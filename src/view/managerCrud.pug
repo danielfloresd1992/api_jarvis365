@@ -1,0 +1,28 @@
+include includes/header
+body
+    link(rel="stylesheet", href="crudLocal/style.css")
+    link(rel="stylesheet", href="crudManager/assets/css/style.css")
+    main.main-contain
+        aside.main-aside
+            button.aside-buttons#CrearFranquicia Agregar gerente o asistente
+            div.asideFranchise-contain
+                div.asideFranchise-titlecontain
+                    img(src="/ico/filter/filter.svg", alt="", srcset="").asideFranchise-img
+                    p.asideFranchise-subTitle Filtrar por local 
+                div.asideFranchise-list#asideFranchise-list
+                    ul.asideFranchise-ul
+                        li#fill-franchise-30.asideFranchise-li Todos
+            div.asideFranchise-contain
+                div.asideFranchise-titlecontain
+                    img(src="/ico/filter/filter.svg", alt="", srcset="").asideFranchise-img
+                    p.asideFranchise-subTitle Filtrar por franquicia
+                div.asideFranchise-list#asideFranchise-list
+                    ul.asideFranchise-ul
+                        li.asideFranchise-li Todos
+        section.main-localContain
+
+    script(crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js")
+    script(crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js")
+    
+    script(src="libreries/axios/axios.min.js") ;
+    script(src="crudManager/index.js" type="module") 

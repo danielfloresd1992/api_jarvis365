@@ -1,0 +1,7 @@
+
+public/
+dist/
+cert/
+.env
+node_modules/
+.vscode/

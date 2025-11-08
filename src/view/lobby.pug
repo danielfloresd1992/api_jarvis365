@@ -1,0 +1,104 @@
+include includes/header
+
+
+main.componentContain 
+
+    button.menu_burger#open-asidebar-option
+        img(src="ico/menu_burger/menu_burger.svg", alt="").menu_burger-img
+    
+    aside.listRoute.border10#aside-bar-menu
+        div.aside-contents
+            div.listRoute-presentation
+                img.listRoute-presentation-imgLogo(src="img/LOGO-SLIDER.png")
+                img.listRoute-presentation-imgBackground(src="img/4.png", alt="", srcset="")
+                div.textContain 
+                    p.textContain-p Notificar ante cualquer medio cualquier irregularidad de la herramienta appManager al departamento de sistemas.
+                hr.hr
+            div.listRoute-a-menuTitle
+                p.usersContain-title Lista de opciones
+                div.listRoute-a-menuTitle.scrolltheme1
+                    a.listRoute-a(href="/entregaCortes365")
+                        img.listRoute-img(src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAABJElEQVR4nO2ZMU7DMBiFvXAF2zkBV2nUAfcmOQetWIoqte7IWA4CCxtUFRLEqcwZmB5K1SAGOtA4RpbfJ701yqf/f/oHC0EI+ROTD4yNx954YMhceTTGoxShOX4YkeKCC0T8ebShgFq/j7Wt9/r2BfL6AclNQNu6KaxDsgKFdaCAT2ACcrrBRTU/O2q2+V+B9gf6CdyzA3mXWJ7RAXVi75PpgDqx97wDP2EHKt6BfmSzQiZ1Ack7AK7Qr7ADFe9AP7JZIZO6gOQdAFco7w4YCmDoCWwhp48oXz+R1ANH0QksdlA3T7i828aScBOPUTCBYvkGPX8+SLSTaPswRERovgU6icXuUOihIkLTPXDEiF7V4R/19LIpY0joVe20df13npDM+AKNiCDRz//2/AAAAABJRU5ErkJggg==")
+                        p.listRoute-p Corte por hora
+                    a.listRoute-a(href="/performance") 
+                        img.listRoute-img(src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAChUlEQVR4nO2ZPU/bQBjH8wWQmErCQDKUfoV0A6ntUIbede/Uj9AXXipQGSt2RKVK7ZB26oxCi7r1A4QRQtQQ+W6lYogDhfyr56iRe7Extu9iI/mRniGyL7nf4+d+d3JKpSKKKKKIXMZTgUdcos0lkGUyge4TBw9jA3CJo6wnzz0IiYMkAMgRgFsAcMtVnmv1MdMQqDYE5luunSewdgxsnNjJ2c8ClQ89lQSh/fbACICtyW+cALVPPcMAAsMwgLA2SHqdOUNMrf/E1OYhah+PML/n3i6A+nYXE8+/YmaxiXe/h0Fj8wvAqPqLOwrg2Y9u8BOSOM0tQP1f9e+8uqy+MQAmcGEbgPmqf3/7svqZAZDHZ78IlbrHw8bXfdUnmLEBRHn8bsOJ1Ca1S3Wp+V/vhwIInFkH8Ht8equDNce99n6a9ITPPDYAzpN4vLx5iMkXu6isfMPCwSBwvLr/dfOq9yO/3zaA3+NU+cqb7+pzeWkHj/fdkfF67/MsAYI8vtAeBEJ4ve83D7+JJAT+WAMI83gQhL/39epz0wA0KK3HdYjVXh+15eDq8ywAaBI0GVqQYR6nhUwLevLlLspbHbXQacHr1efjBPB62aum7nE91+UA0+87V5qlE+d19/PRRXxuHMDrZdqMdI8HJW1uHgBtetYBmMBZGIDe+5EtIKGOF3TMuEdHjdHzPiI0ahYgrsfTXmcmARJ5PD3AhTGARB7PBEDiVP8iv3lieTwPAHOtvjpxKo+/jenxPABUG+LGHk+bfHQjGxoFiPJ4mlw9NgRArzJ0j1e9V38hHreWwgBApiluO4AEkgC0c/QEfsUGYA4e0N87WU+eSezTXGIDFFFEEUWUxhF/Aep3Fk6P8rMEAAAAAElFTkSuQmCC")
+                        p.listRoute-p Desempeño de novedades en vivo
+
+                    a.listRoute-a(href="/crudLocal")
+                        img.listRoute-img(src="data:image/png;base64,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")
+                        p.listRoute-p Gestion de Clientes
+
+                    a.listRoute-a(href="/crudManager")
+                        img.listRoute-img(src=src="data:image/png;base64,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")
+                        p.listRoute-p Gestion de manager
+
+                    a.listRoute-a(href="/menuediction")
+                        img.listRoute-img(src="data:image/png;base64,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")
+                        p.listRoute-p Gestion de alertas
+
+                    a.listRoute-a(href="/manager%date")
+                        img.listRoute-img(src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAADNklEQVR4nO2Z70tTURjHL9W7fv0HlRCRlin0QumF4ai/QHoTSBBi3aMWNAlqMrFmgkIv2gsjKpjbC7M3EtgPTRPHnNubdM5zWkwllF64frhBZZwLTzx3W9xuU2fdczfkfuEDl7uze873nnPuOed5JMmSJUvbXzZvKmDzpsDmTepYzcHXP/F90fE5B590JKDWm/AbaQDMNmDzJcAwA7XepN/0HvAlJiSjVXmDAlKhMgcVN9Oc0FCuEv3NcYeWWTimoSxLGxKB0gyGN3w7GfCLNnDUETF+6GhFmAIikUTLMsAK3gP8p6hekClfE2+A8mWBBpaEG5CZMiRsHlDlmXADhCrN4npAIcINXGSwl1C+ihXGPHXw8UHNfxHz1GWHT7LlPeyTzBBhih0rdY8Pw5K7GpbdVf/Ekrsa7o2PpA0w5apkls4B7CRMeYUV944MwvzdKvjQU7kl8D+9I4PZofOiHWCHZKZIFPYQqoxhA5yhdzBxvx4WXaV5gWWdoVj2zb+2T8NuqRBqfwO7COUu/H43UQ49o6Mw5j4P8baSnOBvWAbLEsp/yJTfxmdIhRaZg4OE8Tsy5XF8q+2BCAw8dkD41ikVvMZ7mckalynvbIzCAalYdInBIZnxrqyBTRarOJZF01Khhd2fafharsaGBwiEnzavu22QKe8s2BBSJzFTxjd626EnBKb6yWar75jpkxg/ozJThg1cgV/iM00zIM8p1/Np2JS3AYK+xnxNXDOl8bjc47KfT6OCfQ0w6WnIcyPHU43zsF+4AZkpLaI2c5ep0lRU2+nJh/UQeHSh2LbTfNMDjTMcg8H+DljsKlfBa7xXFAcassGRsvXtCjz32GHBVfbX/gfvDfW1gn16pcBHSpa78o7gLER6amCh48iGzHSfVsuu9xypEAacQQpR10mYdx7OCyzrnGLFYaAl+h1C3Wch7ijZEuHuM3Al+s1cA6VtMwEM/2EYUA0HZkKD2nAhhg+14URtmLFcF4asyIJhykzcFcOXAg2k45eCDYBlQC+bLxFIZ030iYhcyQpdQkOf8MiZFEnqSAEmVSSjlE35mGnA5k0ZmWJK+E3vgb6k2DyBJUuWpKLQL+I2ULWPVu0GAAAAAElFTkSuQmCC")
+                        p.listRoute-p Gestion de horarios en monitoreo
+
+                    a.listRoute-a.movil(href="https://72.68.60.254:4000"  target="_blank")
+                        img.listRoute-img(src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAD9UlEQVR4nO1YXU9TSRg+5XzQLRTYROkcY2LM+htk9QcYlRr3cqNebERRZJEiHxHBj0QxGrPe7AbtGYx3e2GyFysqGpEWigWlIpI1EBTamaqrETWKV2J8zQxS29M2QnsKHNMneZLOvPPOeZ6Z6cycIwhZZJFFFt8lHG2hUoTJE4RJGLnDmwSzAWESVjEFRqQRKpgNyPQG3OFNxedCUNwaBITpRsGMEPf7gFEwK5Q914FRMCusv/0DjIIZsBLTNQ6NViJM/kYaHUQaeaVqBBiRRiZ5HYu56b7lbvKTsCRwFCRVo9uRRvyzO85ciTC9rWK6TbgE4qJoZzsLwmRsvsLjjGhkVG0jGxZMuOp+akOYtKUrPH5GiLbyD/pDRsU7Wh8XI0zvGS1enaVGB9CFZ8szJ55Nd6bE469LynATM8smgyOP42di1cWg1TADmVjzczBx3hDxbIdYcPH4y3JK+xp+FCQjtsqUDWA6ktY5gXB4x2KJV79whZv+mrIBFZO+xTaANNqb8t0mSYdQcOYRyEceguXgMCf7XXBmjMfmIGh++Rr55NBCq+dtgF3M9J2xFxSleRgs9YMJyWKsTTLxqeYjTPbMTXXd4FZL3ZDXUn//fdHZx3EjpzQNgaU2ALZjw7DW+xqcoY+cJT1vwH7iPx5TDj1IOJLp5BedfQRMk6V+yCPUDm1JqN1yIHCKdTDLZX+Nx3RSeHoUcmruQN6R+7B5Yhp+eQYxLA1O8xhrU3h6JM5AOvnL/pyI6JrhQEuMeNHVv5UlRtOhm8rcxgCILj+UeCb5A9f5XkNecwDyDwdgfe8bXre2a5K3yW28F2cgnXzHuVCMNkbxwB1nxEBO9W2vWO2HaOqnUXL5Qdzfy6ecPSy/6S4vM+Y3DfA6Z/AjL7O2egPp5CONxGhjzKn2d32dgSrflFjlg2jqBcjVPpCquiMC7If6eZnR3tQ/swwmpnlZdvUYni/q9Im/97yLGJAqvVNSpReiqe/AWt8HUqUHfva+5A9b73sF9oN+sDf6+W++BDpf8DbWhj7D8yWdPmmf523EgFzR6ZErOiGa+g6KTj7g9UXNfj5S+j/h5vEPYG/wzbRpGTY8X9bpkytu3ooYUMpvbFH23oBoxm+DBGw13TxW0NANJZ3PwRmc5iy5+T+vYzHWBrmJ4fmKTp9S0VEasxPJu6+1KOXXYJaJDiJH6zjYXF5QyjsSksVYm2QHWTr5SpQ2effV4wnPAmXXv05l1+Wu3LL2qaRXATeBH48Pgs3VBdbyDs68Gg+vSzRyRuXnlrVPKWXtt5SdV2JHPhm+JWShKcwXpjeAoj6PLzZRKp/n2evcUjCBNEJN+3k+iyyyyEJY8vgMXPjOATWTlZIAAAAASUVORK5CYII=")
+                        p.listRoute-p Jarvis-fix
+
+            
+        div.aside-contents
+            div.listRoute-a-menuTitle
+                p.usersContain-title Nuestros clientes
+                hr
+                div.listRoute-a-menuTitle.scrolltheme1#list-local-303
+            
+
+
+    main.main-contain
+        div.textJarvisComponent 
+                div.textArea-content
+                    textarea.textJarvisComponent-textArea(name="", cols="30", rows="10" placeholder="Compartir con Jarvis 🤖..." autocomplete)
+                    div.btnContain
+                        button#btn-send-text-jarvis.btnContain-send 
+                            img.btn-send-text-jarvis-Img(src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAACXBIWXMAAAsTAAALEwEAmpwYAAAC0ElEQVR4nO2ZS2jUUBSGPx+l4hOh44yKC6sgiIrgpqIbURF3uhAEQVdWRMStC0FxVaTTEe1OcCFIQUHE11JFcOFjY20VBHXhG3xW1IqPkQN/4BLSmWSSZhKZD8JMknvvnJ//5Nx7M9CiRYv/hZnAAeAJcJMcsgQ4CYwAVR2PyQkTgA3AOeC3I8A7zJlMMwPoBoYDgvcOc2YWGWUR0AN8dAJ+BfQDL31CTpDB9NkEXAX+OIFeB7YAJWBQ117o86+emUwwXekz5AQ/CpwBVqhNwRHxCOjV92tkgE6lzwdHwGvgCNDhtCv4RMwHnul8cxPjZ21A9bkP7AQm+9oWfCIsvbbq3OaPiWkHP0WBPvSljwnqGqNPkAjjhq7tb3b6vFH6WKBEFLFMD/iIZvbU0udXQPq01ek7lgjjlK4fJ4X08YKw46cErQ45Ri0Rs4Fv41ly5ylV3jsC3iqlrMKQgAjjoO5dIaX06ZY7JChiEvBc923SjE270udBQPqsaXDMeiKMbUmV3KD0eaf0WRBj3DAijFtqs48Y9Psmr3tyxdwhIRGDNcrxSrX5rNVww3jLgapSainxCSvCOK12FWJS0iDfNaCtTAdiCIoiogD80G8ubvD3AgftUS33BF2W9Uk/Ex6H1PZSzNgTFRRVhC0gvX3HxgTjjyUoqghju9PeNl3jTj1BjYgwbqvPXlKmCJR9ggYiPNguq9Tnk3aQTaFDk+cXp2xHcQJtc62fbWmbzhzgvAIyZ6I4OypHO8kI5s5XBbU8ZJ/DEn+RjNEbwZU2573VejJGUQUgjCs7JGI4rZIblXJIV+6o3R4ySjGEK11OyZ1GhinXceWs7h8j4xRruDJXO03b9ywkB/SN4cpRXb9ATigFuNKuty4mZB05os/nyi6dD2W15IZ15a6E7CaHVJx3AFW9G55KDik5y/2q9jO5pSIRuSm5tVx5qv/MW7RoQbr8A2pLKcu/QDhRAAAAAElFTkSuQmCC", alt="", srcset="")
+                div.textArea-content.left          
+                    label.label-toogle Activar filtro
+                        div#toglee-localFill.toogle-contain
+                            button.btnFilter-toogle( activate='false' )
+                    label.label-toogle Lista de locales
+                        select#selectFilter-local.select-fillLocal(disabled="true")
+                    div.List-Option.center-contain
+                        p Locales activado
+                        div.tag-contain#local-contin-3030.scrolltheme1
+
+        section.box-Noveltie#main-content-novelties(tabindex="0")
+
+
+
+
+
+    aside.componentAside.border10  
+        div.aside-contents.contents30
+            div.componentAside-userDiv 
+                div.componentAside-dataContain
+                    img.componentAside-nameImg(src=src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAACxklEQVR4nO3WTU8TQRwG8McT8YWD8RtoosSXg96N4UJiPBkPkhjxaygXtNttu213t9vX7baF0qa00oqmChrRtAQNNw8mBj6BXoBCQG/lbwpERA9Mu2tnEvskc21+z/xnZgv00otgKS8MoVxLo/RuBcX5bRRebyM3u4LJlylkq0MQNpXaAMr1DyjXCU/fE4rzhMIbQn6OkHtFyFYJEy8I6WeLSFYGIFQq9UFUFjaOxGdmCKkKwZreQLI0CGF2vj08wSwREsUGwgUBJsFybP7GE2IFQiS3BKJjnC9sp/g8ITxJMLIcL/Z0LWMTTwhlUvwK7D2VNvDjBC2zwq/A1NstW3g9Q1DTW/wK2MVraYKaIn4FnMAHLY4FnMAHTE4FWu+3E3h/gkOB7OxNZKsNR/BKnOCLrUKO3ehegYnqJwfxBG+U4Iksda/A+PNNh/EET6TRvQLpmWWH8QSPsdy9AlZ51Fl8mOA2HnWvgDHXB7NYRKLYdADfhGxMwTD60PVECyX7Ox8uglsi+Qe28HKrgD7Cr0AgdxKhidWO8bKxhrHoKXCNPu7qEE+QjMfgntbl01Kf28eHvkBVj0OIaNYlBK1vbez8V8jGRQgVf/IcE95tELzaWQgZhQHvDnH8/39UWPDCFlDS/Ux4SScoSj+Eiy8yzITfW3chVHyxW5DD64x4gktbxRPtugi7fgWeaB5yeIcZf7CacOk5yKHL3UWPJU/AHxuBN1qHJ7IPbxv/+zR24NJqkLT7u7/9z6Ikr0GJW/DFN5lfm6Pw0p9L24RLs+AKXnUQnr6AgFmBEt9hfuc7wuuHpyLpZXiC5+3hg9Y9+M0fzF9YJ/DSoYl8h0sd7gyvJu8gYDb54fWDy+5Wb7eH90TOwJ9oCICn/SO1Dm/8NHuBoDkqDF76dZweshfwJz6KhddbU1hkL6DE14XCS7trjb1AL738P/kJqVrXzyPccH4AAAAASUVORK5CYII=", alt="")
+                    h1.componentAside-nametext#name-text name 
+                hr
+                div.componentAside-dataContainSub(title="Actualmente no posee atributos de supervisor")
+                    h2.componentAside-superText supervisor 
+                    img.componentAside-superiMG#user-super(src="ico/close/close.svg", alt="")
+                div.componentAside-dataContainSub(title="Actualmente no posee atributos de supervisor")
+                    h2.componentAside-superText Administrador 
+                    img.componentAside-superiMG#user-adminstrador(src="ico/close/close.svg", alt="")
+
+        div.aside-contents.contents60
+            div.usersContain
+                div.usersContain-titleContain
+                    p.usersContain-title Usuarios conectador por express
+
+                div.usersContain-divUsers.scrolltheme1#user-online30
+
+
+
+    script(src="libreries/axios/axios.min.js" defer) 
+    script(src="libreries/socketIo/socket.io.min.js" defer) 
+    script(src="lobby/index.js" type="module" defer) 

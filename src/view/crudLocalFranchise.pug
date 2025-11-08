@@ -1,0 +1,24 @@
+include includes/header
+
+body
+    main.main-contain
+        aside.main-aside
+            butto.aside-buttons#CrearFranquicia Crear franquicia
+            butto.aside-buttons#CrearFranquicia Crear local
+            div.asideFranchise-contain
+                p.asideFranchise-subTitle Filtrar por franquicia
+                div.asideFranchise-list#asideFranchise-list
+                    ul.asideFranchise-ul
+        section.main-localContain
+            div.main-localContain-header
+                p.header-key foto
+                p.header-key nombre
+                p.header-key estatus
+                p.header-key acción
+
+    
+    link(rel="stylesheet", href="crudLocal/style.css")
+    link(rel="stylesheet", href="crudLocal/showImg.css")
+    link(rel="stylesheet", href="crudLocal/put.css")
+    script(src="../libreries/axios/axios.min.js") 
+    script(src="crudLocal/index.js" type="module") 

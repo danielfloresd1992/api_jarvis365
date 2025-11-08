@@ -1,0 +1,51 @@
+doctype html
+html(lang="en")
+    head
+        meta(charset="UTF-8")
+        meta(http-equiv="X-UA-Compatible", content="IE=edge")
+        meta(name="viewport", content="width=device-width", initial-scale="1.0")
+        meta(http-equiv="Expires", content="0")
+        meta(http-equiv="Last-Modified", content="0")
+        meta(http-equiv="Cache-Control", content="no-cache, mustrevalidate")
+        meta(http-equiv="Pragma", content="no-cache")
+        title #{tittle}
+        link(rel="shortcut icon", href="lobby/img/AppManager.ico" type="image/x-icon")
+        link(rel="stylesheet", href="header/header.min.css")
+        link(rel="stylesheet", href="Lobby/styles.min.css")
+        script(src="/libreries/react/unpkg.com_react@18.2.0_umd_react.production.min.js") 
+        script(src="/libreries/react/unpkg.com_react-dom@18.2.0_umd_react-dom.production.min.js") 
+        
+            
+    body 
+        nav.heaader#navigator
+            
+            if  isLoggin === true   
+                script(async="true", src="header/index.js" type="module") 
+                img.logo-title(src="img/newLogo.svg" draggable="false")
+
+                .searchContain  
+                    input.search-input#search-2020(type="text", placeholder="buscar local o usuario")
+                    button.search-btn    
+                        img.search-btnImg(src="ico/seach/search.svg", alt="")
+
+                div.header-buttonContain
+                    #{option}.header-btn#btn-option-admin(data-text="Configuraciones")
+                        //img.icoBtnHeader(src="setting/setting.svg")
+                        img.icoBtnHeader(src="data:image/png;base64,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")
+                        div.header-btn-List#btn-option-listContain
+                            a.header-btn-List-a(href="/crudLocal") Datos de locales
+                            a.header-btn-List-a(href="/crudManager") Listas de gerentes
+
+
+                    #{home}.header-btn#home(data-text="regresar")
+                        img.icoBtnHeader(src="ico/undo/undo.svg")
+
+                    button.header-btn#e-u(data-text="Salir")
+                        img.icoBtnHeader(src="ico/logout_FILL0_wght400_GRAD0_opsz48.png", alt="", srcset="")
+
+            else 
+                img.logo-title(src="img/newLogo.svg" draggable="false")
+
+                    
+
+            

@@ -1,0 +1,72 @@
+doctype html
+html(lang="en")
+    head
+        meta(charset="UTF-8")
+        meta(http-equiv="X-UA-Compatible", content="IE=edge")
+        meta(name="viewport", content="width=device-width, initial-scale=1.0")
+        title Iniciar sesion Amazonas 365
+        link(rel="stylesheet" href="/singIn/style.css")
+        link(rel="shortcut icon", href="/img/AppManager.ico", type="image/x-icon")
+    body
+        //include includes/intropage
+        
+    
+
+        
+
+        main.prensetantionContent
+            header.header-banner
+                nav.banner
+                    a.banner-kink(href="https://amazonas365.com") Web Site
+                    a.banner-kink(href="http://") Facebook   
+                    a.banner-kink(href="https://www.instagram.com/365.amazonas/?hl=es") Instagram
+
+            div.decorationpresentation
+                video.video(autoplay loop muted playsinline src="/video/pexels-treedeost-7255101-4096x2160-60fps.mp4")
+                div.box.box1 
+                div.box.box2
+                div.box.box3
+                div.box.box4
+                div.box.box5
+
+            div.imgCelContent
+                img(src="img/new image.png", alt="")
+
+            section.content#content-box
+                div.presentation
+                    //img.presentation-img(src="/img/portada.jpg")
+                   
+                    div.titleContain
+                        div.title
+                            img.title-img(src="/img/nuego_logo.png", alt="" draggable="false")
+                        hr
+                        h3.sub-title Manejador de aplicaciónes de amazonas.
+                        img.logo-amazonas.invert(src="/img/LOGO-SLIDER.png", alt="", draggable="false")
+                
+                form.form(action="" id="form-session")
+                    article.textContain
+                        h1.textContain-h1 Gestion General de sistemas
+                        p.textContain-p Controla y asegura los procesos, novedades y actividades diaria de los locales.
+
+                    div.form-itemsContent
+                        p.form-p Iniciar sesión
+                        label.form-label(for="user")  
+                            p.form-label-p.intro Usuario 
+                            input.form-input(type="text", name="" id="user" required)
+                        label.form-label(for="password") 
+                            p.form-label-p.intro Password
+                            div.inputBtnContain    
+                                input.form-input.password(type="password", name="password" id="password" required)
+                                btn.btnPassword#btn-input(type="text")
+                                    img.btnPassword-img#btn-input-img(src="/ico/visibility/visibility_off.svg", alt="/ico/visibility/visibility.svg" draggable="false")
+
+                        button.form-btnSubmit(type="submit") Iniciar session
+                        p.text-mens#text-mens
+                    img.logo-amazonas(src="/img/LOGO-SLIDER.png", alt="", draggable="false")
+
+        section.section-secound
+    script(type="text/javascript" src="/libreries/axios/axios.min.js") 
+    script(type="text/javascript" src="/libreries/particles/particles.min.js") 
+    script(type="text/javascript" src="/singIn/configPartic.js") 
+
+    script(src="/singIn/index.js" type="module")

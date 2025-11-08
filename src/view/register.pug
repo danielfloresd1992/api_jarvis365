@@ -1,0 +1,45 @@
+doctype html
+html(lang="en")
+    head
+        meta(charset="UTF-8")
+        meta(http-equiv="X-UA-Compatible", content="IE=edge")
+        meta(name="viewport", content="width=device-width, initial-scale=1.0")
+        title Registrar Usuario
+        link(rel="shortcut icon", href="/img/", type="image/x-icon")
+        link(rel="stylesheet", href="/register/style.css")
+    body
+        div#particles-js
+        div.box-form
+            div.titulo 
+                h1 Registro de usuario 
+            div.containerInput
+                form(action="", method="post") 
+                    section
+                        label Nombre de usuario 
+                            input#nameUser(type="text")    
+                        label Contraseña 
+                            input#password(type="password") 
+                        label Confirmar contraseña 
+                            input#confir(type="password") 
+                        label Primer Nombre
+                            input#name(type="text")
+                        label Primer Apellido
+                            input#surName(type="text")
+                        label Número de telefono 
+                            input#cel(type="tel", name="")
+                    
+                    label.chekbox ¿Usuarion con atributos de Administrador?
+                        input#admin(type="checkbox", value="Paneer")
+                        
+                    label.chekbox ¿Usuario con atributos de supervisor?
+                        input#super(type="checkbox")
+                    button.btn(type="submit" value="Paneer") Registrar
+            a.link(href="/") Regresar
+    include includes/alertText.pug
+
+    script(src="/libreries/particles/particles.min.js")
+    script(src="/singin/configPartic.js") 
+    script(src="/register/index.js") 
+
+                
+

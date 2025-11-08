@@ -1,0 +1,59 @@
+include includes/header
+    link(rel="stylesheet", href="/performanceUser/style.css")
+
+   
+
+
+main.maimComponent
+
+    aside.asideComponent
+
+        div(tabindex="-1").aside-Seach-content
+
+            div.aside-dateContain
+                label(for="").aside-labelDate Desde
+                    input(type="date", name="").aside-imputDate#dateinput-since
+
+                label(for="").aside-labelDate Hasta
+                    input(type="date", name="").aside-imputDate#dateinput-until
+
+                label(for="").aside-labelDate Tipo de grafica
+                    select.aside-imputDate#type-grafic
+                        option(value="line") lineas
+                        option(value="bar") barras
+
+       
+            div(tabindex="0").aside-listUser
+                input(type="text", name="" placeholder="Nombre del usuario" autocomplete="off").aside-seachInput#seach-user
+                button.aside-seachBtn
+                    img.aside-seachImg(src="ico/seach/search.svg", alt="", srcset="")
+
+            div.aside-userSeach#list-user-seach
+
+      
+
+        div#close-banner01.closeBaner »
+
+
+    section.sectionComponent#main-content
+
+        div.introPage
+            div.introPage-titleContains
+                h1.introPage-title Graficas de rendimiento
+                p.introPage-subtitle selecione la fecha a consultar e introduca el nombre del operador
+            
+            div.introPage-imgContain
+                img(src="/img/engranaje2.png", alt="", srcset="" draggable="false").introPage-img
+
+            
+script(src="/libreries/chart/chart.umd.js")
+script(src="libreries/chart/chartjs-plugin-datalabels.min.js") 
+
+//script(src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js")
+//script(src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0/dist/chartjs-plugin-datalabels.min.js")
+script(src="/libreries/html2canvas/html2canvas.min.js")
+script(src="/libreries/fuse/fuse.min.js") 
+script(src="/libreries/axios/axios.min.js") 
+
+
+script(src="/performanceUser/index.js" type="module") 

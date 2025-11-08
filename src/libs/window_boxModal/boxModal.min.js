@@ -1,0 +1,1 @@
+export default class BoxModal{constructor(){console.log("hola constructor")}}

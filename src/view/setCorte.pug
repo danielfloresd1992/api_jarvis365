@@ -1,0 +1,34 @@
+include includes/header
+link(rel="stylesheet", href="/setCorte/style.css")
+link(rel="stylesheet", href="/setCorte/assets/css/div_img.css")
+body
+    //include includes/intropage
+
+    div.msm
+        h2#textHeader.number2
+    
+    div.boxContain 
+        main.mainContain
+            form.mainContain-form#form-local-30
+                button.mainContain-form-btn Enviar
+
+        aside.boxHour-contain
+            article.boxHour-hour
+                div.hour
+                    h2.hour-text#date1 00/00/0000 00:00:00
+                    h2.hour-text#date2
+                div.ico 
+                    div
+                        h3.textLive#textLive Waiting for an answer
+                    div 
+                        img#icoWhatsapp(src="setCorte/assets/img/ws.png" width="40px")
+
+    include includes/alertText.pug
+    script(src="../libreries/axios/axios.min.js") 
+    script(src="../dependency/html2canvas.min.js")
+    script(src="/setCorte/date.js")
+    //script(src="/setCorte/index.min.js" type="module" defer)
+    script(src="/setCorte/index.js" type="module" defer)
+    
+    
+

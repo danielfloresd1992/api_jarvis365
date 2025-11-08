@@ -1,0 +1,56 @@
+{
+    "presets": [
+        [
+            "@babel/preset-env",
+            {
+                "targets": {
+                    "browsers": [
+                        "last 2 versions",
+                        "not dead"
+                    ],
+                    "node": "current"
+                },
+                "modules": false,
+                "useBuiltIns": "usage",
+                "corejs": 3
+            }
+        ],
+        [
+            "@babel/preset-typescript",
+            {
+                "allowDeclareFields": true
+            }
+        ]
+    ],
+    "plugins": [
+        "@babel/plugin-proposal-class-properties",
+        [
+            "@babel/plugin-transform-classes",
+            {
+                "loose": true
+            }
+        ],
+        "minify-dead-code-elimination",
+        "minify-mangle-names",
+        "minify-simplify",
+        "remove-comments",
+        "babel-plugin-add-import-extension",
+        [
+            "transform-remove-console",
+            {
+                "exclude": [
+                    "error",
+                    "warn"
+                ]
+            }
+        ],
+        [
+            "replace-import-extension",
+            {
+                "extMapping": {
+                    ".ts": ".js"
+                }
+            }
+        ]
+    ]
+}
