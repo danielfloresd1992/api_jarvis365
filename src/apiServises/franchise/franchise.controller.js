@@ -17,6 +17,9 @@ controller.getAllFranchise = (req, res) => {
 };
 
 
+
+
+
 controller.getEstablishments = async (req, res) => {
     try {
         const nameFranchiseParams = req.params.name;
@@ -24,7 +27,7 @@ controller.getEstablishments = async (req, res) => {
         console.log(resFranchise);
         if (!resFranchise) return res.status(404).json({ error: 'There are no documents related to the name received' });
 
-        const resultEstablishments = await LocalModel.find({ franchise: nameFranchiseParams }).select('name _id order status');
+        const resultEstablishments = await LocalModel.find({ 'franchiseReference.name_franchise': nameFranchiseParams }).select('name _id order status');
         const result = { franchise: resFranchise, establishments: resultEstablishments };
 
 
@@ -35,6 +38,7 @@ controller.getEstablishments = async (req, res) => {
         return res.status(500).json({ error: 'Bad request', status: 500, message: error });
     }
 };
+
 
 
 controller.setFranchise = async (req, res) => {

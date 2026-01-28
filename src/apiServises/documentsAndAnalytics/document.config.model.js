@@ -6,6 +6,13 @@ import { Schema, model } from 'mongoose';
 export default model('DocumentConfig', new Schema({
     idEstablesment: ObjectId,
     activation: Boolean,
+
+    typePageSumary: {
+        type: String,
+        enum: ['classic', 'simplified'],
+        default: 'classic'
+    },
+
     numberOfReports: {
         type: String,
         enum: ['single-diary', 'dual-diary'],
@@ -77,6 +84,7 @@ export default model('DocumentConfig', new Schema({
         colorTextBox: String,
         colorBorderBox: String,
     },
+
     urlImgFront: {
         type: String,
         default: null
