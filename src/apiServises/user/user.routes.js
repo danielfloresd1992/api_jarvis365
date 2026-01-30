@@ -2,7 +2,7 @@ import express from 'express';
 const routerUser = express.Router();
 import addCredentials from '../../middleware/addCredential.js';
 import controller from './user.controller.js';
-import { store } from '../../config/MongoDBStore.js';
+
 import nameApi from '../../libs/name_api.js';
 
 
@@ -28,7 +28,10 @@ routerUser.get(`${nameApi}/user/logout`, controller.logout);
 routerUser.get(`${nameApi}/user/getUser`, controller.getUser);
 
 
+
 routerUser.get(`${nameApi}/userStore`, (req, res) => {
+    return res.status(403)
+    /*
     store.all((err, sessions) => {
         if (err) {
             console.error('Error al obtener las sesiones:', err);
@@ -48,6 +51,7 @@ routerUser.get(`${nameApi}/userStore`, (req, res) => {
             return res.json(authenticatedUsers);
         }
     })
+        */
 });
 
 

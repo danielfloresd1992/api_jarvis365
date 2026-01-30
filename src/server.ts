@@ -3,12 +3,14 @@ import { createServer, Server } from 'https';
 import { readFileSync } from 'fs';
 import { app } from './app';
 import colors from 'colors';
-import { config } from 'dotenv';
+import { config as dotenvConfig } from 'dotenv';
 import { join } from 'path';
 import * as url from 'url';
+import appConfig from './config/index.js';
 
 
-config();
+// load .env (db_connect also loads dotenv but ensure env is loaded early)
+dotenvConfig();
 
 
 declare global {
@@ -26,7 +28,7 @@ const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
 
 const app_dev: Express = express();
-const httpPort: string = process.env.NODE_ENV === 'development' ? process.env.DEV_PORT : process.env.PROD_PORT;
+const httpPort: number = appConfig.PORT;
 
 
 const sslOptions = {
@@ -112,9 +114,9 @@ app_dev.use(express.static(join(__dirname, '../public')));
 
 
 server.listen(httpPort, () => {
-    console.log(colors.bgGreen(`\nInit App Manager mode: ${process.env.NODE_ENV} and port ${httpPort}`));
+    console.log(colors.bgGreen(`\nInit App Manager mode: ${appConfig.NODE_ENV} and port ${httpPort}`));
     const httpPortDev: number = 80;
     app_dev.listen(httpPortDev, () => {
-        console.log(colors.red(`\nInit App Manager mode: ${process.env.NODE_ENV} and port ${httpPort}, for development`));
+        console.log(colors.red(`\nInit App Manager mode: ${appConfig.NODE_ENV} and port ${httpPort}, for development`));
     });
 });
