@@ -7,15 +7,12 @@ import nameApi from '../../libs/name_api.js';
 import { config } from 'dotenv';
 import { join } from 'path';
 import { io } from '../../services/socket/io.js';
-
 import { validateSession, validateSessionAndUserSuper } from '../../middleware/validateSessionAndUser.js';
 import { uploadConfigReport, dirConfigImgReport, uploadReportDocument, dirPageImgReport } from '../../util/multer.js';
-
 import SMU_MODEL from '../auth/auth.model.js';
 import PageDocument from './page.model.js';
 import DocumentModel from './document.model.js';
 import { documentSchema, documentSchemaComplete, documentSchemaPartial } from '../../libs/schema/document.schema.js'
-
 import shiftToEs from '../../libs/string/shitfToEs.js';
 
 
@@ -25,26 +22,26 @@ const routerDocument = express.Router();
 
 
 
-routerDocument.get(`${nameApi}/document/exit`, validateSession, async (req, res) => { //  conflicto 🔽
-    try {
-        const findTask = await SMU_MODEL.findOne({ idUser: req.session.userId });
-        if (!findTask) return res.status(404).json({ error: 'Document not found', status: 404, message: 'The user does not have any tasks assigned' });
+routerDocument.get(`${nameApi}/document/exit`, validateSession, async (req, res) => {
+  try {
 
-        const deletedElement = await SMU_MODEL.deleteOne({ idUser: req.session.userId });
+        const findTask = await SMU_MODEL.findOne({ idUser: req.session.userId});
+        const d = await SMU_MODEL.findById(req.session?.activity?._id);
 
-        const savedDelete = req.session.dataUser.activity
+        if (console.log(req.session), console.log(d), !findTask) return res.status(404).json({error: 'Document not found',status: 404, message: 'The user does not have any tasks assigned'});
+        const deletedElement = await SMU_MODEL.deleteOne({idUser: req.session.userId});
+
+        const savedDelete = req.session.dataUser.activity;
         delete req.session.dataUser.activity;
+    
+        io.emit('jarvis365reporte-alert-receive', {title: 'Reporte finalizado',description: `${req.session.name} finalizó el reporte en ${savedDelete.SMU.establishmentName}, ${savedDelete.SMU.date}, turno: ${shiftToEs(savedDelete.SMU.shift)}`})
 
-        io.emit('jarvis365reporte-alert-receive', { title: 'Reporte finalizado', description: `${req.session.name} finalizó el reporte en ${savedDelete.SMU.establishmentName}, ${savedDelete.SMU.date}, turno: ${shiftToEs(savedDelete.SMU.shift)}` });
-
-        return res.status(200).json({ status: 200, message: 'Task eliminate', data: deletedElement });
+        return res.status(200).json({status: 200,message: 'Task eliminate',data: deletedElement});
+    } 
+    catch (a) {
+        return console.log(a), res.status(500).json({status: 500, error: a,message: 'Error server internal' });
     }
-    catch (error) {
-        console.log(error);
-        return res.status(500).json({ status: 500, error: error, message: 'Error server internal' });
-    }
-});
-
+}), 
 
 
 
@@ -53,6 +50,8 @@ routerDocument.get(`${nameApi}/document/paginate`, validateSession, async (req, 
     try {
         const { page, limit, date, franchise, establishment, shift } = req.query;
         if (!page || !limit) return res.status(400).json({ error: 'Bad request', status: 200, message: '' })
+
+
         const query = {};
         if (establishment) query.establishmentName = establishment;
         if (shift) query.shift = shift;
@@ -555,11 +554,6 @@ routerDocument.delete(`${nameApi}/document/Page/document=:idDocument/page=:idPag
 
 
 
-
-
-
-
-
 /////////////////////////           DOCUMENT          ////////////////////////////////
 
 
@@ -628,7 +622,7 @@ routerDocument.put(`${nameApi}/document/config/:id`, validateSession, async (req
 });
 
 
-
+/*
 
 routerDocument.put(`${nameApi}/document/config/:id`, validateSession, async (req, res) => {
     try {
@@ -646,7 +640,7 @@ routerDocument.put(`${nameApi}/document/config/:id`, validateSession, async (req
     }
 });
 
-
+*/
 
 
 
