@@ -1,7 +1,10 @@
 import { config as dotenvConfig } from 'dotenv';
+import { join } from 'path';
+import * as url from 'url';
+const __dirname: string = url.fileURLToPath(new URL('.', import.meta.url));
 
 // Carga variables desde .env (si existe)
-dotenvConfig();
+dotenvConfig({ path: join( __dirname + '../../.env')});
 
 type Env = 'development' | 'production';
 
@@ -13,8 +16,8 @@ function required(key: string, val?: string): string {
 const NODE_ENV = (process.env.NODE_ENV as Env) || 'development';
 const DEV_PORT = Number(process.env.DEV_PORT || 3000);
 const PROD_PORT = Number(process.env.PROD_PORT || 443);
-const MONGO_URI = required('MONGO_URI', process.env.MONGO_URI);
-const SECRET_SERVER = required('SECRET_SERVER', process.env.SECRET_SERVER);
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/Cortes365';
+const SECRET_SERVER = process.env.SECRET_SERVER || '.bfdpSeth#FCEWG0"80435*'; 
 const REDIS_URL = process.env.REDIS_URL || '';
 const CORS_ORIGINS = (process.env.CORS_ORIGINS || '')
   .split(',')

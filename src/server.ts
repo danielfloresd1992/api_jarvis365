@@ -67,7 +67,7 @@ app_dev.get('/.well-known/pki-validation/:file_name',
         try {
             const { file_name } = req.params;
             const filePath = join(__dirname, `./cert/${file_name}`);
-            console.log(filePath);
+ 
 
             res.sendFile(filePath, (err: Error) => {
                 if (err) {

@@ -25,9 +25,8 @@ import { rejects } from 'assert';
 config();
 
 
-const __dirname: string = url.fileURLToPath(new URL('.', import.meta.url));
-const documentsPath: string = join(os.homedir(), 'Documents');
-
+const __dirname: string =  url.fileURLToPath(new URL('.', import.meta.url));
+const documentsPath: any = process.env.DEBUG === 'true' ? '\\\\72.68.60.254\\d' : 'D:\\';
 
 
 

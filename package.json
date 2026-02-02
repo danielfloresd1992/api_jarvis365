@@ -9,7 +9,7 @@
   "scripts": {
     "build": "npx babel src --out-dir dist --extensions \".ts,.js\" && npx gulp --gulpfile gulpfile.esm.js build",
     "start": "node ./dist/server.js",
-    "debuggin": "set NODE_ENV=production&& npx nodemon",
+    "debuggin": "set NODE_ENV=production&& set DEBUG=true&& npx nodemon",
     "dev": "set NODE_ENV=development&& npx nodemon"
   },
   "devDependencies": {

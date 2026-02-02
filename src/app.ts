@@ -24,7 +24,6 @@ const __dirname: string = url.fileURLToPath(new URL('.', import.meta.url));
 
 const app: Express = express();
 
-console.log(process.env)
 import './services/socket/io.js';
 
 
@@ -38,8 +37,9 @@ connectDB();
 
 
 // --- HTTP hardening / security middlewares ---
-app.use(helmet());
 
+/*
+app.use(helmet());
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100,
@@ -47,11 +47,12 @@ const limiter = rateLimit({
     legacyHeaders: false,
 });
 app.use(limiter);
+*/
 
-app.use(hpp());
+// app.use(hpp());
 app.use(mongoSanitize());
-app.use(xss());
-app.use(compression());
+//app.use(xss());
+//app.use(compression());
 
 app.use(rejectInsecureConnections);
 
