@@ -1,12 +1,15 @@
 const origins = process.env.NODE_ENV === 'development' ? 
-[ 
+    [ 
     'https://72.68.60.201:5174',
     'http://72.68.60.201:5174',
     'https://192.168.1.104:5173', 
     'http://72.68.60.201:5173',
     'http://localhost:5174',
     'http://localhost:5173',
-    'https://72.68.60.201:5173', 'https://72.68.60.201:3000', 'https://72.68.60.201:3005', 'https://amazona365.ddns.net:3000', 'https://localhost:3000' ] : [ 
+    'https://72.68.60.201:5173', 'https://72.68.60.201:3000', 'https://72.68.60.201:3005', 'https://amazona365.ddns.net:3000', 'https://localhost:3000' 
+    ] 
+    : 
+    [ 
     'https://72.68.60.201:5173',
     'https://192.168.1.102:3000',
     'https://72.68.60.201:3000',

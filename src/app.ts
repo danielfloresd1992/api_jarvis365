@@ -56,7 +56,7 @@ app.use(compression());
 app.use(rejectInsecureConnections);
 
 app.use(cors({
-    origin: config.CORS_ORIGINS && config.CORS_ORIGINS.length > 0 ? config.CORS_ORIGINS : origins,
+    origin: origins,
     optionsSuccessStatus: 200,
     credentials: true,
 }
