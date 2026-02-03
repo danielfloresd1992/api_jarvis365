@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction, Express } from 'express';
+import morgan from 'morgan';
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 import colors from 'colors';
@@ -6,6 +7,7 @@ import { join } from 'path';
 import cors from 'cors';
 import session, { SessionOptions } from 'express-session';
 import connectDB from './config/db_connect.js'
+import redisStore from './config/redis_cache.js'
 import { rejectInsecureConnections } from './middleware/secure_connection.js';
 import origins from './config/origins.js';
 import config from './config/index.js';
@@ -34,33 +36,29 @@ app.set('views', join(__dirname, './view'));
 
 connectDB();
 
-
-
 // --- HTTP hardening / security middlewares ---
 
-/*
+
 app.use(helmet());
+
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100,
+    max: 400,
     standardHeaders: true,
     legacyHeaders: false,
 });
 app.use(limiter);
-*/
-
-// app.use(hpp());
+app.use(hpp());
 app.use(mongoSanitize());
-//app.use(xss());
-//app.use(compression());
-
+app.use(xss());
+app.use(compression());
 app.use(rejectInsecureConnections);
 
 app.use(cors({
-    origin: origins,
-    optionsSuccessStatus: 200,
-    credentials: true,
-}
+        origin: origins,
+        optionsSuccessStatus: 200,
+        credentials: true,
+    }
 ));
 
 
@@ -73,18 +71,21 @@ app.use(cookieParser(config.SECRET_SERVER || 'Secreto_montaña365.*'));
 
 app.set('trust proxy', 1);
 
+
+
 const sessionOptions: SessionOptions = {
     secret: config.SECRET_SERVER || 'lkjgklIUT456487miohVBUTV-,..*',
-    saveUninitialized: true,
-    resave: true,
+    saveUninitialized: false,
+    resave: false,
+    store: await redisStore,
     cookie: {
-        httpOnly: false,
+        httpOnly: true,
         maxAge: undefined, // 30 * 60 * 1000,
         secure: config.COOKIE_SECURE,
         sameSite: 'none',
     }
 };
-
+app.use(morgan(':method :url :status :res[content-length] - :response-time ms'))
 
 app.use(session(sessionOptions));
 
