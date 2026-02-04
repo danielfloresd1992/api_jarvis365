@@ -38,15 +38,15 @@ connectDB();
 
 // --- HTTP hardening / security middlewares ---
 
+app.use(bodyParser.json({}));
 
-app.use(helmet());
 
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 400,
-    standardHeaders: true,
-    legacyHeaders: false,
+    max: 2000
 });
+
+
 app.use(limiter);
 app.use(hpp());
 app.use(mongoSanitize());
@@ -54,20 +54,29 @@ app.use(xss());
 app.use(compression());
 app.use(rejectInsecureConnections);
 
-app.use(cors({
-        origin: origins,
-        optionsSuccessStatus: 200,
-        credentials: true,
-    }
-));
 
+app.use(cors({ 
+    origin: function (origin, callback) { 
+        if (!origin) return callback(null, true); // permite requests sin origen (ej. curl, server-side) 
+        if (origins.includes(origin)) {
+             return callback(null, true); 
+            } 
+            else { 
+                return callback(new Error('Not allowed by CORS')); 
+            } 
+        }, 
+    credentials: true, 
+    optionsSuccessStatus: 200, 
+}));
 
-app.use(bodyParser.json({}));
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' }, // Importante para imágenes
+    contentSecurityPolicy: false // O configúrala específicamente
+}));
 
 
 
 app.use(cookieParser(config.SECRET_SERVER || 'Secreto_montaña365.*'));
-
 
 app.set('trust proxy', 1);
 

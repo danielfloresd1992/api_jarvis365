@@ -44,7 +44,7 @@ routerNoveltie.get(`${nameApi}/noveltie/coundDocuments`, extendSession, validate
 
         res.json({ totalDocumentAbbreviate: AbbreviateNumber(result), total: result });
     }
-    catch (error) {
+    catch (error:any) {
         console.log(error);
         res.status(500).json({ error: 'Error server internal', status: 500, message: error.message });
     }
@@ -94,7 +94,7 @@ routerNoveltie.get(`${nameApi}/noveltie/date=:date/shift=:shift/establishments=:
 
         res.json(result);
     }
-    catch (error) {
+    catch (error:any) {
         console.log(error);
         res.status(500).json({ error: 'Error server internal', status: 500, message: error.message });
     }

@@ -516,6 +516,7 @@ routerDocument.delete(`${nameApi}/document`, validateSession, validateSessionAnd
 routerDocument.get(`${nameApi}/document/page/img/file=:filename`, async (req, res) => {
     try {
         const { filename } = req.params;
+        console.log(dirPageImgReport)
         const pathFile = join(dirPageImgReport, `/${filename}`);
         return res.sendFile(pathFile);
     }

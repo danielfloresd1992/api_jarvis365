@@ -10,9 +10,9 @@ let baseDrive: string | undefined;
 
 try {
     fs.accessSync('D:\\', fs.constants.R_OK | fs.constants.W_OK);
-    baseDrive = 'D:\\';
+    baseDrive = process.env.DEBUG === 'true' ? '\\\\72.68.60.254\\d' : 'D:\\';
 } catch (error: any) {
-    baseDrive = 'C:\\';
+    baseDrive = process.env.DEBUG === 'true' ? '\\\\72.68.60.254\\d' :'C:\\';
 }
 
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));

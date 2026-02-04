@@ -15,6 +15,8 @@ const routerAlert = express.Router();
 routerAlert.post(`${nameApi}/alertNoveltie`, extendSession, validateSession,  uploadAlert.single('img') , controller.setAlert);
 
 
+
+
 routerAlert.get(`${nameApi}/alertNoveltie/recordsLive`, validateSession, async (req, res) => {
     try {
         const dateParam = req.query.date;
