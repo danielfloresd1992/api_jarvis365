@@ -11,8 +11,14 @@ import { io } from '../../services/socket/io.js';
 controller.getChatPaginate = async (req, res) => {
     try {
         const { page, limit } = req.query;
+
         console.log( { page, limit } );
-        const chat = await ChatModel.find().sort({ $natural: -1 }).skip(Number(page) ?? 0 * Number(limit) ?? 10).limit(Number(limit) ?? 10);
+
+
+            const chat = await ChatModel.find().sort({
+              $natural: -1
+            }).skip(Number(page) * Number(limit)).limit(Number(limit));
+        
 
         return res.json({ result: chat, })
     }

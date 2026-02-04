@@ -8,13 +8,17 @@ import nameApi from '../../libs/name_api.js';
 const routesDishes = express.Router();
 
 
-routesDishes.post(`${nameApi}/dishes`, extendSession, validateSessionAndUserSuper, validateObjectIdStrict, controller.setDishe);
+routesDishes.post(`${nameApi}/dishes`, extendSession, validateSessionAndUserSuper, validateObjectIdStrict, controller.setDishe), 
 
+routesDishes.get(`${nameApi}/dishes`, extendSession, validateSession, controller.getDishe), 
 
-routesDishes.get(`${nameApi}/dishes`, extendSession, validateSession, controller.getDishe);
+routesDishes.get(`${nameApi}/dishes/id=:id`, extendSession, validateSession, controller.getDishById), 
 
+routesDishes.put(`${nameApi}/dishes/id=:id`, extendSession, validateSession, controller.putDish), 
 
 routesDishes.delete(`${nameApi}/dishes`, extendSession, validateSessionAndUserSuper, validateObjectIdStrict, controller.deleteDishComplete);
+
+
 
 
 export { routesDishes };

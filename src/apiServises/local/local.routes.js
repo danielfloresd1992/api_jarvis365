@@ -11,6 +11,22 @@ import nameApi from '../../libs/name_api.js';
 import LocalModel from './local.model.js';
 
 
+routerLocal.get(`${nameApi}/establishment&compressed`, extendSession, validateSession, async (req, res) => {
+    try {
+        const result = await LocalModel.find().select('_id name franchiseReference');
+        return res.json(result).status(200);
+    } 
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({status: 500,error: 'Error server internal',error: error});
+    }
+})
+
+
+
+
+
+
 routerLocal.get(`${nameApi}/establishment`,  extendSession, validateSession, async (req, res) => {
     try {
         const { AllEstablishment, paginate, limit, page } = req.query;
@@ -58,6 +74,9 @@ routerLocal.get(`${nameApi}/establishment`,  extendSession, validateSession, asy
 
 
 // this is deprecated
+
+
+
 
 
 routerLocal.get(`${nameApi}/local`,  extendSession, validateSession, controller.getAllLocal); // datos solos del local
