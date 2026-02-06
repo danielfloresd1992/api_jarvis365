@@ -7,8 +7,11 @@ const UpdateByUserSchema = new Schema({
     idRef:{ 
         type: Schema.Types.ObjectId, 
         required: true, 
-        ref: 'User' 
-    } }, 
+        ref: 'user',
+        immutable: true,
+    }, 
+    change: []
+}, 
     { timestamps: true // ← Esto genera createdAt y updatedAt automáticamente 
     
 });
@@ -20,7 +23,8 @@ export default model('user', new Schema({
     user:{
         type: String,
         unique: true,
-        required: true
+        required: true,
+        immutable: true
     },
     password: {
         type: String,
@@ -28,24 +32,26 @@ export default model('user', new Schema({
         select: false
     },
     email: {
-
-
+        immutable: true,
         type: String,
         unique: true,
         required: true
     },
     name: {
         type: String,
-        required: true
+        required: true,
+        immutable: true,
     },
     surName: {
         type: String,
-        required: true
+        required: true,
+        immutable: true,
     },
     phone: {
         type: String,
         unique: true,
-        required: true
+        required: true,
+        immutable: true,
     },
 
     admin: {
@@ -64,11 +70,13 @@ export default model('user', new Schema({
     },
     date: {
         type: Date,
-        default: new Date()
+        default: new Date(),
+        immutable: true,
     },
     createdOn: {
         type: Date,
-        default: new Date()
+        default: new Date(),
+        immutable: true,
     },
     
     shiftSchedule: {
@@ -79,9 +87,11 @@ export default model('user', new Schema({
 
     updateByUser: { 
         type: [UpdateByUserSchema], // ← Array de subdocumentos con timestamps
-        default: [] 
+        default: [] ,
+        select: false
     }
     })
 );
+
 
 export { UpdateByUserSchema }
