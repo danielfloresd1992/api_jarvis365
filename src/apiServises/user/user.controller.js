@@ -12,8 +12,8 @@ controller.login = async (req, res, next) => {
 
         if(!body.user || !body.password) return res.status(400).json({ error: 'the name or password property is undefined in the body' })
 
-        const user = await User.findOne({ user: body.user }) ;
-        
+        const user = await User.findOne({ user: body.user }, '+password');
+        console.log(user)
         if(!user) return res.status(404).json({ error : 'user not found'});
 
 

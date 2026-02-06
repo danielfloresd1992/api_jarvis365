@@ -1,6 +1,8 @@
 import colors from 'colors';
 import os from 'os';
-import NoveltieModel from './noveltie.model.js';
+import  NoveltieModel, { CommentSchema } from './noveltie.model.js';
+import { commentYupSchema } from './novelty.squema.js';
+
 import MenuModel from '../menu/menu.model.js';
 import FileNoveltieModel from './fileNoveltie.model.js';
 import { join } from 'path';
@@ -355,7 +357,7 @@ export default class ControllerNovelty {
             const videoUrl = process.env.NODE_ENV === 'development' ? `https://amazona365.ddns.net:3006${nameApi}/novelty/video=${req.files.video[0].filename}` : `https://amazona365.ddns.net/api_jarvis/v1/novelty/video=${req.files.video[0].filename}`;
             res.status(200).json({ url: videoUrl })
         }
-        catch (error) {
+        catch (error: any) {
             console.log(error);
             if (error.details?.code) return res.status(error.details?.code).json({ error: error.message });
             res.status(500).send('Error server internal.');
@@ -440,7 +442,7 @@ export default class ControllerNovelty {
 
             return res.status(200).json(updateDocument);
         }
-        catch (error) {
+        catch (error: any) {
             console.log(error);
             if (error.details?.code) return res.status(error.details?.code).json({ error: error.message });
 
@@ -450,4 +452,29 @@ export default class ControllerNovelty {
 
 
 
+
+
+    setComment = async (req: any, res: Response) => {
+        try {
+            const id: string | undefined = req.query?.id;
+            
+            if(!id) return res.status(400).json({  status: 400, error: 'Bad request', message: 'Id is undefined' });
+            if(!Types.ObjectId.isValid(id)) return res.status(400).json({  status: 400, error: 'Bad request', message: 'Id is invalid' });
+
+            const body = req.body;
+            body.user = req.session?.userId;
+            console.log(body);
+            const bodyValidate = await commentYupSchema.validate(body);
+
+
+            console.log(bodyValidate);
+            return res.json({});
+
+        } 
+        catch (error: any) {
+            console.log(error)
+            if(error.name === 'ValidationError') return res.status(400).json({ status: 400, error: error.errors, message: 'Bad request' });
+            return res.status(500).json({ massege: 'Error erver internal', status: 500, error: error })
+        }
+    };
 };

@@ -17,6 +17,7 @@ import { FileImgToadPos } from './fileNoveltie.model';
 import { io } from '../../services/socket/io';
 import SocketAdapter from '../../adapters/SocketAdapter';
 
+
 import * as url from 'url';
 const __dirname: string = url.fileURLToPath(new URL('.', import.meta.url));
 
@@ -236,6 +237,9 @@ routerNoveltie.delete(`${nameApi}/noventy/imageToasdPos`,  validateSession, asyn
     }
 });
 
+
+
+routerNoveltie.put(`${nameApi}/novelty/comment`, controller.setComment);
 
 
 

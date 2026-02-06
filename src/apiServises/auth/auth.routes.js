@@ -104,7 +104,8 @@ authRouter.post(`${nameApi}/auth/singin`, async (req, res) => {
     try {
         const dateValidate = await userSchema.validate(req.body);
         const findEmail = await UserModel.findOne({ email: dateValidate.email });
-
+        console.log(findEmail);
+        return null
         if(findEmail) return res.status(409).json({ error: 'Conflict', status: 409, message: 'The email is not available.' });
 
       

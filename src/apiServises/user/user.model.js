@@ -24,34 +24,40 @@ export default model('user', new Schema({
         type: String,
         unique: true,
         required: true,
-        immutable: true
+        immutable: true,
+        trim: true
     },
     password: {
         type: String,
         required: true,
-        select: false
+        select: false,
+        trim: true
     },
     email: {
         immutable: true,
         type: String,
         unique: true,
-        required: true
+        required: true,
+        trim: true
     },
     name: {
         type: String,
         required: true,
         immutable: true,
+        trim: true
     },
     surName: {
         type: String,
         required: true,
         immutable: true,
+        trim: true
     },
     phone: {
         type: String,
         unique: true,
         required: true,
         immutable: true,
+        trim: true
     },
 
     admin: {

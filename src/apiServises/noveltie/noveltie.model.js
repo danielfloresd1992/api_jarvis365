@@ -1,6 +1,23 @@
 import { model, Schema } from 'mongoose';
 
 
+const CommentSchema = new Schema({ 
+    user: { 
+        type: Schema.Types.ObjectId, 
+        ref: 'User', // asegúrate que tu modelo se registre como 'User' 
+        required: true
+    }, 
+    comment: { 
+        type: String, 
+        required: true, 
+        trim: true 
+    } 
+}, { 
+    timestamps: true // añade createdAt y updatedAt automáticamente 
+});
+
+
+
 
 const Novelties = new Schema({
 
@@ -142,6 +159,7 @@ const Novelties = new Schema({
     },
 
 
+
     sharedByUser: {
 
         createdAt: {
@@ -274,10 +292,18 @@ const Novelties = new Schema({
             message: "'{VALUE}' is not a valid value. Allowed values are: day or night"
         },
         default: null
+    },
+
+    commentSystem:{
+        type: [CommentSchema],
+        default: [ ]
     }
 
 
 }, { timestamps: true });
+
+
+
 
 
 let Noveltie;
@@ -289,3 +315,5 @@ catch (error) {
 }
 
 export default Noveltie;
+
+export { CommentSchema }

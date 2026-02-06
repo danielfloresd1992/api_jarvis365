@@ -138,12 +138,18 @@ const Menu = new Schema({
         defaultRule: {
             worth: Number,        // X1, X2, X3, X5
             acum: Number,
-            bonusValue: Number,             // Valor en puntos
+
+            valueBonusForTheStaffOnDuty:{
+                day: Number,
+                nigth: Number
+            },             // Valor en puntos
             reglamentoCode: String,     // Referencia al reglamento
             description: String,
             defaultActive: Boolean
         },
-        localSpecificRules: []       // Reglas por establecimiento
+        localSpecificRules: [
+            
+        ]       // Reglas por establecimiento
     },
 
 
