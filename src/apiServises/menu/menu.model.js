@@ -119,7 +119,7 @@ const Menu = new Schema({
         require: true
     },
 
-    rulesForBonus: {
+    rulesForBonus: {  // IS DEPRECATED
         forLocal: {},
         worth: {
             type: Number,
@@ -130,6 +130,20 @@ const Menu = new Schema({
             type: Number,
             require: true
         }
+    },
+
+
+    bonusCalculationRules: {
+        activate: Boolean,
+        defaultRule: {
+            worth: Number,        // X1, X2, X3, X5
+            acum: Number,
+            bonusValue: Number,             // Valor en puntos
+            reglamentoCode: String,     // Referencia al reglamento
+            description: String,
+            defaultActive: Boolean
+        },
+        localSpecificRules: []       // Reglas por establecimiento
     },
 
 

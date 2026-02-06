@@ -3,8 +3,20 @@ const { Schema , model } = mongoo;
 
 
 
-const userSchema = new Schema({
+const UpdateByUserSchema = new Schema({ 
+    idRef:{ 
+        type: Schema.Types.ObjectId, 
+        required: true, 
+        ref: 'User' 
+    } }, 
+    { timestamps: true // ← Esto genera createdAt y updatedAt automáticamente 
+    
+});
 
+
+
+
+export default model('user', new Schema({
     user:{
         type: String,
         unique: true,
@@ -12,9 +24,12 @@ const userSchema = new Schema({
     },
     password: {
         type: String,
-        required: true
+        required: true,
+        select: false
     },
     email: {
+
+
         type: String,
         unique: true,
         required: true
@@ -54,8 +69,19 @@ const userSchema = new Schema({
     createdOn: {
         type: Date,
         default: new Date()
+    },
+    
+    shiftSchedule: {
+        type: String,
+        require: true,
+        enum: ['day',  'nigth']
+    },
+
+    updateByUser: { 
+        type: [UpdateByUserSchema], // ← Array de subdocumentos con timestamps
+        default: [] 
     }
-});
+    })
+);
 
-
-export default model('user', userSchema);
+export { UpdateByUserSchema }

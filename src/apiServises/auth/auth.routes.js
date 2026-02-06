@@ -73,7 +73,7 @@ authRouter.post(`${nameApi}/auth/login`, async (req, res, next) => {
         }
         const dateValidate = await userSchemaMinime.validate(req.body);
 
-        const searchedUserByEmail = await UserModel.findOne({ email: dateValidate.email });
+        const searchedUserByEmail = await UserModel.findOne({ email: dateValidate.email }, '+password');
         if(!searchedUserByEmail) return res.status(404).json({ error: 'User not found', message: `The following email: "${dateValidate.email}"  does not exist` , status: 404 });
 
         const isMatch = await bcrypt.compare(dateValidate.password, searchedUserByEmail.password);
