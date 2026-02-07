@@ -21,53 +21,100 @@ const CommentSchema = new Schema({
 
 const Novelties = new Schema({
 
-    fileNoveltie: {
+    ///////////////// DATOS DE LA ALERTA
+
+    fileNoveltie: { //DEPRECATED
         type: Schema.Types.ObjectId,
         ref: 'FileNoveltie',
     },
 
-    date: {
+    date: { // DEPRECATED
         type: Date,
         require: true,
         immutable: true
     },
-
     title: {
         type: String, 
         require: true
     },
-
     table: {
         type: String,
         default: null
     },
-
     amount: {
         type: Number,
         default: null
     },
-
     nameDish: {
         type: String,
         default: null
     },
-
     menu: {
         type: String,
         require: true
     },
-
-    
     orderTicketNumber: {
         type: Number,
         default: null
     },
-
     timePeriod: {
         default: null,
         type: Schema.Types.Mixed
     },
-    
+    time:{
+        default: null,
+        type: String
+    },
+    menuRef: {
+        type: Schema.Types.ObjectId, 
+        ref: 'Menu'
+    },
+    imageToShare: {
+        type: String,
+        require: true
+    },
+
+    imageUrl: [
+        {
+            index: {
+                type: Number
+            },
+
+            url: {
+                type: String
+            },
+
+            caption: {
+                type: String,
+            }
+        }
+    ],
+
+    videoUrl: {
+        type: String,
+        default: null
+    },  
+
+    for_the_report: {
+        type: Boolean,
+        default : true
+    },
+
+    shift:  {
+        type: String,
+        enum: {
+            values: ['day', 'night', null],
+            message: "'{VALUE}' is not a valid value. Allowed values are: day or night"
+        },
+        default: null
+    },
+
+
+
+
+
+    ///////////////// DATOS DE LA VALIDACIÓN
+
     isValidate: {
         validation: {
             type: String,
@@ -90,29 +137,30 @@ const Novelties = new Schema({
                 default: 'This "isValidate" property is deprecated, use the "públicationDetail" property instead.'
             }
         }
+    
     },
 
 
 
 
     
-    givenToTheGroup: {
+    givenToTheGroup: {// DEPRECATED
         type: Boolean,
         default: null
     },
 
 
 
-    description: {
-        type: String,
+    description: { // DEPRECATED
+        type: String, 
         default: null
     },
 
 
 
 
-
-    local:{
+    ///////////////// DATOS DE LA LOCALIDAD DE LA ALERTA
+    local:{  // DEPRECATED
         name:{
             type: String,
             require: true
@@ -134,18 +182,19 @@ const Novelties = new Schema({
 
 
 
-
-    userPublic:{
+    /*
+    userPublic:{ // DEPRECATED
         name:{
             type: String,
             required: true
         },
         userId: Schema.Types.ObjectId, 
+
     },
+    */
 
-
-
-    rulesForBonus: {
+    /*
+    rulesForBonus: { // DEPRECATED
         worth: {
             type: Number,
             default: null
@@ -157,9 +206,9 @@ const Novelties = new Schema({
             default: null
         }
     },
+    */
 
-
-
+    //  DATOS DEL USUARIO
     sharedByUser: {
 
         createdAt: {
@@ -185,6 +234,10 @@ const Novelties = new Schema({
                 type: String,
                 required: true,
             }
+        },
+        commentByUser:{
+            type: String,
+            default: ''
         }
     },
 
@@ -212,7 +265,7 @@ const Novelties = new Schema({
     },
 
     
-        
+    ////////////////////////////////////////////////
     validationResult: {
         updatedAt: {
             type: Date
@@ -238,7 +291,26 @@ const Novelties = new Schema({
                 version: String
             }
         },
+        
+
+        validationToDiscard:{
+            byTheClient:{
+                type: Boolean,
+                default: false
+            },
+
+            reportingDepartment:{
+                type: Boolean,
+                default: false
+            }
+        },
+
+        commentSystem:{
+            type: [CommentSchema],
+            default: [ ]
+        }
     },
+    ///////////////////////////////////////////////////
 
 
     sharedByAmazonActive: {
@@ -246,58 +318,6 @@ const Novelties = new Schema({
         default: false
     },
 
-
-    menuRef: {
-        type: Schema.Types.ObjectId, 
-        ref: 'Menu'
-    },
-
-
-    imageToShare: {
-        type: String,
-        require: true
-    },
-
-    imageUrl: [
-        {
-            index: {
-                type: Number
-            },
-
-            url: {
-                type: String
-            },
-
-            caption: {
-                type: String,
-            }
-        }
-    ],
-    
-    videoUrl: {
-        type: String,
-        default: null
-    },  
-
-    for_the_report: {
-        type: Boolean,
-        default : true
-    },
-
-
-    shift:  {
-        type: String,
-        enum: {
-            values: ['day', 'night', null],
-            message: "'{VALUE}' is not a valid value. Allowed values are: day or night"
-        },
-        default: null
-    },
-
-    commentSystem:{
-        type: [CommentSchema],
-        default: [ ]
-    }
 
 
 }, { timestamps: true });

@@ -267,8 +267,8 @@ export default class ControllerNovelty {
 
             //    if(!resultMenu) return res.status(400).json({ error: 'The result of the title property is not registered in the system' })
 
-
-            let rules: any
+        /*
+            let rules: any // LOGIC IS DEPRECATED
             if (novelties.body.rulesForBonus === 'undefined' || novelties.body.rulesForBonus === undefined || novelties.body.rulesForBonus === null) {
                 rules = {
                     worth: 0,
@@ -280,14 +280,18 @@ export default class ControllerNovelty {
                 rules = novelties.body.rulesForBonus;
             }
 
+            */
+
             const newNoveltie = new NoveltieModel({
+
                 date: Date(),
 
                 title: novelties.body.title,
                 table: novelties.body.table,
 
                 menu: novelties.body.menu,
-                description: novelties.body.description,
+
+              
                 isValidate: {
                     validation: 'null',
                     for: null
@@ -298,19 +302,21 @@ export default class ControllerNovelty {
                     idLocal: novelties.body.localId,
                     lang: novelties.body.lang
                 },
+
+                 /*
                 userPublic: {
                     name: novelties.body.userName,
                     userId: novelties.body.userId,
                 },
+               
                 rulesForBonus: {
                     worth: rules.worth,
                     amulative: rules.amulative
                 },
-
+                */
 
                 sharedByUser: {
                     createdAt: Date.now(),
-
                     user: {
                         nameUser: req.session.name,
                         id: req.session.userId
@@ -319,8 +325,11 @@ export default class ControllerNovelty {
                     requestOrigin: {
                         applicationName: req.headers['source-application'],
                         version: req.headers['version-app']
-                    }
+                    },
+                    commentByUser: novelties.body.description
                 },
+
+
                 imageToShare: novelties.body.imageToShare,
                 imageUrl: novelties.body.imageUrl ? novelties.body.imageUrl : null,
                 videoUrl: novelties.body.videoUrl,
@@ -339,6 +348,8 @@ export default class ControllerNovelty {
 
             newBodyRequest.idCategory = resultNovelty._id;
             const result = await publisher.createPublication(newBodyRequest);
+
+
             return res.json(result);
         }
         catch (error: any) {
@@ -463,12 +474,20 @@ export default class ControllerNovelty {
 
             const body = req.body;
             body.user = req.session?.userId;
-            console.log(body);
+            
             const bodyValidate = await commentYupSchema.validate(body);
+            
+            const alertFound = await NoveltieModel.findById(id);
 
+            return res.json(alertFound);
+
+            
+            const novelty = await NoveltieModel.findByIdAndUpdate(id, { $push: { commentSystem: bodyValidate }}, {new: true, runValidators: true});
+
+            if(!novelty) return res.status(404).json({ status: 404, error: 'Document not found', message: `T he document with the following ID does not exist, ${id}` });
 
             console.log(bodyValidate);
-            return res.json({});
+            return res.json(novelty);
 
         } 
         catch (error: any) {
