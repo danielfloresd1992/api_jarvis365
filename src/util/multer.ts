@@ -20,6 +20,7 @@ const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
 
 const dirPath = path.join(baseDrive, 'imagen_clientApp');
+const userMultimedia = path.join(dirPath, 'user');
 const dirConfigImgReport = path.join(dirPath, 'config_document_report');
 const dirPageImgReport = path.join(dirPath, 'document_report_page');
 const dirPathImageNovelty = path.join(dirPath, 'imageNovelty');
@@ -139,5 +140,6 @@ export {
     uploadConfigReport,
     uploadReportDocument,
     dirConfigImgReport,
-    dirPageImgReport
+    dirPageImgReport,
+    userMultimedia
 };

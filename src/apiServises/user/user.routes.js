@@ -1,5 +1,6 @@
 import express from 'express';
 const routerUser = express.Router();
+import { join } from 'path';
 import UserModel, {UpdateByUserSchema} from './user.model.js';
 import {userUpdateSchema} from './user.schema.js'
 import addCredentials from '../../middleware/addCredential.js';
@@ -8,7 +9,7 @@ import controller from './user.controller.js';
 import nameApi from '../../libs/name_api.js';
 import { ObjectId } from 'mongodb';  //   validateSessionAndUser.js
 import { validateSessionAndUserSuper } from '../../middleware/validateSessionAndUser.js';
-
+import {userMultimedia} from '../../util/multer.js'
 
 
 //  FOR USER MANAGEMENT
@@ -98,9 +99,38 @@ routerUser.put(`${nameApi}/user/:id`, validateSessionAndUserSuper,  async (req, 
     }
 });
 
+//https://amazona365.ddns.net/api_jarvis/v1/user/multimedia/WhatsAppImage2026-02-08at1.07.11PM.jpeg
 
 
 
+routerUser.get(`${nameApi}/user/:dni`,  async (req, res) => {
+    try {
+        const dni = req.params?.dni;
+        if(!dni) return res.status(400).json({error: 'Bad request', status: 400, message: "The user's ID number is required in the dni parameter"});
+
+        const user = await UserModel.findOne({dni: dni});
+        if(!user) return res.status(404).json({ error: 'Not found', status:404, message: 'User not found, or dni invalidate', });
+        return res.status(200).json({ stauts: 200, result: user })
+    } 
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ error: 'Error server internal', status: 500, error: error });
+    }   
+});
+
+
+
+
+
+routerUser.get(`${nameApi}/user/multimedia/:namefile`,  async (req, res) => {
+    try {
+        const namefile = req.params?.namefile;
+        return res.sendFile(join(userMultimedia, namefile))
+    } 
+    catch (error) {
+        console.log(error);
+    }   
+});
 
 
 

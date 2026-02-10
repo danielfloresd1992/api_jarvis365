@@ -14,9 +14,94 @@ const updateByUserSchema = yup.object({
 
 });
 
-export const userUpdateSchema = 
-    yup.object({ password: yup .string() .min(6, 'La contraseña debe tener al menos 6 caracteres').optional(), 
-        admin: yup.boolean().optional(), 
-        super: yup.boolean().optional(), 
-        inabilited: yup.boolean().optional(), 
-        shiftSchedule: yup.string().oneOf(['day', 'nigth'], 'shiftSchedule debe ser "day" o "nigth"') .optional()}).noUnknown(true);
+
+export const userSchemaComplete = yup.object({
+    password: yup
+        .string()
+        .min(6, 'La contraseña debe tener al menos 6 caracteres')
+        .optional(),
+    
+    admin: yup.boolean().optional(),
+    super: yup.boolean().optional(),
+    inabilited: yup.boolean().optional(),
+
+    // Adaptación para la jerarquía de trabajo
+    jobInformation: yup.object({
+        department: yup
+            .string()
+            .oneOf(
+                ['Operaciones', 'Sistemas y desarrollo', 'Reportes', 'Recursos Humanos'],
+                'Departamento no válido'
+            )
+            .optional(),
+        position: yup
+            .string()
+            .oneOf(
+                [
+                    'Gerente', 'Subgerente', 'Coordinador', 'Operador senior', 
+                    'Operador', 'Analista de sistemas', 'Analista de reportes', 'Analista de RRHH'
+                ],
+                'Puesto no válido'
+            )
+            .optional()
+    }).optional(),
+
+    // Adaptación para horarios y turnos
+    workSchedule: yup.object({
+        shiftType: yup
+            .string()
+            .oneOf(['Diurno', 'Nocturno'], 'El turno debe ser Diurno o Nocturno')
+            .optional(),
+        startTime: yup
+            .string()
+            .matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato de hora inválido (HH:mm)')
+            .optional(),
+        endTime: yup
+            .string()
+            .matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato de hora inválido (HH:mm)')
+            .optional()
+    }).optional(),
+
+    img: yup.string().url('La imagen debe ser una URL válida').nullable().optional()
+
+}).noUnknown(true);
+
+
+
+
+
+export const userUpdateSchema = yup.object({
+    // Permisos y Estado (Raíz del modelo)
+    admin: yup.boolean().optional(),
+    super: yup.boolean().optional(),
+    inabilited: yup.boolean().optional(),
+
+    // Cargo (Debe estar dentro de jobInformation para Mongoose)
+    jobInformation: yup.object({
+        position: yup
+            .string()
+            .oneOf([
+                'Gerente', 'Subgerente', 'Coordinador', 
+                'Operador senior', 'Operador', 'Analista de sistemas', 
+                'Analista de reportes', 'Analista de RRHH'
+            ], 'Puesto no válido')
+            .optional()
+    }).optional(),
+
+    // Horario (Debe estar dentro de workSchedule para Mongoose)
+    workSchedule: yup.object({
+        startTime: yup
+            .string()
+            .matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato HH:mm (24h)')
+            .optional(),
+        endTime: yup
+            .string()
+            .matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato HH:mm (24h)')
+            .optional(),
+        shiftType: yup
+            .string()
+            .oneOf(['Diurno', 'Nocturno'], 'Turno inválido')
+            .optional()
+    }).optional()
+
+}).noUnknown(true);

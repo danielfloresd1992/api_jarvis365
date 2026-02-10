@@ -20,6 +20,14 @@ const UpdateByUserSchema = new Schema({
 
 
 export default model('user', new Schema({
+    dni:{
+        type: String,
+        unique: true,
+        required: true,
+        immutable: true,
+        trim: true
+    },
+
     user:{
         type: String,
         unique: true,
@@ -84,19 +92,59 @@ export default model('user', new Schema({
         default: new Date(),
         immutable: true,
     },
-    
-    shiftSchedule: {
-        type: String,
-        require: true,
-        enum: ['day',  'nigth']
+
+
+    jobInformation: {
+        department: {
+            type: String,
+            required: true,
+            enum: ['Operaciones', 'Sistemas y desarrollo', 'Reportes', 'Recursos Humanos']
+        },
+        position: {
+            type: String,
+            required: true,
+            // Aquí puedes listar todos los puestos posibles
+            enum: [
+                'Gerente', 'Subgerente', 'Coordinador', 'Operador senior', 'Operador', 
+                'Analista de sistemas', 'Analista de reportes', 'Analista de RRHH'
+            ]
+        }
     },
+
+
+    workSchedule: {
+        shiftType: {
+            type: String,
+            required: true,
+            enum: ['Diurno', 'Nocturno'],
+            default: 'Diurno'
+        },
+        startTime: {
+            type: String, // Formato "HH:mm" (ej. "08:00")
+            required: true
+        },
+        endTime: {
+            type: String, // Formato "HH:mm" (ej. "17:00")
+            required: true
+        }
+    },
+
+
+    
 
     updateByUser: { 
         type: [UpdateByUserSchema], // ← Array de subdocumentos con timestamps
         default: [] ,
         select: false
+    },
+    img: {
+        type: String,
+        unique: true,
+        default: null
     }
-    })
+    }),
+
+
 );
 
 
