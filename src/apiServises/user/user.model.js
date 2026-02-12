@@ -1,26 +1,27 @@
 import mongoo from 'mongoose';
-const { Schema , model } = mongoo;
+const { Schema, model } = mongoo;
 
 
 
-const UpdateByUserSchema = new Schema({ 
-    idRef:{ 
-        type: Schema.Types.ObjectId, 
-        required: true, 
+const UpdateByUserSchema = new Schema({
+    idRef: {
+        type: Schema.Types.ObjectId,
+        required: true,
         ref: 'user',
         immutable: true,
-    }, 
+    },
     change: []
-}, 
-    { timestamps: true // ← Esto genera createdAt y updatedAt automáticamente 
-    
-});
+},
+    {
+        timestamps: true // ← Esto genera createdAt y updatedAt automáticamente 
+
+    });
 
 
 
 
 export default model('user', new Schema({
-    dni:{
+    dni: {
         type: String,
         unique: true,
         required: true,
@@ -28,7 +29,7 @@ export default model('user', new Schema({
         trim: true
     },
 
-    user:{
+    user: {
         type: String,
         unique: true,
         required: true,
@@ -105,7 +106,7 @@ export default model('user', new Schema({
             required: true,
             // Aquí puedes listar todos los puestos posibles
             enum: [
-                'Gerente', 'Subgerente', 'Coordinador', 'Operador senior', 'Operador', 
+                'Gerente', 'Subgerente', 'Coordinador', 'Operador senior', 'Operador',
                 'Analista de sistemas', 'Analista de reportes', 'Analista de RRHH'
             ]
         }
@@ -126,15 +127,27 @@ export default model('user', new Schema({
         endTime: {
             type: String, // Formato "HH:mm" (ej. "17:00")
             required: true
+        },
+        restDays: {
+            type: [Number], // Array de números
+            required: true,
+            default: [0, 6], // Por defecto Domingo (0) y Sábado (6)
+            validate: {
+                validator: function (v) {
+                    // Valida que sean números del 0 al 6
+                    return v.every(day => day >= 0 && day <= 6);
+                },
+                message: 'Los días deben ser números entre 0 (Domingo) y 6 (Sábado).'
+            }
         }
     },
 
 
-    
 
-    updateByUser: { 
+
+    updateByUser: {
         type: [UpdateByUserSchema], // ← Array de subdocumentos con timestamps
-        default: [] ,
+        default: [],
         select: false
     },
     img: {
@@ -142,7 +155,7 @@ export default model('user', new Schema({
         unique: true,
         default: null
     }
-    }),
+}),
 
 
 );

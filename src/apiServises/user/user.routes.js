@@ -38,8 +38,8 @@ routerUser.get(`${nameApi}/user/AllById?`, async (req, res) => {
 
 
 
-//  FOR USER MANAGEMENT
-routerUser.get(`${nameApi}/user`, validateSessionAndUserSuper, async (req, res) => {
+//  FOR USER MANAGEMENT/*validateSessionAndUserSuper, */
+routerUser.get(`${nameApi}/user`, async (req, res) => {
     try {
 
         // --- Validación: debe venir id O pag ---
