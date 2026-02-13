@@ -1,24 +1,55 @@
 import * as yup from 'yup';
 
-
-// Sub‑schema para updateByUser
+// Sub‑schema para auditoría de cambios
 const updateByUserSchema = yup.object({
     idRef: yup
         .string()
         .required('El idRef es obligatorio')
         .matches(/^[0-9a-fA-F]{24}$/, 'idRef debe ser un ObjectId válido'),
 
-    change: yup.array().of(yup.string().required('Cada cambio debe ser un string válido'))
+    change: yup.array()
+        .of(yup.string().required('Cada cambio debe ser un string válido'))
         .required('El campo change es obligatorio')
         .min(1, 'Debe haber al menos un cambio')
-
 });
 
-
-
+// Esquema Completo (Registro / Creación)
 export const userSchemaComplete = yup.object({
-    // ... campos anteriores (password, admin, etc.)
+    dni: yup.string().required('El DNI es obligatorio'),
     password: yup.string().min(6, 'La contraseña debe tener al menos 6 caracteres').optional(),
+    admin: yup.boolean().default(false),
+    super: yup.boolean().default(false),
+    inabilited: yup.boolean().default(false),
+
+    jobInformation: yup.object({
+        department: yup.string()
+            .oneOf(['Operaciones', 'Sistemas y desarrollo', 'Reportes', 'Recursos Humanos'], 'Departamento no válido')
+            .nullable(),
+        position: yup.string()
+            .oneOf([
+                'Gerente', 'Subgerente', 'Coordinador', 'Operador senior',
+                'Operador', 'Analista de sistemas', 'Analista de reportes', 'Analista de RRHH'
+            ], 'Puesto no válido')
+            .nullable()
+    }).nullable().default(null),
+
+    workSchedule: yup.object({
+        shiftType: yup.string().oneOf(['Diurno', 'Nocturno'], 'Turno inválido').default('Diurno'),
+        startTime: yup.string().matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato HH:mm').required('Entrada requerida'),
+        endTime: yup.string().matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato HH:mm').required('Salida requerida'),
+        restDays: yup.array()
+            .of(yup.number().integer().min(0).max(6))
+            .min(1, 'Mínimo 1 día de descanso')
+            .max(3, 'Máximo 3 días de descanso')
+            .default([0, 6]) // Sábado y Domingo por defecto
+    }).nullable().default(null),
+
+    img: yup.string().url('URL de imagen inválida').nullable().optional()
+}).noUnknown(true);
+
+// Esquema de Actualización (Edición de Perfil)
+export const userUpdateSchema = yup.object({
+    dni: yup.string().optional(),
     admin: yup.boolean().optional(),
     super: yup.boolean().optional(),
     inabilited: yup.boolean().optional(),
@@ -33,48 +64,13 @@ export const userSchemaComplete = yup.object({
                 'Operador', 'Analista de sistemas', 'Analista de reportes', 'Analista de RRHH'
             ], 'Puesto no válido')
             .optional()
-    }).optional(),
-
-    workSchedule: yup.object({
-        shiftType: yup.string().oneOf(['Diurno', 'Nocturno'], 'Turno inválido').optional(),
-        startTime: yup.string().matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato HH:mm').optional(),
-        endTime: yup.string().matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato HH:mm').optional(),
-        // NUEVO CAMPO: restDays
-        restDays: yup.array()
-            .of(yup.number().min(0).max(6))
-            .min(1, 'Debe tener al menos un día libre')
-            .max(3, 'No puede tener más de 3 días libres') // Opcional, según tu lógica
-            .optional()
-    }).optional(),
-
-    img: yup.string().url('La imagen debe ser una URL válida').nullable().optional()
-}).noUnknown(true);
-
-
-
-
-
-export const userUpdateSchema = yup.object({
-    admin: yup.boolean().optional(),
-    super: yup.boolean().optional(),
-    inabilited: yup.boolean().optional(),
-
-    jobInformation: yup.object({
-        position: yup.string()
-            .oneOf([
-                'Gerente', 'Subgerente', 'Coordinador', 'Operador senior', 
-                'Operador', 'Analista de sistemas', 'Analista de reportes', 'Analista de RRHH'
-            ], 'Puesto no válido')
-            .optional()
-    }).optional(),
+    }).nullable().optional(),
 
     workSchedule: yup.object({
         startTime: yup.string().matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato HH:mm').optional(),
         endTime: yup.string().matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato HH:mm').optional(),
         shiftType: yup.string().oneOf(['Diurno', 'Nocturno'], 'Turno inválido').optional(),
-        // NUEVO CAMPO: restDays en Update
-        restDays: yup.array()
-            .of(yup.number().min(0).max(6).integer('Debe ser un número entero'))
+        restDays: yup.object()
             .optional()
-    }).optional()
+    }).nullable().optional()
 }).noUnknown(true);

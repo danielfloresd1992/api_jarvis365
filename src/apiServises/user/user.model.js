@@ -109,7 +109,8 @@ export default model('user', new Schema({
                 'Gerente', 'Subgerente', 'Coordinador', 'Operador senior', 'Operador',
                 'Analista de sistemas', 'Analista de reportes', 'Analista de RRHH'
             ]
-        }
+        },
+        required: false
     },
 
 
@@ -129,22 +130,19 @@ export default model('user', new Schema({
             required: true
         },
         restDays: {
-            type: [Number], // Array de números
-            required: true,
-            default: [0, 6], // Por defecto Domingo (0) y Sábado (6)
-            validate: {
-                validator: function (v) {
-                    // Valida que sean números del 0 al 6
-                    return v.every(day => day >= 0 && day <= 6);
-                },
-                message: 'Los días deben ser números entre 0 (Domingo) y 6 (Sábado).'
-            }
-        }
+            0: { type: Boolean, default: true },
+            1: { type: Boolean, default: false },
+            2: { type: Boolean, default: false },
+            3: { type: Boolean, default: false },
+            4: { type: Boolean, default: false },
+            5: { type: Boolean, default: false },
+            6: { type: Boolean, default: true }
+        },
+        required: false
     },
 
 
-
-
+    
     updateByUser: {
         type: [UpdateByUserSchema], // ← Array de subdocumentos con timestamps
         default: [],
@@ -155,10 +153,8 @@ export default model('user', new Schema({
         unique: true,
         default: null
     }
-}),
+}));
 
-
-);
 
 
 export { UpdateByUserSchema }
