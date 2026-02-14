@@ -24,9 +24,8 @@ export default model('user', new Schema({
     dni: {
         type: String,
         unique: true,
-        required: true,
-        immutable: true,
-        trim: true
+        trim: true,
+        default: null
     },
 
     user: {
@@ -52,13 +51,11 @@ export default model('user', new Schema({
     name: {
         type: String,
         required: true,
-        immutable: true,
         trim: true
     },
     surName: {
         type: String,
         required: true,
-        immutable: true,
         trim: true
     },
     phone: {
@@ -99,16 +96,20 @@ export default model('user', new Schema({
         department: {
             type: String,
             required: true,
-            enum: ['Operaciones', 'Sistemas y desarrollo', 'Reportes', 'Recursos Humanos']
+            enum: ['Operaciones', 'Sistemas y desarrollo', 'Reportes', 'Recursos Humanos', 'Audioria']
         },
         position: {
             type: String,
             required: true,
             // Aquí puedes listar todos los puestos posibles
             enum: [
-                'Gerente', 'Subgerente', 'Coordinador', 'Operador senior', 'Operador',
-                'Analista de sistemas', 'Analista de reportes', 'Analista de RRHH'
+                'Gerente', 'Subgerente', 'Coordinador', 'Operador senior', 'Operador experto', 'Operador',
+                'Analista de sistemas', 'Analista de reportes', 'Analista de auditoria','Analista de RRHH'
             ]
+        },
+        detail:{
+            type: String,
+            default: null,
         },
         required: false
     },
@@ -138,11 +139,23 @@ export default model('user', new Schema({
             5: { type: Boolean, default: false },
             6: { type: Boolean, default: true }
         },
-        required: false
+        required: false,
+        lateArrivalControl: {
+            type: Boolean,
+            default: true // ¿Se le aplica la regla de llegada tarde?
+        },
+        lateArrivalTracking: {
+            type: Boolean,
+            default: true // ¿Se debe hacer seguimiento/notificación?
+        },
+        outForkSchedule: {
+            type: Boolean,
+            default: false
+        }
     },
 
 
-    
+
     updateByUser: {
         type: [UpdateByUserSchema], // ← Array de subdocumentos con timestamps
         default: [],

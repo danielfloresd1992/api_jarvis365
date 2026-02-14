@@ -148,6 +148,9 @@ routerUser.get(`${nameApi}/user/:dni`, async (req, res) => {
 
 
 
+routerUser.post(`${nameApi}/user/multidia`, );
+
+
 
 
 routerUser.get(`${nameApi}/user/multimedia/:namefile`, async (req, res) => {

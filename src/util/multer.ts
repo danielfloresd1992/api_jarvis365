@@ -132,6 +132,14 @@ const uploadReportDocument: Multer = multer({
 });
 
 
+
+const uploadFileProfile: Multer = multer({
+    storage: commonStorage('profile', userMultimedia),
+    fileFilter: createFileFilter(['png', 'jpg', 'jpeg', 'mp4', 'avi'])
+});
+
+
+
 export {
     uploadLocal,
     uploadManager,
@@ -141,5 +149,6 @@ export {
     uploadReportDocument,
     dirConfigImgReport,
     dirPageImgReport,
-    userMultimedia
+    userMultimedia,
+    uploadFileProfile
 };

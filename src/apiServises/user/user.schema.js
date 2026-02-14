@@ -13,9 +13,16 @@ const updateByUserSchema = yup.object({
         .min(1, 'Debe haber al menos un cambio')
 });
 
+
 // Esquema Completo (Registro / Creación)
 export const userSchemaComplete = yup.object({
-    dni: yup.string().required('El DNI es obligatorio'),
+    dni: yup.string().nullable().default(null),
+
+    user: yup.string().required().trim(),
+    name:  yup.string().required().trim(),
+    surName: yup.string().required().trim(),
+    phone: yup.string().required().trim(),
+
     password: yup.string().min(6, 'La contraseña debe tener al menos 6 caracteres').optional(),
     admin: yup.boolean().default(false),
     super: yup.boolean().default(false),
@@ -27,7 +34,7 @@ export const userSchemaComplete = yup.object({
             .nullable(),
         position: yup.string()
             .oneOf([
-                'Gerente', 'Subgerente', 'Coordinador', 'Operador senior',
+                'Gerente', 'Subgerente', 'Coordinador', 'Operador senior', 'Operador experto',
                 'Operador', 'Analista de sistemas', 'Analista de reportes', 'Analista de RRHH'
             ], 'Puesto no válido')
             .nullable()
@@ -47,11 +54,16 @@ export const userSchemaComplete = yup.object({
     img: yup.string().url('URL de imagen inválida').nullable().optional()
 }).noUnknown(true);
 
+
+
+
 // Esquema de Actualización (Edición de Perfil)
 export const userUpdateSchema = yup.object({
-    dni: yup.string().optional(),
+    dni: yup.string().nullable().default(null),
     admin: yup.boolean().optional(),
     super: yup.boolean().optional(),
+    name:  yup.string().optional().trim(),
+    surName: yup.string().optional().trim(),
     inabilited: yup.boolean().optional(),
 
     jobInformation: yup.object({
@@ -60,10 +72,11 @@ export const userUpdateSchema = yup.object({
             .optional(),
         position: yup.string()
             .oneOf([
-                'Gerente', 'Subgerente', 'Coordinador', 'Operador senior',
+                'Gerente', 'Subgerente', 'Coordinador', 'Operador senior','Operador experto',
                 'Operador', 'Analista de sistemas', 'Analista de reportes', 'Analista de RRHH'
             ], 'Puesto no válido')
-            .optional()
+            .optional(),
+        detail: yup.string().nullable().default(null),
     }).nullable().optional(),
 
     workSchedule: yup.object({
@@ -71,6 +84,13 @@ export const userUpdateSchema = yup.object({
         endTime: yup.string().matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato HH:mm').optional(),
         shiftType: yup.string().oneOf(['Diurno', 'Nocturno'], 'Turno inválido').optional(),
         restDays: yup.object()
-            .optional()
-    }).nullable().optional()
-}).noUnknown(true);
+            .optional(),
+        lateArrivalControl: yup.boolean().default(true),
+        lateArrivalTracking: yup.boolean().default(true),
+        outForkSchedule: yup.boolean().default(false),
+        
+    }).nullable().optional(),
+
+    img: yup.string().nullable().default(null)
+
+}).noUnknown(true)
