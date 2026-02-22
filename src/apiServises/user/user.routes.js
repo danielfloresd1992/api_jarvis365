@@ -11,6 +11,9 @@ import { ObjectId } from 'mongodb';  //   validateSessionAndUser.js
 import { validateSessionAndUserSuper } from '../../middleware/validateSessionAndUser.js';
 import { userMultimedia } from '../../util/multer.js'
 
+import AttendanceModel from './attendance.model.js';
+import attendanceValidationSchema from './attendance.squema.js';
+import { parseISO, format, isAfter, getDay, startOfDay, isValid } from 'date-fns';
 
 
 
@@ -18,14 +21,14 @@ import { userMultimedia } from '../../util/multer.js'
 routerUser.get(`${nameApi}/user/AllById?`, async (req, res) => {
     try {
 
-        const {inabilited} = req.query
+        const { inabilited } = req.query
         const query = {};
 
-        if(inabilited !== undefined) { 
-            if(inabilited === 'true') query.inabilited = true;
-            if(inabilited === 'false') query.inabilited = false;
+        if (inabilited !== undefined) {
+            if (inabilited === 'true') query.inabilited = true;
+            if (inabilited === 'false') query.inabilited = false;
         }
-         
+
         const fullUser = await UserModel.find(query).select('_id');
         return res.status(200).json({ result: fullUser })
     }
@@ -148,7 +151,216 @@ routerUser.get(`${nameApi}/user/:dni`, async (req, res) => {
 
 
 
-routerUser.post(`${nameApi}/user/multidia`, );
+
+routerUser.get(`${nameApi}/user/attendance/:dns`, async (req, res) => {
+    try {
+        const { dni } = req.params;
+        const { date } = req.query; // Recibimos la fecha por Query Params
+
+        // 1. Validaciones iniciales
+        if (!dni) {
+            return res.status(400).json({ status: 400, message: 'El DNI es obligatorio', error: 'Bad request' });
+        }
+        if (!date) {
+            return res.status(400).json({ status: 400, message: 'La fecha es obligatoria para la consulta', error: 'Bad request' });
+        }
+
+
+        // 2. Normalizar la fecha de búsqueda (Igual que en el guardado)
+        const searchDate = startOfDay(new Date(date));
+        if (!isValid(searchDate)) {
+            return res.status(400).json({ status: 400, message: 'Formato de fecha inválido', error: 'Bad request' });
+        }
+
+        // 3. Buscar al usuario por DNI para obtener su _id
+        const user = await UserModel.findOne({ dni: dni });
+        if (!user) {
+            return res.status(404).json({
+                status: 404,
+                message: "Usuario no encontrado",
+                error: "User Not Found"
+            });
+        }
+
+        // 4. Buscar el registro de asistencia
+        const attendance = await AttendanceModel.findOne({
+            userId: user._id,
+            date: searchDate
+        });
+
+        // 5. Respuesta si NO hay registro (Muy importante para el frontend)
+        if (!attendance) {
+            return res.status(404).json({
+                error: 'Document not found',
+                status: 404,
+                message: "No se encontró registro de asistencia para este día",
+                data: null // Enviamos data null para que el frontend sepa que es un día "vío"
+            });
+        }
+
+        // 6. Respuesta exitosa
+        return res.status(200).json({
+            status: 200,
+            message: "Registro encontrado",
+            data: attendance
+        });
+
+    }
+    catch (error) {
+        console.error("Error en getAttendanceByDni:", error);
+        return res.status(500).json({
+            status: 500,
+            message: "Error interno del servidor",
+            error: error.message
+        });
+    }
+});
+
+
+
+
+// attendance record
+const ensureDate = (dateSource) => {
+    if (!dateSource) return null;
+    if (dateSource instanceof Date) return dateSource;
+    // Solo si es string intentamos parsear
+    return new Date(dateSource);
+};
+
+
+routerUser.post(`${nameApi}/user/attendance/:dns`, async (req, res) => {
+    try {
+        const dni = req.params?.dns;
+        const body = req.body;
+
+        if (!dni) return res.status(400).json({ status: 400, message: 'Dni is undefined', error: 'Bad request' });
+
+        const user = await UserModel.findOne({ dni: dni });
+        if (!user) return res.status(404).json({ status: 404, message: 'User not found or dni invalid', error: 'Documento not found' });
+
+
+        const bodyValidate = await attendanceValidationSchema.validate(body);
+
+
+
+        // Datos de regla
+        const timeArrivaRules = new Date(new Date().setHours(Number(user.workSchedule.startTime.split(':')[0]), Number(user.workSchedule.startTime.split(':')[1]), 0, 0)); // "09:00", "18:00" /TIME LIMIT
+        const timeOutRule = new Date(new Date().setHours(Number(user.workSchedule.endTime.split(':')[0]), Number(user.workSchedule.endTime.split(':')[1]), 0, 0));
+        const shiftRule = user.workSchedule.shiftType;
+
+        // Datos de llegada
+        const recordDate = startOfDay(ensureDate(bodyValidate.date)); // DÍA DEL DOCUMENTO;
+        const timeArrival = new Date(bodyValidate.checkIn); // HORA LLEGADA
+        const timeOut = new Date(bodyValidate.checkOut); // HORA SALIDA 
+        const dayArrival = timeArrival.getDay(); // DÍA DE LLEGADA
+        const dayFree = user.workSchedule.restDays[String(new Date().getDay())]; // DIA LIBRE EN BOOLEANO
+
+
+        // ==========================================================
+        // AQUÍ SE ESTABLECE SI LLEGÓ TARDE (Lógica de Negocio)
+        // ==========================================================
+        const realIsLate = isAfter(timeArrivaRules, timeArrival); // TARDE EN BOOLEANO
+
+
+
+
+        // ==========================================================
+        // GUARDADO EN BASE DE DATOS (Upsert)
+        // ==========================================================
+
+        const finalRecord = await AttendanceModel.findOneAndUpdate(
+            { userId: user._id, date: recordDate },
+            {
+                $set: {
+                    date: recordDate,
+                    checkIn: timeArrival, // Hora de llegada
+                    checkOut: bodyValidate.checkOut ? timeOut : null, // hora de salida en caso e haber
+                    isLate: realIsLate, // legda tarde en booleano
+                    isExtraDay: dayFree, // si es dia libre trabajado
+                    status: dayFree ? 'franco-trabajado' : 'presente',
+                    adminNotes: bodyValidate?.adminNotes || "" // Nota de recursos humanos
+                }
+            },
+            { upsert: true, new: true }
+        );
+
+        return res.json({
+            message: realIsLate ? "Registro exitoso con retardo" : "Registro exitoso a tiempo",
+            data: finalRecord
+        });
+
+
+        /*
+
+        const ensureDate = (dateSource) => {
+            if (dateSource instanceof Date) return dateSource;
+            if (typeof dateSource === 'string') return parseISO(dateSource);
+            return new Date(dateSource);
+        };
+
+        const checkInDate = ensureDate(bodyValidate.checkIn);
+        
+
+        if (!isValid(checkInDate) || !isValid(recordDate)) {
+            return res.status(400).json({ message: "Formato de fecha inválido" });
+        }
+
+        // ==========================================================
+        // AQUÍ SE ESTABLECE SI LLEGÓ TARDE (Lógica de Negocio)
+        // ==========================================================
+        
+        // 1. Obtener horas y minutos del horario oficial de Daniel (ej: "09:00")
+        
+        
+        // 2. Crear un objeto Date para la "Hora Límite" basado en el día del CheckIn
+        const limitTime = new Date(checkInDate);
+        limitTime.setHours(hour, minute, 0, 0);
+
+        // 3. Determinar si es su día de descanso (0-6)
+        const dayOfWeek = getDay(recordDate);
+        const isRestDay = user.workSchedule.restDays[dayOfWeek.toString()];
+
+        // 4. Calcular el estado real del retardo
+        let realIsLate = false;
+        if (user.workSchedule.lateArrivalControl && !isRestDay) {
+            // Es tarde si la hora de entrada es mayor a la hora límite
+            realIsLate = isAfter(checkInDate, limitTime);
+        }
+
+        // ==========================================================
+        // GUARDADO EN BASE DE DATOS (Upsert)
+        // ==========================================================
+        
+        const finalRecord = await AttendanceModel.findOneAndUpdate(
+            { userId: user._id, date: recordDate },
+            {
+                $set: {
+                    checkIn: checkInDate,
+                    checkOut: bodyValidate.checkOut ? ensureDate(bodyValidate.checkOut) : null,
+                    isLate: realIsLate,
+                    isExtraDay: isRestDay,
+                    status: isRestDay ? 'franco-trabajado' : 'presente',
+                    adminNotes: bodyValidate.adminNotes || ""
+                }
+            },
+            { upsert: true, new: true }
+        );
+
+        
+        */
+
+    }
+    catch (error) {
+        console.log(error.name);
+        if (error.name === 'CastError') return res.status(400).json({ error: error, status: 400, message: 'Bad request' });
+        if (error.name === 'ValidationError') return res.status(400).json({ error: error.errors, status: 400, message: 'Bad request' });
+        return res.status(500).json({ status: 500, message: 'Error server internal', error: error.message });
+    }
+});
+
+
+
+
 
 
 
@@ -162,6 +374,8 @@ routerUser.get(`${nameApi}/user/multimedia/:namefile`, async (req, res) => {
         console.log(error);
     }
 });
+
+
 
 
 

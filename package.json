@@ -9,7 +9,7 @@
   "scripts": {
     "build": "npx babel src --out-dir dist --extensions \".ts,.js\" && npx gulp --gulpfile gulpfile.esm.js build",
     "start": "node ./dist/server.js",
-    "debuggin": "set NODE_ENV=production&& set DEBUG=true&& npx nodemon",
+    "debuggin": "set NODE_ENV=production&& set DEBUG=true&& nodemon ./src/server.ts",
     "dev": "set NODE_ENV=development&& npx nodemon"
   },
   "devDependencies": {
@@ -33,6 +33,7 @@
     "gulp": "^5.0.0",
     "gulp-pug": "^5.0.0",
     "gulp-rename": "^2.0.0",
+    "nodemon": "^3.1.13",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2"
   },
@@ -53,6 +54,7 @@
     "connect-redis": "^9.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
+    "date-fns": "^4.1.0",
     "debug": "^4.4.0",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
