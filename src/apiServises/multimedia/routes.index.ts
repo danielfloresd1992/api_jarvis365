@@ -43,7 +43,7 @@ routerMultimedia.get(`${nameApi}/multimedia`, async (req: Request, res: Response
 
 
 
-routerMultimedia.post(`${nameApi}/multimedia`, validateSession, uploadNoveltie.fields([{ name: 'video', maxCount: 1 }, { name: 'img', maxCount: 1 }]), async (req: Request, res: Response): Promise<void> => {
+routerMultimedia.post(`${nameApi}/multimedia`,  uploadNoveltie.fields([{ name: 'video', maxCount: 1 }, { name: 'img', maxCount: 1 }]), async (req: Request, res: Response): Promise<void> => {
     try {
         const file = req.files ? req.files : null;
         if (!file) res.status(400).json({ error: 'No files uploaded' });

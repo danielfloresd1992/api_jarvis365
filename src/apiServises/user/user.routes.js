@@ -16,6 +16,8 @@ import attendanceValidationSchema from './attendance.squema.js';
 import { parseISO, format, isAfter, getDay, startOfDay, isValid } from 'date-fns';
 
 
+import socket from '../../services/socket/io.js'
+
 
 
 routerUser.get(`${nameApi}/user/AllById?`, async (req, res) => {
@@ -271,6 +273,9 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dns`, async (req, res) => {
             {
                 new: true     // Devuelve el documento actualizado
             });
+
+            socket.emit('user-attendance' ,socket)
+
             return res.status(200).json({finalRecord, user, message: '¡Fin de la jornada diaria!🥳🥳🥳'})
         }
 
