@@ -1,6 +1,13 @@
 import * as yup from 'yup';
 import { startOfDay } from 'date-fns';
 
+
+
+// Devuelve el inicio del día preservando la misma fecha en UTC
+
+
+
+
 const attendanceValidationSchema = yup.object().shape({
   userId: yup
     .string()
@@ -8,9 +15,10 @@ const attendanceValidationSchema = yup.object().shape({
 
   date: yup
     .date()
-    .transform((value) => (value ? startOfDay(new Date(value)) : value))
+    .transform((value) => (value ? startOfDayLocal(value) : value))
     .required('La fecha del registro es obligatoria'),
 
+    
   checkIn: yup
     .date()
     .nullable()

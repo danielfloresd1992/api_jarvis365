@@ -43,7 +43,7 @@ app.use(bodyParser.json({}));
 
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 2000
+    max: 30000
 });
 
 

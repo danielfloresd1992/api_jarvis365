@@ -16,11 +16,12 @@ const AttendanceSchema = new mongoose.Schema({
     // Registro de horas reales
     checkIn: { 
         type: Date,
-        immutable: true,
+        immutable: true
+
     },
     checkOut: { 
         type: Date,
-        immutable: true
+        
     },
 
     // Lógica de retardos
@@ -51,7 +52,12 @@ const AttendanceSchema = new mongoose.Schema({
         type: String,
         enum: ['presente', 'ausente', 'pendiente', 'franco-trabajado'],
         default: 'pendiente'
+    },
+
+    imageReference:{
+        type: []
     }
+
 }, { timestamps: true });
 
 // Índice para buscar rápido por usuario y fecha
