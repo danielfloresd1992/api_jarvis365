@@ -3,7 +3,11 @@ import { startOfDay } from 'date-fns';
 
 
 
-// Devuelve el inicio del día preservando la misma fecha en UTC
+const startOfDayLocal = (value) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return startOfDay(date);
+};
 
 
 
@@ -66,5 +70,14 @@ const attendanceValidationSchema = yup.object().shape({
     .default('pendiente'),
 });
 
+const attendanceMachineValidationSchema = yup.object().shape({
+  imageReference: yup
+    .string()
+    .trim()
+    .required('La referencia de imagen es obligatoria')
+    .min(3, 'La referencia de imagen es inválida')
+});
+
 
 export default attendanceValidationSchema;
+export { attendanceMachineValidationSchema };

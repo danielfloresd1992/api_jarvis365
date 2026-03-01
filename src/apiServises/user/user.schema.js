@@ -1,5 +1,30 @@
 import * as yup from 'yup';
 
+const DEPARTMENT_ENUM = ['Operaciones', 'Sistemas y desarrollo', 'Reportes', 'Recursos Humanos', 'Audioria'];
+const POSITION_ENUM = [
+    'Gerente', 'Subgerente', 'Coordinador', 'Operador senior', 'Operador experto',
+    'Operador', 'Analista de sistemas', 'Analista de reportes', 'Analista de auditoria', 'Analista de RRHH'
+];
+
+// Sub-schema de validación para un día individual de scheduleByDay
+const dayScheduleSchema = yup.object({
+    workType: yup.string().oneOf(['laboral', 'extra', 'descanso'], 'workType inválido').default('laboral'),
+    shift: yup.string().oneOf(['Diurno', 'Nocturno'], 'Turno inválido').default('Diurno'),
+    startTime: yup.string().matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato HH:mm').nullable().default(null),
+    endTime: yup.string().matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato HH:mm').nullable().default(null),
+    note: yup.array().optional().default([])
+});
+
+const scheduleByDaySchema = yup.lazy((value) => {
+    if (value == null) return yup.mixed().nullable();
+    const shape = {};
+    for (const key of Object.keys(value)) {
+        shape[key] = dayScheduleSchema;
+    }
+    return yup.object(shape);
+});
+
+
 // Sub‑schema para auditoría de cambios
 const updateByUserSchema = yup.object({
     idRef: yup
@@ -30,25 +55,16 @@ export const userSchemaComplete = yup.object({
 
     jobInformation: yup.object({
         department: yup.string()
-            .oneOf(['Operaciones', 'Sistemas y desarrollo', 'Reportes', 'Recursos Humanos'], 'Departamento no válido')
+            .oneOf(DEPARTMENT_ENUM, 'Departamento no válido')
             .nullable(),
         position: yup.string()
-            .oneOf([
-                'Gerente', 'Subgerente', 'Coordinador', 'Operador senior', 'Operador experto',
-                'Operador', 'Analista de sistemas', 'Analista de reportes', 'Analista de RRHH'
-            ], 'Puesto no válido')
+            .oneOf(POSITION_ENUM, 'Puesto no válido')
             .nullable()
     }).nullable().default(null),
 
     workSchedule: yup.object({
         shiftType: yup.string().oneOf(['Diurno', 'Nocturno'], 'Turno inválido').default('Diurno'),
-        startTime: yup.string().matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato HH:mm').required('Entrada requerida'),
-        endTime: yup.string().matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato HH:mm').required('Salida requerida'),
-        restDays: yup.array()
-            .of(yup.number().integer().min(0).max(6))
-            .min(1, 'Mínimo 1 día de descanso')
-            .max(3, 'Máximo 3 días de descanso')
-            .default([0, 6]) // Sábado y Domingo por defecto
+        scheduleByDay: scheduleByDaySchema.optional()
     }).nullable().default(null),
 
     img: yup.string().url('URL de imagen inválida').nullable().optional()
@@ -68,27 +84,20 @@ export const userUpdateSchema = yup.object({
 
     jobInformation: yup.object({
         department: yup.string()
-            .oneOf(['Operaciones', 'Sistemas y desarrollo', 'Reportes', 'Recursos Humanos'], 'Departamento no válido')
+            .oneOf(DEPARTMENT_ENUM, 'Departamento no válido')
             .optional(),
         position: yup.string()
-            .oneOf([
-                'Gerente', 'Subgerente', 'Coordinador', 'Operador senior','Operador experto',
-                'Operador', 'Analista de sistemas', 'Analista de reportes', 'Analista de RRHH'
-            ], 'Puesto no válido')
+            .oneOf(POSITION_ENUM, 'Puesto no válido')
             .optional(),
         detail: yup.string().nullable().default(null),
     }).nullable().optional(),
 
     workSchedule: yup.object({
-        startTime: yup.string().matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato HH:mm').optional(),
-        endTime: yup.string().matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato HH:mm').optional(),
         shiftType: yup.string().oneOf(['Diurno', 'Nocturno'], 'Turno inválido').optional(),
-        restDays: yup.object()
-            .optional(),
+        scheduleByDay: scheduleByDaySchema.optional(),
         lateArrivalControl: yup.boolean().default(true),
         lateArrivalTracking: yup.boolean().default(true),
         outForkSchedule: yup.boolean().default(false),
-        
     }).nullable().optional(),
 
     img: yup.string().nullable().default(null)

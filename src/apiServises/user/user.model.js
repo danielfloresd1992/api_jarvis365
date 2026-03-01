@@ -104,10 +104,10 @@ export default model('user', new Schema({
             // Aquí puedes listar todos los puestos posibles
             enum: [
                 'Gerente', 'Subgerente', 'Coordinador', 'Operador senior', 'Operador experto', 'Operador',
-                'Analista de sistemas', 'Analista de reportes', 'Analista de auditoria','Analista de RRHH'
+                'Analista de sistemas', 'Analista de reportes', 'Analista de auditoria', 'Analista de RRHH'
             ]
         },
-        detail:{
+        detail: {
             type: String,
             default: null,
         },
@@ -122,23 +122,38 @@ export default model('user', new Schema({
             enum: ['Diurno', 'Nocturno'],
             default: 'Diurno'
         },
-        startTime: {
-            type: String, // Formato "HH:mm" (ej. "08:00")
-            required: true
+
+        // ══════════════════════════════════════════════════════════════
+        // HORARIO POR DÍA: scheduleByDay (reemplaza startTime/endTime/restDays)
+        // ══════════════════════════════════════════════════════════════
+        // Cada clave (0-6) representa un día de la semana (0=Dom, 1=Lun … 6=Sáb).
+        // Si un día tiene workType 'descanso', startTime/endTime se ignoran.
+        // shift por día permite asignar turnos mixtos (ej: diurno L-V, nocturno S).
+        scheduleByDay: {
+            type: Map,
+            of: new Schema({
+                workType: {
+                    type: String,
+                    enum: ['laboral', 'extra', 'descanso'],
+                    default: 'laboral'
+                },
+                shift: {
+                    type: String,
+                    enum: ['Diurno', 'Nocturno'],
+                    default: 'Diurno'
+                },
+                startTime: { type: String },  // "HH:mm"
+                endTime: { type: String },  // "HH:mm"
+                note: [{
+                    user: { type: Schema.Types.ObjectId, ref: 'user' },
+                    message: { type: String },
+                    date: { type: Date, default: Date.now },
+                    _id: false
+                }]
+            }, { _id: false }),
+            default: {}
         },
-        endTime: {
-            type: String, // Formato "HH:mm" (ej. "17:00")
-            required: true
-        },
-        restDays: {
-            0: { type: Boolean, default: true },
-            1: { type: Boolean, default: false },
-            2: { type: Boolean, default: false },
-            3: { type: Boolean, default: false },
-            4: { type: Boolean, default: false },
-            5: { type: Boolean, default: false },
-            6: { type: Boolean, default: true }
-        },
+
         required: false,
         lateArrivalControl: {
             type: Boolean,

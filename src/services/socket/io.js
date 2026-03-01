@@ -17,7 +17,7 @@ config({ path: join(__dirname, '../../../.env') });
 
 
 
-const SOCKET_PORT = process.env.NODE_ENV === 'development' ? process.env.DEV_SOCKET_PORT : process.env.PROD_SOCKET_PORT;
+const SOCKET_PORT = process.env.SOCKET_PORT_API;
 
 
 const httpsServer = createServer({
@@ -43,7 +43,7 @@ io.on('connection', (socket) => {
     });
 
     socket.join('lobby');
-    
+
 
     socket.on('updatePublisher', data => {
         console.log(data);
@@ -69,13 +69,13 @@ io.on('connection', (socket) => {
     socket.on('close-user-connection', data => {
         io.emit('close-user-repost-express', data);
     });
- 
+
     socket.on('update-user-repost-express', userId => {
         io.emit('update-user-client-express', userId);
     });
 
     socket.on('update-user-app-manager', user => {
-    
+
         io.emit('update-user-client-manager', user);
     });
 
@@ -91,17 +91,17 @@ io.on('connection', (socket) => {
         io.emit('return-ask-user', data);
     });
 
-//////////////////////////////////////////;
+    //////////////////////////////////////////;
 
 
     socket.on('receive-failure', data => {
 
-        if(!cacheFailedConcnection.setItem(`${data.idLocal}-${data.localName}`)){
+        if (!cacheFailedConcnection.setItem(`${data.idLocal}-${data.localName}`)) {
             const dataLocal = {
                 nameItem: `${data.idLocal}-${data.localName}`,
                 ...data
             };
-            
+
             cacheFailedConcnection.setItem(dataLocal.nameItem, data);
             io.emit('failed-connection', dataLocal);
         }
@@ -114,18 +114,18 @@ io.on('connection', (socket) => {
 
 
     socket.on('from-failed-connection', msm => {
-       
-        io.emit('check-failed-connection' , cacheFailedConcnection.getCacheArray());
+
+        io.emit('check-failed-connection', cacheFailedConcnection.getCacheArray());
     });
 
 
     //jarvis365reporte
     socket.on('jarvis365reporte-alert-emit', msm => {
-        io.emit('jarvis365reporte-alert-receive' , msm);
+        io.emit('jarvis365reporte-alert-receive', msm);
     });
 
 
-    
+
 
 });
 
