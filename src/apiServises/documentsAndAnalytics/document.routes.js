@@ -10,6 +10,7 @@ import { io } from '../../services/socket/io.js';
 import { validateSession, validateSessionAndUserSuper } from '../../middleware/validateSessionAndUser.js';
 import { uploadConfigReport, dirConfigImgReport, uploadReportDocument, dirPageImgReport } from '../../util/multer.js';
 import SMU_MODEL from '../auth/auth.model.js';
+import UserModel from '../user/user.model.js';
 import PageDocument from './page.model.js';
 import DocumentModel from './document.model.js';
 import { documentSchema, documentSchemaComplete, documentSchemaPartial } from '../../libs/schema/document.schema.js'
@@ -23,47 +24,160 @@ const routerDocument = express.Router();
 
 
 routerDocument.get(`${nameApi}/document/exit`, validateSession, async (req, res) => {
-  try {
+    try {
 
-        const findTask = await SMU_MODEL.findOne({ idUser: req.session.userId});
+        const findTask = await SMU_MODEL.findOne({ idUser: req.session.userId });
         const d = await SMU_MODEL.findById(req.session?.activity?._id);
 
-        if (console.log(req.session), console.log(d), !findTask) return res.status(404).json({error: 'Document not found',status: 404, message: 'The user does not have any tasks assigned'});
-        const deletedElement = await SMU_MODEL.deleteOne({idUser: req.session.userId});
+        if (console.log(req.session), console.log(d), !findTask) return res.status(404).json({ error: 'Document not found', status: 404, message: 'The user does not have any tasks assigned' });
+        const deletedElement = await SMU_MODEL.deleteOne({ idUser: req.session.userId });
 
         const savedDelete = req.session.dataUser.activity;
         delete req.session.dataUser.activity;
-    
-        io.emit('jarvis365reporte-alert-receive', {title: 'Reporte finalizado',description: `${req.session.name} finalizó el reporte en ${savedDelete.SMU.establishmentName}, ${savedDelete.SMU.date}, turno: ${shiftToEs(savedDelete.SMU.shift)}`})
 
-        return res.status(200).json({status: 200,message: 'Task eliminate',data: deletedElement});
-    } 
-    catch (a) {
-        return console.log(a), res.status(500).json({status: 500, error: a,message: 'Error server internal' });
+        io.emit('jarvis365reporte-alert-receive', { title: 'Reporte finalizado', description: `${req.session.name} finalizó el reporte en ${savedDelete.SMU.establishmentName}, ${savedDelete.SMU.date}, turno: ${shiftToEs(savedDelete.SMU.shift)}` })
+
+        return res.status(200).json({ status: 200, message: 'Task eliminate', data: deletedElement });
     }
-}), 
+    catch (a) {
+        return console.log(a), res.status(500).json({ status: 500, error: a, message: 'Error server internal' });
+    }
+}),
 
 
 
 
-routerDocument.get(`${nameApi}/document/paginate`, validateSession, async (req, res) => {  //  paginate 
+    routerDocument.get(`${nameApi}/document/paginate`, validateSession, async (req, res) => {  //  paginate 
+        try {
+            const { page, limit, date, franchise, establishment, shift } = req.query;
+            if (!page || !limit) return res.status(400).json({ error: 'Bad request', status: 200, message: '' })
+
+
+            const query = {};
+            if (establishment) query.establishmentName = establishment;
+            if (shift) query.shift = shift;
+            if (date) query.date = date;
+
+            const documents = await DocumentModel.find(query)
+                .sort({ $natural: -1 })
+                .skip(page * limit)
+                .limit(limit);
+
+
+            return res.status(200).json({ data: documents });
+        }
+        catch (error) {
+            console.log(error);
+            return res.status(500).json({ status: 500, error: error, message: 'Error server internal' });
+        }
+    });
+
+
+
+
+/**
+ * GET /document/analytics/daily-summary?date=YYYY-MM-DD
+ * Returns report counts grouped by franchise, by user and by shift for the given date.
+ * If no date is provided, defaults to today.
+ * When the requested date has 0 results, also returns `lastAvailableDate`.
+ */
+routerDocument.get(`${nameApi}/document/analytics/daily-summary`, validateSession, async (req, res) => {
     try {
-        const { page, limit, date, franchise, establishment, shift } = req.query;
-        if (!page || !limit) return res.status(400).json({ error: 'Bad request', status: 200, message: '' })
+        const dateParam = req.query.date || new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        const dateFilter = { date: dateParam };
 
+        // --- By franchise ---
+        const byFranchise = await DocumentModel.aggregate([
+            { $match: dateFilter },
+            {
+                $group: {
+                    _id: { franchiseName: '$franchiseName', shift: '$shift', type: '$type' },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { '_id.franchiseName': 1, '_id.shift': 1 } }
+        ]);
 
-        const query = {};
-        if (establishment) query.establishmentName = establishment;
-        if (shift) query.shift = shift;
-        if (date) query.date = date;
+        // --- By user ---
+        const byUser = await DocumentModel.aggregate([
+            { $match: dateFilter },
+            {
+                $group: {
+                    _id: { userName: '$createdDocument.nameUser', userId: '$createdDocument._id', shift: '$shift', type: '$type' },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { '_id.userName': 1, '_id.shift': 1 } }
+        ]);
 
-        const documents = await DocumentModel.find(query)
-            .sort({ $natural: -1 })
-            .skip(page * limit)
-            .limit(limit);
+        // --- Totals by shift ---
+        const byShift = await DocumentModel.aggregate([
+            { $match: dateFilter },
+            {
+                $group: {
+                    _id: { shift: '$shift', type: '$type' },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { '_id.shift': 1 } }
+        ]);
 
+        // --- Overall total ---
+        const total = await DocumentModel.countDocuments(dateFilter);
 
-        return res.status(200).json({ data: documents });
+        // Reshape for client convenience
+        const franchiseSummary = {};
+        for (const item of byFranchise) {
+            const name = item._id.franchiseName || 'Sin franquicia';
+            if (!franchiseSummary[name]) franchiseSummary[name] = { total: 0, shifts: {} };
+            franchiseSummary[name].total += item.count;
+            const shiftKey = `${item._id.shift}-${item._id.type}`;
+            franchiseSummary[name].shifts[shiftKey] = (franchiseSummary[name].shifts[shiftKey] || 0) + item.count;
+        }
+
+        const userSummary = {};
+        for (const item of byUser) {
+            const name = item._id.userName || 'Desconocido';
+            const id = item._id.userId;
+            const key = `${id}_${name}`;
+            if (!userSummary[key]) userSummary[key] = { name, userId: id, total: 0, shifts: {}, img: null };
+            userSummary[key].total += item.count;
+            const shiftKey = `${item._id.shift}-${item._id.type}`;
+            userSummary[key].shifts[shiftKey] = (userSummary[key].shifts[shiftKey] || 0) + item.count;
+        }
+
+        // Hydrate user photos
+        const userIds = Object.values(userSummary).map(u => u.userId).filter(Boolean);
+        if (userIds.length > 0) {
+            const users = await UserModel.find({ _id: { $in: userIds } }, { _id: 1, img: 1 }).lean();
+            const userImgMap = {};
+            for (const u of users) userImgMap[String(u._id)] = u.img || null;
+            for (const key in userSummary) {
+                userSummary[key].img = userImgMap[String(userSummary[key].userId)] || null;
+            }
+        }
+
+        const shiftSummary = {};
+        for (const item of byShift) {
+            const shiftKey = `${item._id.shift}-${item._id.type}`;
+            shiftSummary[shiftKey] = item.count;
+        }
+
+        // When no data for the requested date, find the last date that has data
+        let lastAvailableDate = null;
+        if (total === 0) {
+            const lastDoc = await DocumentModel.findOne({}, { date: 1 }).sort({ _id: -1 }).lean();
+            if (lastDoc) lastAvailableDate = lastDoc.date;
+        }
+
+        return res.status(200).json({
+            date: dateParam,
+            total,
+            byFranchise: franchiseSummary,
+            byUser: Object.values(userSummary),
+            byShift: shiftSummary,
+            ...(lastAvailableDate ? { lastAvailableDate } : {})
+        });
     }
     catch (error) {
         console.log(error);
