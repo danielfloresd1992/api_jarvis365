@@ -22,7 +22,7 @@ controller.setPublisher = async (req, res) => {
 
 
 controller.getAllPublisher = async (req, res) => {
-    try {
+    try { 
 
         const publications = await publisherLayer.getAllPublisher();
         return res.json(publications);
@@ -111,7 +111,7 @@ controller.getPublisherPaginate = async (req, res) => {
                 filter.date.$lte = tmp;
             }
         }
-        console.log(filter)
+        
         const doc = await Publisher.find(filter).sort({ date: -1, _id: -1 })
             .skip(page * numberItems)
             .limit(numberItems);

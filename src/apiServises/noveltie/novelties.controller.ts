@@ -1,6 +1,6 @@
 import colors from 'colors';
 import os from 'os';
-import  NoveltieModel, { CommentSchema } from './noveltie.model.js';
+import NoveltieModel, { CommentSchema } from './noveltie.model.js';
 import { commentYupSchema } from './novelty.squema.js';
 
 import MenuModel from '../menu/menu.model.js';
@@ -27,7 +27,7 @@ import { rejects } from 'assert';
 config();
 
 
-const __dirname: string =  url.fileURLToPath(new URL('.', import.meta.url));
+const __dirname: string = url.fileURLToPath(new URL('.', import.meta.url));
 const documentsPath: any = process.env.DEBUG === 'true' ? '\\\\72.68.60.254\\d' : 'D:\\';
 
 
@@ -215,7 +215,7 @@ export default class ControllerNovelty {
     getNoveltieImgById = async (req: Request, res: any): Promise<void> => {
         try {
             const id = req.params.id;
-            const noveltie = await NoveltieModel.find({ _id: id }).populate('fileNoveltie')
+            const noveltie = await NoveltieModel.find({ _id: id }).populate('fileNoveltie sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id')
             res.json(noveltie);
         }
         catch (err) {
@@ -267,20 +267,20 @@ export default class ControllerNovelty {
 
             //    if(!resultMenu) return res.status(400).json({ error: 'The result of the title property is not registered in the system' })
 
-        /*
-            let rules: any // LOGIC IS DEPRECATED
-            if (novelties.body.rulesForBonus === 'undefined' || novelties.body.rulesForBonus === undefined || novelties.body.rulesForBonus === null) {
-                rules = {
-                    worth: 0,
-                    amulative: 0
+            /*
+                let rules: any // LOGIC IS DEPRECATED
+                if (novelties.body.rulesForBonus === 'undefined' || novelties.body.rulesForBonus === undefined || novelties.body.rulesForBonus === null) {
+                    rules = {
+                        worth: 0,
+                        amulative: 0
+                    }
                 }
-            }
-            else {
-
-                rules = novelties.body.rulesForBonus;
-            }
-
-            */
+                else {
+    
+                    rules = novelties.body.rulesForBonus;
+                }
+    
+                */
 
             const newNoveltie = new NoveltieModel({
 
@@ -291,7 +291,7 @@ export default class ControllerNovelty {
 
                 menu: novelties.body.menu,
 
-              
+
                 isValidate: {
                     validation: 'null',
                     for: null
@@ -303,17 +303,17 @@ export default class ControllerNovelty {
                     lang: novelties.body.lang
                 },
 
-                 /*
-                userPublic: {
-                    name: novelties.body.userName,
-                    userId: novelties.body.userId,
-                },
-               
-                rulesForBonus: {
-                    worth: rules.worth,
-                    amulative: rules.amulative
-                },
-                */
+                /*
+               userPublic: {
+                   name: novelties.body.userName,
+                   userId: novelties.body.userId,
+               },
+              
+               rulesForBonus: {
+                   worth: rules.worth,
+                   amulative: rules.amulative
+               },
+               */
 
                 sharedByUser: {
                     createdAt: Date.now(),
@@ -339,7 +339,7 @@ export default class ControllerNovelty {
             if (novelties.body.numberTiket) newNoveltie.orderTicketNumber = novelties.body.numberTiket;
             if (novelties.body.timePeriod) newNoveltie.timePeriod = novelties.body.timePeriod;
             if (novelties.body.nameDish) newNoveltie.nameDish = novelties.body.nameDish;
-         
+
             if (novelties.body.amount) newNoveltie.amount = novelties.body.amount;
 
             if ('for_the_report' in novelties.body) newNoveltie.for_the_report = novelties.body.for_the_report;
@@ -432,7 +432,7 @@ export default class ControllerNovelty {
                     validatedByUser: {
                         user: {
                             nameUser: req.session.name,
-                            id: req.session.userId
+                            id: new Types.ObjectId(req.session.userId)
                         },
                         requestOrigin: {
                             applicationName: req.headers['source-application'] ?? 'APP-LEGACY',
@@ -441,12 +441,18 @@ export default class ControllerNovelty {
                     }
                 }
             }
-            const updateDocument = await NoveltieModel.findOneAndUpdate({ _id: id }, body, { new: true, runValidators: true }); 
-            if (this.socketAdapter) {   
+
+
+
+            const updateDocument = await NoveltieModel.findOneAndUpdate({ _id: id }, body, { new: true, runValidators: true }).populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id');
+
+            console.log(updateDocument.validationResult);
+
+            if (this.socketAdapter) {
                 this.socketAdapter.emitToRoom(
                     'lobby',
                     'document_updated',
-                    {doc: updateDocument, user:{ idUser: req.session.userId, nameUser: `${req.session.name}` }}
+                    { doc: updateDocument, user: { idUser: req.session.userId, nameUser: `${req.session.name}` } }
                 );
             }
 
@@ -468,31 +474,31 @@ export default class ControllerNovelty {
     setComment = async (req: any, res: Response) => {
         try {
             const id: string | undefined = req.query?.id;
-            
-            if(!id) return res.status(400).json({  status: 400, error: 'Bad request', message: 'Id is undefined' });
-            if(!Types.ObjectId.isValid(id)) return res.status(400).json({  status: 400, error: 'Bad request', message: 'Id is invalid' });
+
+            if (!id) return res.status(400).json({ status: 400, error: 'Bad request', message: 'Id is undefined' });
+            if (!Types.ObjectId.isValid(id)) return res.status(400).json({ status: 400, error: 'Bad request', message: 'Id is invalid' });
 
             const body = req.body;
             body.user = req.session?.userId;
-            
+
             const bodyValidate = await commentYupSchema.validate(body);
-            
+
             const alertFound = await NoveltieModel.findById(id);
 
             return res.json(alertFound);
 
-            
-            const novelty = await NoveltieModel.findByIdAndUpdate(id, { $push: { commentSystem: bodyValidate }}, {new: true, runValidators: true});
 
-            if(!novelty) return res.status(404).json({ status: 404, error: 'Document not found', message: `T he document with the following ID does not exist, ${id}` });
+            const novelty = await NoveltieModel.findByIdAndUpdate(id, { $push: { commentSystem: bodyValidate } }, { new: true, runValidators: true });
+
+            if (!novelty) return res.status(404).json({ status: 404, error: 'Document not found', message: `T he document with the following ID does not exist, ${id}` });
 
             console.log(bodyValidate);
             return res.json(novelty);
 
-        } 
+        }
         catch (error: any) {
             console.log(error)
-            if(error.name === 'ValidationError') return res.status(400).json({ status: 400, error: error.errors, message: 'Bad request' });
+            if (error.name === 'ValidationError') return res.status(400).json({ status: 400, error: error.errors, message: 'Bad request' });
             return res.status(500).json({ massege: 'Error erver internal', status: 500, error: error })
         }
     };

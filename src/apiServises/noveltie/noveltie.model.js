@@ -221,8 +221,8 @@ const Novelties = new Schema({
                 required: true,
             },
             id: {
-                type: String,
-                required: true,
+                type: Schema.Types.ObjectId,
+                ref: 'user'
             }
         },
         requestOrigin: {
@@ -283,7 +283,8 @@ const Novelties = new Schema({
                     type: String,
                 },
                 id: {
-                    type: String,
+                    type: Schema.Types.ObjectId,
+                    ref: 'user'
                 }
             },
             requestOrigin: {
