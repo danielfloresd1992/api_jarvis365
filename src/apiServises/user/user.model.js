@@ -95,12 +95,10 @@ export default model('user', new Schema({
     jobInformation: {
         department: {
             type: String,
-            required: true,
             enum: ['Operaciones', 'Sistemas y desarrollo', 'Reportes', 'Recursos Humanos', 'Audioria']
         },
         position: {
             type: String,
-            required: true,
             // Aquí puedes listar todos los puestos posibles
             enum: [
                 'Gerente', 'Subgerente', 'Coordinador', 'Operador senior', 'Operador experto', 'Operador',
@@ -118,7 +116,6 @@ export default model('user', new Schema({
     workSchedule: {
         shiftType: {
             type: String,
-            required: true,
             enum: ['Diurno', 'Nocturno'],
             default: 'Diurno'
         },

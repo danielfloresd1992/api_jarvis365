@@ -152,9 +152,6 @@ routerNoveltie.post(`${nameApi}/novelties`, extendSession, validateSession, cont
 
 
 
-
-
-
 routerNoveltie.post(`${nameApi}/novelty/video`, extendSession, validateSession, uploadNoveltie.fields([{ name: 'video', maxCount: 1 }, { name: 'img', maxCount: 1 }, { name: 'imageUrl', maxCount: 4 }]), controller.saveNovelty);
 
 

@@ -89,6 +89,7 @@ authRouter.post(`${nameApi}/auth/login`, async (req, res, next) => {
         next();
     }
     catch(error){
+        console.log(error);
         if(error.name === 'ValidationError'){
             return res.status(400).json({ error: 'Bad request', message: error.message, status: 400  });
         }
@@ -124,6 +125,7 @@ authRouter.post(`${nameApi}/auth/singin`, async (req, res) => {
         return res.json({ data: resData, status: 200, message: "User registered successfully"});
     } 
     catch(error){
+        console.log(error);
         if(error.name === 'ValidationError'){
             return res.status(400).json({ error: error.message, stautus: 400, message: 'Bad request' });
         }
@@ -136,7 +138,6 @@ authRouter.post(`${nameApi}/auth/singin`, async (req, res) => {
 
 authRouter.put(`${nameApi}/auth/update-user-data`, async (req, res) => {
     try {
-        console.log(req.body);
         const { user, password, newPassword, email, phone } = await userSchemaLegacy.validate(req.body);
        
 
