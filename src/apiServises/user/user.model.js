@@ -152,10 +152,12 @@ export default model('user', new Schema({
         },
 
         required: false,
-        lateArrivalControl: {
+
+        lateArrivalControl: { ////ojo aqui
             type: Boolean,
             default: true // ¿Se le aplica la regla de llegada tarde?
         },
+
         lateArrivalTracking: {
             type: Boolean,
             default: true // ¿Se debe hacer seguimiento/notificación?

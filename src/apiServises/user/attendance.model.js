@@ -64,7 +64,7 @@ const AttendanceSchema = new mongoose.Schema({
             // Tipo de jornada: 'laboral', 'extra', 'descanso'.
             workType: {
                 type: String,
-                enum: ['laboral', 'extra', 'descanso']
+                enum: ['laboral', 'extra', 'descanso', 'permiso', 'vacaciones', 'falta']
             },
             // Tipo de turno específico para este día (puede diferir del global).
             shift: {

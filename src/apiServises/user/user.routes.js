@@ -341,7 +341,7 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
                         date: new Date()
                     };
                 }
-
+                console.log(overrideFields)
                 const record = await AttendanceModel.findOneAndUpdate(
                     { userId, date: dateObj },
                     {
@@ -350,6 +350,8 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
                     },
                     { upsert: true, new: true, setDefaultsOnInsert: true }
                 ).populate('scheduleOverride.note.user', 'name surName dni');
+
+                console.log('Record after upsert:', record);
 
                 // Emitir evento Socket.IO para que Client365 actualice la celda en tiempo real.
                 // Se popula modifiedBy para que el frontend muestre quién creó/editó el override.
@@ -361,7 +363,8 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
                 }
 
                 results.push(record);
-            } catch (innerErr) {
+            } 
+            catch (innerErr) {
                 errors.push({ item, error: innerErr.message });
             }
         }
@@ -425,8 +428,17 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
             || scheduleByDayMap?.[String(currentDayNumber)]
             || null;
 
+
+        const effectiveShiftType = (hasOverride && override.shift)
+            || dayRule?.shift
+            || user?.workSchedule?.shiftType
+            || 'Diurno';
+        const isNocturno = effectiveShiftType === 'Nocturno';
+
+
+
         // ── Si el admin marcó este día como DESCANSO via override → no se permite marcar ──
-        if (hasOverride && override.workType === 'descanso') {
+        if (!isNocturno && hasOverride && override.workType === 'descanso') {
             return res.status(400).json({
                 status: 400,
                 message: 'Este día fue asignado como descanso por el administrador. No se requiere marcar asistencia.',
@@ -495,11 +507,7 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
         // ── 4. DETERMINAR TIPO DE TURNO ──
         // Prioridad: override.shift > dayRule.shift > workSchedule.shiftType (global)
         // Permite que un diurno apoye en nocturno un día específico vía override.
-        const effectiveShiftType = (hasOverride && override.shift)
-            || dayRule?.shift
-            || user?.workSchedule?.shiftType
-            || 'Diurno';
-        const isNocturno = effectiveShiftType === 'Nocturno';
+
 
         // ── 5. DETERMINAR SI HOY ES DÍA DE DESCANSO ──
         // Si override define workType 'descanso' ya se rechazó arriba.
