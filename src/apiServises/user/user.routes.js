@@ -363,7 +363,7 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
                 }
 
                 results.push(record);
-            } 
+            }
             catch (innerErr) {
                 errors.push({ item, error: innerErr.message });
             }
@@ -380,6 +380,8 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
         return res.status(500).json({ status: 500, message: 'Error server internal', error: error.message });
     }
 });
+
+
 
 
 
@@ -429,6 +431,7 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
             || null;
 
 
+        // -- determina el tipo de turno efectivo para hoy, considerando override > dayRule > shiftType global --
         const effectiveShiftType = (hasOverride && override.shift)
             || dayRule?.shift
             || user?.workSchedule?.shiftType
@@ -447,7 +450,7 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
         }
 
         // ── Si NO hay override y el scheduleByDay marca descanso → no se permite ──
-        if (!hasOverride && dayRule && dayRule.workType === 'descanso') {
+        if (!isNocturno && !hasOverride && dayRule && dayRule.workType === 'descanso') {
             return res.status(400).json({
                 status: 400,
                 message: 'Este día está configurado como descanso en tu horario. No se requiere marcar asistencia.',
@@ -528,7 +531,9 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
             // isInMorningWindow: evalúa si la hora actual está entre 00:00 y las 07:00 (checkout limit).
             // Si es true → el empleado está intentando marcar SALIDA del turno de anoche.
             // Si es false → el empleado está intentando marcar ENTRADA de un nuevo turno nocturno.
-            const checkoutLimitMinutes = endMinutes + 60;
+
+            const NOCTURNAL_CHECKOUT_TOLERANCE_MINUTES = 210; // TIMEPO LIMITE DE TOLERANCIA PARA EL PERSONAL NOCTURNO (210 min = 3h30min después de endTime, ej: 06:00 + 3h30 = 09:30)
+            const checkoutLimitMinutes = endMinutes + NOCTURNAL_CHECKOUT_TOLERANCE_MINUTES;
             const isInMorningWindow = nowMinutes <= checkoutLimitMinutes;
 
             if (isInMorningWindow) {
