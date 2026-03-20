@@ -32,35 +32,62 @@ export default {
             const menu = new Menu({
                 es: body.es,
                 en: body.en,
+
+                // Título alternativo para el documento de reporte (opcional)
+                titleForDocumentReport: body.titleForDocumentReport
+                    ? { es: body.titleForDocumentReport.es || null,
+                        en: body.titleForDocumentReport.en || null }
+                    : { es: null, en: null },
+
                 textHeader: textHeader,
-                time: body.time,
+
+                // Flags de tiempo (mutuamente excluyentes en el formulario)
+                time:       body.time,
+                timeUnique: body.timeUnique,
+
                 amountOfSomething: body.amountOfSomething,
-                table: body.table,
-                photos :{
-                    length: body.photos.length,
+                table:  body.table,
+                photos: {
+                    length:  body.photos.length,
                     caption: body.photos.caption
                 },
-                category : body.category,
-                especial: body.especial,
-                car: body.car,
-                isArea: body.isArea,
+                category:          body.category,
+                especial:          especial,          // ya procesado arriba
+                car:               body.car,
+                isArea:            body.isArea,
                 isDescriptionPerson: body.isDescriptionPerson,
-                rulesForBonus : {
-                    forLocal: body.rulesForBonus.forLocal,
-                    worth: body.rulesForBonus.worth,
-                    amulative: body.rulesForBonus.amulative
+
+                // DEPRECATED — se mantiene por compatibilidad con registros anteriores
+                rulesForBonus: {
+                    forLocal:  body.rulesForBonus?.forLocal  ?? 'Todos',
+                    worth:     body.rulesForBonus?.worth     ?? 0,
+                    amulative: body.rulesForBonus?.amulative ?? 0
                 },
 
-                useOnlyForTheReportingDocument: body.useOnlyForTheReportingDocument,
-                useOfLiveAlertForTheCustomer: body.useOfLiveAlertForTheCustomer,
-                //agrupación en el documento de reporte
+                // NUEVO sistema de bonificación (mapea al reglamento oficial)
+                bonusCalculationRules: body.bonusCalculationRules
+                    ? {
+                        activate: body.bonusCalculationRules.activate ?? false,
+                        defaultRule: {
+                            worth:  body.bonusCalculationRules.defaultRule?.worth  ?? 1,
+                            acum:   body.bonusCalculationRules.defaultRule?.acum   ?? 1,
+                            valueBonusForTheStaffOnDuty: {
+                                day:   body.bonusCalculationRules.defaultRule?.valueBonusForTheStaffOnDuty?.day   ?? 0.20,
+                                nigth: body.bonusCalculationRules.defaultRule?.valueBonusForTheStaffOnDuty?.nigth ?? 0.30
+                            },
+                            reglamentoCode: body.bonusCalculationRules.defaultRule?.reglamentoCode ?? '',
+                            description:    body.bonusCalculationRules.defaultRule?.description    ?? '',
+                            defaultActive:  body.bonusCalculationRules.defaultRule?.defaultActive  ?? true
+                        },
+                        localSpecificRules: body.bonusCalculationRules.localSpecificRules ?? []
+                    }
+                    : undefined,
 
-                groupingInTheReport:  body.groupingInTheReport,
-
-                
-                
+                useOnlyForTheReportingDocument:  body.useOnlyForTheReportingDocument,
+                useOfLiveAlertForTheCustomer:    body.useOfLiveAlertForTheCustomer,
+                groupingInTheReport:             body.groupingInTheReport,
                 descriptionNoteForReportDocument: body.descriptionNoteForReportDocument,
-                doesItrequireVideo: body.doesItrequireVideo
+                doesItrequireVideo:              body.doesItrequireVideo
             });
 
             menu.save()
@@ -115,45 +142,62 @@ export default {
     putMenu(body){
         return new Promise((resolve, reject) => {
             if(body._id === null || body._id === undefined) return reject('404 not found');
-            /*
+
+            // Construir el documento de actualización con todos los campos del modelo.
+            // Se excluye _id del payload para evitar error de campo inmutable.
             let especial = null;
             if(body.especial){
                 especial = {
-                    time:{
+                    time: {
                         timeInitTitle: {
-                            es: body.especial.time.timeInitTitle.es ,
+                            es: body.especial.time.timeInitTitle.es,
                             en: body.especial.time.timeInitTitle.en
-                        }, 
+                        },
                         timeEndTitle: {
-                            es: body.especial.time.timeEndTitle.es ,
+                            es: body.especial.time.timeEndTitle.es,
                             en: body.especial.time.timeEndTitle.en
                         }
                     }
                 };
             }
-            const menu = {
-                es: body.es,
-                en: body.en,
-                timeUnique: body.timeUnique,
-                time: body.time,
-                table: body.table,
-                photos :{
-                    length: body.photos.length,
-                    caption: body.photos.caption
-                },
-                category : body.category,
-                especial: body.especial,
-                rulesForBonus : {
-                    worth: body.rules.worth,
-                    amulative: body.rules.amulative
-                }
-            }
-            */
-            Menu.updateOne({_id: body._id,} , body).exec((err, docs) => {
-                if(err) return reject(err);
 
+            const update = {
+                es:   body.es,
+                en:   body.en,
+                titleForDocumentReport: body.titleForDocumentReport
+                    ? { es: body.titleForDocumentReport.es || null,
+                        en: body.titleForDocumentReport.en || null }
+                    : { es: null, en: null },
+                textHeader: body.textHeader || null,
+                time:       body.time,
+                timeUnique: body.timeUnique,
+                amountOfSomething:   body.amountOfSomething,
+                table:   body.table,
+                photos:  { length: body.photos.length, caption: body.photos.caption },
+                category: body.category,
+                especial: especial,
+                car:      body.car,
+                isArea:   body.isArea,
+                isDescriptionPerson: body.isDescriptionPerson,
+                // DEPRECATED — se preserva para registros existentes
+                rulesForBonus: {
+                    forLocal:  body.rulesForBonus?.forLocal  ?? 'Todos',
+                    worth:     body.rulesForBonus?.worth     ?? 0,
+                    amulative: body.rulesForBonus?.amulative ?? 0
+                },
+                // Nuevo sistema de bonificación
+                bonusCalculationRules: body.bonusCalculationRules ?? undefined,
+                useOnlyForTheReportingDocument:   body.useOnlyForTheReportingDocument,
+                useOfLiveAlertForTheCustomer:     body.useOfLiveAlertForTheCustomer,
+                groupingInTheReport:              body.groupingInTheReport,
+                descriptionNoteForReportDocument: body.descriptionNoteForReportDocument,
+                doesItrequireVideo:               body.doesItrequireVideo
+            };
+
+            Menu.updateOne({ _id: body._id }, update).exec((err, docs) => {
+                if(err) return reject(err);
                 return resolve(docs);
-           });
+            });
         });
     },
 

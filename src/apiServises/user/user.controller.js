@@ -9,7 +9,6 @@ import User from './user.model.js';
 controller.login = async (req, res, next) => {
     try{
         const body = req.body;
-
         if(!body.user || !body.password) return res.status(400).json({ error: 'the name or password property is undefined in the body' })
 
         const user = await User.findOne({ user: body.user }, '+password');

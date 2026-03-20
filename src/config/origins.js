@@ -29,7 +29,9 @@ const origins = process.env.NODE_ENV === 'development' ?
         'https://amazona365.ddns.net:5173',
         'https://localhost:3001',
         'https://72.68.60.201:3001',
-        'http://localhost:5174'
+        'http://localhost:5174',
+        'https://biojarvis.netlify.app',
+        'https://jarvis365.net'
     ];
 
 

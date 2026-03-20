@@ -104,7 +104,10 @@ const Menu = new Schema({
         require: true,
     },
 
-    especial: {},
+    // NOTA: el campo 'especial' completo está definido arriba (líneas 38-49).
+    // La línea duplicada 'especial: {}' fue eliminada porque sobreescribía
+    // la definición estructurada con un objeto vacío, perdiendo todos los sub-campos.
+
     isArea: {
         type: Boolean,
         require: true
@@ -133,23 +136,33 @@ const Menu = new Schema({
     },
 
 
+    // ── NUEVO SISTEMA DE BONIFICACIÓN ─────────────────────────────────────
+    // Reemplaza a rulesForBonus (deprecated). Mapea al reglamento oficial:
+    //   worth = multiplicador del bono: 1 (X1), 2 (X2), 3 (X3), 5 (X5)
+    //   valueBonusForTheStaffOnDuty: valor en puntos según turno (0.20 / 0.30)
+    //   reglamentoCode: código del ítem en el reglamento (ej: "1.1", "R2.3")
     bonusCalculationRules: {
-        activate: Boolean,
+        // true  → esta alerta genera bono al operador
+        activate: { type: Boolean, default: false },
         defaultRule: {
-            worth: Number,        // X1, X2, X3, X5
-            acum: Number,
-
-            valueBonusForTheStaffOnDuty:{
-                day: Number,
-                nigth: Number
-            },             // Valor en puntos
-            reglamentoCode: String,     // Referencia al reglamento
-            description: String,
-            defaultActive: Boolean
+            // Multiplicador: 1=X1, 2=X2, 3=X3, 5=X5
+            worth:  { type: Number, default: 1 },
+            // Veces que debe ocurrir para contarse como bono (ej: "bono a la 2° vez")
+            acum:   { type: Number, default: 1 },
+            // Valor monetario/puntaje por bono según turno del operador
+            valueBonusForTheStaffOnDuty: {
+                day:   { type: Number, default: 0.20 },   // turno diurno
+                nigth: { type: Number, default: 0.30 }    // turno nocturno / extra
+            },
+            // Referencia al código del reglamento (ej: "1.1", "R3.2", "E2.1")
+            reglamentoCode: { type: String, default: '' },
+            // Descripción interna de la regla de bono
+            description:    { type: String, default: '' },
+            // Indica si la regla está activa por defecto al crear la alerta
+            defaultActive:  { type: Boolean, default: true }
         },
-        localSpecificRules: [
-            
-        ]       // Reglas por establecimiento
+        // Reglas específicas por establecimiento (estructura a definir según necesidad)
+        localSpecificRules: { type: [], default: [] }
     },
 
 

@@ -131,7 +131,14 @@ export default model('user', new Schema({
             of: new Schema({
                 workType: {
                     type: String,
-                    enum: ['laboral', 'extra', 'descanso'],
+                    // Tipos de jornada soportados por día de horario base:
+                    // 'laboral'    → día de trabajo normal
+                    // 'extra'      → día extra (franco trabajado programado)
+                    // 'descanso'   → día libre / franco sin actividad
+                    // 'permiso'    → permiso autorizado (sin asistencia requerida)
+                    // 'vacaciones' → período vacacional
+                    // 'falta'      → ausencia pre-registrada / falta justificada
+                    enum: ['laboral', 'extra', 'descanso', 'permiso', 'vacaciones', 'falta'],
                     default: 'laboral'
                 },
                 shift: {

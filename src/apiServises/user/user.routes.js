@@ -55,6 +55,24 @@ const toUtcMidnightFromZonedParts = (parts) => {
 
 
 
+
+
+
+
+// THIS ENDPOIND IS DEPRECATED 👇
+
+routerUser.post(`/user/login`, controller.login, addCredentials);   //legace
+routerUser.get(`/user/protected`, controller.get);
+routerUser.post(`/user/signup`, controller.signup);
+routerUser.get(`/user/logout`, controller.logout);
+routerUser.get(`/user/getUser`, controller.getUser);
+
+
+
+
+
+
+
 routerUser.get(`${nameApi}/user/AllById?`, async (req, res) => {
     try {
 
@@ -186,6 +204,377 @@ routerUser.get(`${nameApi}/user/:dni`, async (req, res) => {
     }
 });
 
+
+
+
+/**
+ * ENDPOINT: GET /api_jarvis/v1/user/attendance/global-report
+ *
+ * Genera un reporte consolidado de todos los empleados ACTIVOS (inabilited:false)
+ * para un rango de fechas, calculando por empleado:
+ *   - lateWeekday  : retardos entre semana (Lun–Vie)
+ *   - lateWeekend  : retardos en fin de semana (Sáb–Dom)
+ *   - extraDays    : días extras trabajados
+ *   - totalPresent : días con checkIn registrado
+ *   - faltaCount   : total de ausencias (scheduleOverride.workType='falta' OR status='ausente')
+ *
+ * ── INGENIERÍA ANTI-COLAPSO ──────────────────────────────────────────────────
+ * En vez de hacer N consultas (una por empleado), se usan DOS estrategias:
+ *
+ * 1. MongoDB Aggregation Pipeline desde la colección "users":
+ *    - Itera todos los usuarios activos UNA sola vez.
+ *    - Hace un $lookup con sub-pipeline filtrado por rango de fechas, de modo
+ *      que MongoDB reutiliza el índice compuesto { userId:1, date:1 } que ya
+ *      existe en AttendanceSchema para resolver cada sub-query en O(log n).
+ *    - Toda la aritmética (sumas condicionales) se ejecuta DENTRO del motor
+ *      de MongoDB, sin traer documentos al proceso Node.js.
+ *
+ * 2. $project al final elimina campos pesados (password, workSchedule, etc.)
+ *    para que solo viajen por la red los datos estrictamente necesarios.
+ *
+ * Resultado: una sola round-trip a la DB en lugar de N round-trips.
+ *
+ * Query params:
+ *   @param {string} from  - Fecha inicio (YYYY-MM-DD)
+ *   @param {string} to    - Fecha fin    (YYYY-MM-DD)
+ */
+routerUser.get(`${nameApi}/user/attendance/global-report`, async (req, res) => {
+    try {
+        const { from, to } = req.query;
+
+        // ── Validaciones de parámetros ──────────────────────────────────────
+        if (!from || !to)
+            return res.status(400).json({
+                status: 400, error: 'Bad request',
+                message: '"from" and "to" query params are required.'
+            });
+
+        const fromDate = new Date(from);
+        const toDate = new Date(to);
+        fromDate.setUTCHours(0, 0, 0, 0);
+        toDate.setUTCHours(0, 0, 0, 0);
+
+        if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime()))
+            return res.status(400).json({ status: 400, error: 'Bad request', message: 'Invalid date format.' });
+        if (fromDate > toDate)
+            return res.status(400).json({ status: 400, error: 'Bad request', message: '"from" must be before or equal to "to".' });
+
+        // ── Aggregation Pipeline ────────────────────────────────────────────
+        //
+        // Partimos de la colección "users" para incluir a TODOS los empleados
+        // activos, incluso aquellos sin ninguna asistencia en el período
+        // (aparecerán con ceros). Si partiéramos de "attendances" los usuarios
+        // sin registros no aparecerían.
+        //
+        const pipeline = [
+
+            // PASO 1: Solo empleados ACTIVOS y dentro del horario estándar.
+            // Condiciones de exclusión:
+            //  - inabilited: true          → empleado dado de baja
+            //  - outForkSchedule: true     → empleado fuera de la estructura de horario
+            //                                (sin horario asignado / régimen especial)
+            // $ne: true captura tanto false como undefined (campo inexistente).
+            { $match: { inabilited: false, 'workSchedule.outForkSchedule': { $ne: true } } },
+
+            // PASO 2: Sub-consulta de asistencias del período por usuario.
+            // Se usa $lookup con sub-pipeline para poder filtrar la colección
+            // "attendances" por rango de fechas ANTES de traer los docs a
+            // memoria, aprovechando el índice { userId:1, date:1 }.
+            {
+                $lookup: {
+                    from: 'attendances',           // colección destino
+                    let: { uid: '$_id' },          // variable local = _id del user
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ['$userId', '$$uid'] },    // mismo usuario
+                                        { $gte: ['$date', fromDate] },    // dentro del rango
+                                        { $lte: ['$date', toDate] }
+                                    ]
+                                }
+                            }
+                        },
+                        // Proyectar solo los campos necesarios para calcular
+                        // los totales; reducimos el payload dentro del $lookup.
+                        // - scheduleOverride.workType → detecta faltas pre-registradas ('falta')
+                        // - status                    → detecta ausencias orgánicas ('ausente')
+                        { $project: { date: 1, isLate: 1, isExtraDay: 1, checkIn: 1, status: 1, 'scheduleOverride.workType': 1, _id: 0 } }
+                    ],
+                    as: 'attendanceRecords'
+                }
+            },
+
+            // PASO 3: Calcular los totales usando $filter sobre el array
+            // "attendanceRecords" que trajo el $lookup.
+            //
+            // Nota sobre $dayOfWeek en MongoDB:
+            //   1 = Domingo, 2 = Lunes, 3 = Martes, 4 = Miércoles,
+            //   5 = Jueves,  6 = Viernes, 7 = Sábado
+            // → Entre semana: [2,3,4,5,6]   Fin de semana: [1,7]
+            {
+                $addFields: {
+                    // Retardos entre semana (Lun=2 … Vie=6)
+                    lateWeekday: {
+                        $size: {
+                            $filter: {
+                                input: '$attendanceRecords',
+                                as: 'r',
+                                cond: {
+                                    $and: [
+                                        { $eq: ['$$r.isLate', true] },
+                                        { $in: [{ $dayOfWeek: '$$r.date' }, [2, 3, 4, 5, 6]] }
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    // Retardos fin de semana (Dom=1, Sáb=7)
+                    lateWeekend: {
+                        $size: {
+                            $filter: {
+                                input: '$attendanceRecords',
+                                as: 'r',
+                                cond: {
+                                    $and: [
+                                        { $eq: ['$$r.isLate', true] },
+                                        { $in: [{ $dayOfWeek: '$$r.date' }, [1, 7]] }
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    // Días extras trabajados
+                    extraDays: {
+                        $size: {
+                            $filter: {
+                                input: '$attendanceRecords',
+                                as: 'r',
+                                cond: { $eq: ['$$r.isExtraDay', true] }
+                            }
+                        }
+                    },
+                    // Total días con entrada registrada
+                    totalPresent: {
+                        $size: {
+                            $filter: {
+                                input: '$attendanceRecords',
+                                as: 'r',
+                                cond: { $ne: ['$$r.checkIn', null] }
+                            }
+                        }
+                    },
+                    // Faltas TOTALES por empleado: se suman dos fuentes sin
+                    // doble-conteo porque operan sobre el MISMO registro:
+                    //  a) scheduleOverride.workType === 'falta'  → el admin pre-registró la falta
+                    //  b) status === 'ausente'                   → el empleado no se presentó
+                    // Un registro que cumpla ambas condiciones solo se cuenta UNA vez
+                    // gracias a que $filter opera sobre documentos únicos por fecha.
+                    faltaCount: {
+                        $size: {
+                            $filter: {
+                                input: '$attendanceRecords',
+                                as: 'r',
+                                cond: {
+                                    $or: [
+                                        // Falta pre-registrada por el administrador
+                                        { $eq: ['$$r.scheduleOverride.workType', 'falta'] },
+                                        // Ausencia orgánica: el empleado no asistió
+                                        { $eq: ['$$r.status', 'ausente'] }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+
+            // PASO 4: Eliminar el array de asistencias (ya no se necesita)
+            // y campos sensibles/pesados antes de serializar la respuesta.
+            // Se conserva "inabilited" para que el frontend indique baja del empleado.
+            {
+                $project: {
+                    attendanceRecords: 0,  // array pesado, ya procesado
+                    password: 0,           // nunca exponer
+                    user: 0,               // campo de credencial
+                    updateByUser: 0,       // historial interno, innecesario aquí
+                    workSchedule: 0,       // pesado, innecesario para este reporte
+                    createdOn: 0,
+                    date: 0,
+                    // "inabilited" se MANTIENE intencionalmente para indicar baja
+                }
+            },
+
+            // PASO 5: Ordenar por departamento, luego apellido, luego nombre
+            // para que el reporte se lea agrupado naturalmente.
+            { $sort: { 'jobInformation.department': 1, surName: 1, name: 1 } }
+        ];
+
+        // Ejecutar la aggregation
+        const result = await UserModel.aggregate(pipeline);
+
+        // ── Totales consolidados ────────────────────────────────────────────
+        // Se calculan en Node.js sobre el array ya reducido (pocos campos,
+        // pocos documentos comparado con el full Attendance collection).
+        // Totales globales calculados en Node.js sobre el array ya reducido.
+        // Se añade totalFalta y se desglosa activos vs. inactivos.
+        const totals = {
+            totalEmployees:   result.length,
+            activeEmployees:  result.filter(r => !r.inabilited).length,
+            inactiveEmployees: result.filter(r => r.inabilited).length,
+            totalLateWeekday: result.reduce((a, r) => a + r.lateWeekday, 0),
+            totalLateWeekend: result.reduce((a, r) => a + r.lateWeekend, 0),
+            totalExtraDays:   result.reduce((a, r) => a + r.extraDays, 0),
+            totalPresent:     result.reduce((a, r) => a + r.totalPresent, 0),
+            totalFalta:       result.reduce((a, r) => a + r.faltaCount, 0),
+        };
+
+        return res.status(200).json({
+            status: 200,
+            period: { from: fromDate, to: toDate },
+            totals,
+            employees: result
+        });
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ status: 500, message: 'Error server internal', error: error.message });
+    }
+});
+
+
+
+routerUser.get(`${nameApi}/user/attendance/report`, async (req, res) => {
+    try {
+        const { userId, from, to } = req.query;
+
+        if (!userId || !ObjectId.isValid(userId))
+            return res.status(400).json({ status: 400, error: 'Bad request', message: '"userId" is required and must be a valid ObjectId.' });
+        if (!from || !to)
+            return res.status(400).json({ status: 400, error: 'Bad request', message: '"from" and "to" query params are required.' });
+
+        const fromDate = new Date(from);
+        const toDate = new Date(to);
+        fromDate.setUTCHours(0, 0, 0, 0);
+        toDate.setUTCHours(0, 0, 0, 0);
+
+        if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime()))
+            return res.status(400).json({ status: 400, error: 'Bad request', message: 'Invalid date format for "from" or "to".' });
+        if (fromDate > toDate)
+            return res.status(400).json({ status: 400, error: 'Bad request', message: '"from" must be before or equal to "to".' });
+
+        const user = await UserModel.findById(userId);
+        if (!user) return res.status(404).json({ status: 404, error: 'Not found', message: 'User not found.' });
+
+        const records = await AttendanceModel.find({
+            userId: userId,
+            date: { $gte: fromDate, $lte: toDate }
+        }).sort({ date: 1 });
+
+        const recordMap = new Map();
+        records.forEach(r => recordMap.set(r.date.toISOString(), r));
+
+        const scheduleByDay = user.workSchedule?.scheduleByDay;
+
+        let totalWorkingDays = 0, presentDays = 0, absentDays = 0;
+        let lateDays = 0, justifiedLateDays = 0, lateMinutes = 0, extraMinutes = 0;
+        let expectedMinutes = 0;
+
+        const cur = new Date(fromDate);
+        const todayMid = new Date();
+        todayMid.setUTCHours(0, 0, 0, 0);
+
+        while (cur <= toDate) {
+            const dayKey = cur.toISOString();
+            const dayOfWeek = cur.getUTCDay();
+            const record = recordMap.get(dayKey);
+
+            const override = record?.scheduleOverride;
+            const dayRule = scheduleByDay?.get?.(String(dayOfWeek)) || scheduleByDay?.[String(dayOfWeek)] || null;
+            const effectiveWorkType = override?.workType || dayRule?.workType || 'laboral';
+
+            if (effectiveWorkType !== 'descanso') {
+                totalWorkingDays++;
+
+                const startTime = override?.startTime || dayRule?.startTime;
+                const endTime = override?.endTime || dayRule?.endTime;
+                if (startTime && endTime) {
+                    const [sh, sm] = startTime.split(':').map(Number);
+                    const [eh, em] = endTime.split(':').map(Number);
+                    const scheduledMin = (eh * 60 + em) - (sh * 60 + sm);
+                    if (scheduledMin > 0) expectedMinutes += scheduledMin;
+                }
+
+                if (record?.checkIn) {
+                    presentDays++;
+                    if (record.isLate) {
+                        lateDays++;
+                        if (record.isJustified) justifiedLateDays++;
+                        if (startTime) {
+                            const parts = getZonedDateParts(record.checkIn);
+                            const checkInMin = parts.hour * 60 + parts.minute;
+                            const [sh, sm] = startTime.split(':').map(Number);
+                            lateMinutes += Math.max(0, checkInMin - (sh * 60 + sm));
+                        }
+                    }
+                    if (record.checkOut && startTime && endTime) {
+                        const workedMin = Math.floor((record.checkOut - record.checkIn) / 60000);
+                        const [sh, sm] = startTime.split(':').map(Number);
+                        const [eh, em] = endTime.split(':').map(Number);
+                        const scheduledMin = (eh * 60 + em) - (sh * 60 + sm);
+                        if (scheduledMin > 0 && workedMin > scheduledMin) extraMinutes += workedMin - scheduledMin;
+                    }
+                } else if (cur <= todayMid) {
+                    absentDays++;
+                }
+            }
+            cur.setUTCDate(cur.getUTCDate() + 1);
+        }
+
+        const scheduleByDayObj = {};
+        if (scheduleByDay) {
+            const entries = scheduleByDay instanceof Map ? scheduleByDay : Object.entries(scheduleByDay || {});
+            for (const [k, v] of (scheduleByDay instanceof Map ? scheduleByDay : new Map(Object.entries(scheduleByDay || {})))) {
+                scheduleByDayObj[k] = v;
+            }
+        }
+
+        return res.status(200).json({
+            status: 200,
+            user: {
+                _id: user._id,
+                name: user.name,
+                surName: user.surName,
+                dni: user.dni,
+                email: user.email,
+                jobInformation: user.jobInformation,
+                workSchedule: {
+                    shiftType: user.workSchedule?.shiftType,
+                    scheduleByDay: scheduleByDayObj
+                },
+                img: user.img
+            },
+            records,
+            summary: {
+                totalWorkingDays,
+                presentDays,
+                absentDays,
+                lateDays,
+                justifiedLateDays,
+                lateMinutes,
+                extraMinutes,
+                expectedMinutes,
+                attendanceRate: totalWorkingDays > 0 ? Math.round((presentDays / totalWorkingDays) * 1000) / 10 : 0
+            },
+            period: { from: fromDate, to: toDate }
+        });
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ status: 500, message: 'Error server internal', error: error.message });
+    }
+});
 
 
 
@@ -387,175 +776,72 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
 
 routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
     try {
-        // ── Extraer el número de cédula (DNI) desde los parámetros de la URL ──
         const dni = req.params?.dni;
-
         const body = req.body;
 
-        // ── Validar el body contra el schema Yup: requiere campo "imageReference" (string) ──
-        // Si el body no cumple, Yup lanza ValidationError que se atrapa en el catch.
         await attendanceMachineValidationSchema.validate(body, { abortEarly: false, stripUnknown: true });
 
-        // ── Buscar el usuario en BD por su número de cédula ──
-        const user = await UserModel.findOne({ dni: dni });
-
-        // Si no existe un usuario con ese DNI → 404. No se puede registrar asistencia.
+        const user = await UserModel.findOne({ dni });
         if (!user) return res.status(404).json({ message: 'User not found' });
 
-        // ── NOTA: La validación de startTime/endTime se hace DESPUÉS de resolver ──
-        // scheduleOverride y scheduleByDay, ya que el override puede proveer
-        // horarios incluso si el scheduleByDay del usuario está incompleto.
-
-        // ── 1. CAPTURAR EL INSTANTE ACTUAL ──
         const now = new Date();
         const nowInAttendanceTz = getZonedDateParts(now);
         const todayMidnight = toUtcMidnightFromZonedParts(nowInAttendanceTz);
-
-        // ══════════════════════════════════════════════════════════════
-        // 2. RESOLVER HORARIO EFECTIVO:
-        //    scheduleOverride > scheduleByDay[día] > (sin horario → 400)
-        // ══════════════════════════════════════════════════════════════
-        const preExistingRecord = await AttendanceModel.findOne({
-            userId: user._id,
-            date: todayMidnight
-        });
-
-        const override = preExistingRecord?.scheduleOverride;
-        const hasOverride = override && override.workType;
-
-        // ── Obtener la regla del día desde scheduleByDay (clave = día de la semana 0-6) ──
-        const currentDayNumber = todayMidnight.getUTCDay();
-        const scheduleByDayMap = user?.workSchedule?.scheduleByDay;
-        const dayRule = scheduleByDayMap?.get?.(String(currentDayNumber))
-            || scheduleByDayMap?.[String(currentDayNumber)]
-            || null;
-
-
-        // -- determina el tipo de turno efectivo para hoy, considerando override > dayRule > shiftType global --
-        const effectiveShiftType = (hasOverride && override.shift)
-            || dayRule?.shift
-            || user?.workSchedule?.shiftType
-            || 'Diurno';
-        const isNocturno = effectiveShiftType === 'Nocturno';
-
-
-
-        // ── Si el admin marcó este día como DESCANSO via override → no se permite marcar ──
-        if (!isNocturno && hasOverride && override.workType === 'descanso') {
-            return res.status(400).json({
-                status: 400,
-                message: 'Este día fue asignado como descanso por el administrador. No se requiere marcar asistencia.',
-                error: 'Bad request'
-            });
-        }
-
-        // ── Si NO hay override y el scheduleByDay marca descanso → no se permite ──
-        if (!isNocturno && !hasOverride && dayRule && dayRule.workType === 'descanso') {
-            return res.status(400).json({
-                status: 400,
-                message: 'Este día está configurado como descanso en tu horario. No se requiere marcar asistencia.',
-                error: 'Bad request'
-            });
-        }
-
-        // ── Determinar horarios efectivos: override > dayRule ──
-        const effectiveStartTime = (hasOverride && override.startTime) || dayRule?.startTime || null;
-        const effectiveEndTime = (hasOverride && override.endTime) || dayRule?.endTime || null;
-
-        if (!effectiveStartTime) {
-            return res.status(400).json({
-                status: 400,
-                message: 'No hay horario de entrada configurado para hoy (ni por defecto ni por regla especial del administrador).',
-                error: 'Bad request'
-            });
-        }
-        if (!effectiveEndTime) {
-            return res.status(400).json({
-                status: 400,
-                message: 'No hay horario de salida configurado para hoy (ni por defecto ni por regla especial del administrador).',
-                error: 'Bad request'
-            });
-        }
-
-        // ── 3. EXTRAER Y PARSEAR LAS HORAS DE INICIO/FIN ──
-        const [startH, startM] = effectiveStartTime.split(':');
-        const [endH, endM] = effectiveEndTime.split(':');
-
-        const startHourNumber = Number(startH);
-        const startMinuteNumber = Number(startM);
-        const endHourNumber = Number(endH);
-        const endMinuteNumber = Number(endM);
-
-        // ── Verificar que las 4 partes numéricas (startH, startM, endH, endM) sean números válidos ──
-        // Si algún campo contiene texto o está vacío, Number() devuelve NaN.
-        // Esto protege contra datos corruptos en el modelo del usuario.
-        const hasInvalidSchedule =
-            Number.isNaN(startHourNumber) || Number.isNaN(startMinuteNumber) ||
-            Number.isNaN(endHourNumber) || Number.isNaN(endMinuteNumber);
-
-        if (hasInvalidSchedule) {
-            return res.status(400).json({
-                status: 400,
-                message: 'El horario del usuario tiene un formato inválido.',
-                error: 'Bad request'
-            });
-        }
-
-        // ── Convertir horarios a "minutos desde medianoche" para comparaciones simples ──
-        // Ej: 18:30 → 1110 min, 06:00 → 360 min. Permite comparar momentos del día con aritmética.
-        const startMinutes = (startHourNumber * 60) + startMinuteNumber;
-        const endMinutes = (endHourNumber * 60) + endMinuteNumber;
         const nowMinutes = (nowInAttendanceTz.hour * 60) + nowInAttendanceTz.minute;
 
-        // ── 4. DETERMINAR TIPO DE TURNO ──
-        // Prioridad: override.shift > dayRule.shift > workSchedule.shiftType (global)
-        // Permite que un diurno apoye en nocturno un día específico vía override.
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // PASO 1 — PRIORIDAD ABSOLUTA: salida de turno nocturno abierto de ayer
+        // Se evalúa ANTES que cualquier validación del día de hoy,
+        // porque hoy puede ser descanso/libre y el empleado igual debe
+        // poder cerrar su jornada de anoche.
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        const yesterdayMidnight = new Date(todayMidnight);
+        yesterdayMidnight.setUTCDate(yesterdayMidnight.getUTCDate() - 1);
 
+        const openYesterdayRecord = await AttendanceModel.findOne({
+            userId: user._id,
+            date: yesterdayMidnight,
+            checkOut: null
+        });
 
-        // ── 5. DETERMINAR SI HOY ES DÍA DE DESCANSO ──
-        // Si override define workType 'descanso' ya se rechazó arriba.
-        // Si dayRule tiene workType 'descanso' ya se rechazó arriba.
-        // Llegando aquí, el día es laboral o extra.
-        const isRestDay = false; // Solo llega aquí si el día es laboral/extra
-        const isExtraDayResolved = (hasOverride && override.workType === 'extra')
-            || (!hasOverride && dayRule?.workType === 'extra');
+        if (openYesterdayRecord) {
+            // Resolver el horario efectivo de AYER (no de hoy)
+            const yesterdayOverride = openYesterdayRecord?.scheduleOverride;
+            const hasYesterdayOverride = yesterdayOverride?.workType;
 
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // TURNO NOCTURNO: La salida ocurre al día siguiente (madrugada)
-        // Ejemplo: entrada 18:00 → salida 06:00 del día siguiente
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        if (isNocturno) {
-            // ── CALCULAR VENTANA DE SALIDA MATUTINA ──
-            // checkoutLimitMinutes = hora de fin del turno + 60 minutos de tolerancia.
-            // Ej: endTime 06:00 (360 min) + 60 = 420 min (07:00).
-            // isInMorningWindow: evalúa si la hora actual está entre 00:00 y las 07:00 (checkout limit).
-            // Si es true → el empleado está intentando marcar SALIDA del turno de anoche.
-            // Si es false → el empleado está intentando marcar ENTRADA de un nuevo turno nocturno.
+            const yesterdayDayNumber = yesterdayMidnight.getUTCDay();
+            const scheduleByDayMap = user?.workSchedule?.scheduleByDay;
+            const yesterdayDayRule = scheduleByDayMap?.get?.(String(yesterdayDayNumber))
+                || scheduleByDayMap?.[String(yesterdayDayNumber)]
+                || null;
 
-            const NOCTURNAL_CHECKOUT_TOLERANCE_MINUTES = 210; // TIMEPO LIMITE DE TOLERANCIA PARA EL PERSONAL NOCTURNO (210 min = 3h30min después de endTime, ej: 06:00 + 3h30 = 09:30)
-            const checkoutLimitMinutes = endMinutes + NOCTURNAL_CHECKOUT_TOLERANCE_MINUTES;
-            const isInMorningWindow = nowMinutes <= checkoutLimitMinutes;
+            const yesterdayShiftType = (hasYesterdayOverride && yesterdayOverride.shift)
+                || yesterdayDayRule?.shift
+                || user?.workSchedule?.shiftType
+                || 'Diurno';
 
-            if (isInMorningWindow) {
-                // ══════════════════════════════════════════════════════════════
-                // VENTANA DE SALIDA NOCTURNA (madrugada del día siguiente)
-                // ══════════════════════════════════════════════════════════════
-                // El empleado marca entre 00:00 y (endTime + 60 min).
-                // Debemos buscar el documento de asistencia del DÍA ANTERIOR
-                // que tenga checkOut: null (turno abierto de anoche).
-                const yesterdayMidnight = new Date(todayMidnight);
-                yesterdayMidnight.setUTCDate(yesterdayMidnight.getUTCDate() - 1);
+            // Solo aplicar lógica nocturna si el registro abierto es de un turno nocturno
+            if (yesterdayShiftType === 'Nocturno') {
+                const yesterdayEndTime = (hasYesterdayOverride && yesterdayOverride.endTime)
+                    || yesterdayDayRule?.endTime
+                    || null;
 
-                const openYesterdayRecord = await AttendanceModel.findOne({
-                    userId: user._id,
-                    date: yesterdayMidnight,
-                    checkOut: null  // Solo registros sin salida (turno abierto)
-                });
+                if (!yesterdayEndTime) {
+                    return res.status(400).json({
+                        status: 400,
+                        message: 'El turno nocturno de ayer no tiene hora de salida configurada.',
+                        error: 'Bad request'
+                    });
+                }
 
-                // ── Si existe un registro abierto del día anterior → CERRAR TURNO ──
-                // Se registra checkOut con la hora actual y se añade la imagen capturada.
-                if (openYesterdayRecord) {
-                    // Cerrar el turno del día anterior
+                const [endH, endM] = yesterdayEndTime.split(':');
+                const endMinutes = (Number(endH) * 60) + Number(endM);
+
+                const NOCTURNAL_CHECKOUT_TOLERANCE_MINUTES = 210;
+                const checkoutLimitMinutes = endMinutes + NOCTURNAL_CHECKOUT_TOLERANCE_MINUTES;
+
+                if (nowMinutes <= checkoutLimitMinutes) {
+                    // ✅ Estamos dentro de la ventana de salida → cerrar turno
                     const finalRecord = await AttendanceModel.findOneAndUpdate(
                         { _id: openYesterdayRecord._id },
                         {
@@ -565,35 +851,115 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                         { new: true }
                     );
 
-                    // ── Emitir evento Socket.IO para actualización en tiempo real del dashboard ──
-                    // Se ajusta la fecha +4h (UTC→Caracas) para generar el canal correcto.
                     const dateEvent = new Date(finalRecord.date);
                     dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
                     io.emit(`${dateEvent.toISOString()}-${user.email}`, { finalRecord, user });
-                    return res.status(200).json({ finalRecord, user, message: '¡Fin de la jornada nocturna!🌙' });
+
+                    return res.status(200).json({
+                        finalRecord,
+                        user,
+                        message: '¡Fin de la jornada nocturna!🌙'
+                    });
                 }
 
-                // ── No se encontró un turno abierto de ayer → CONFLICTO ──
-                // El empleado intenta marcar salida pero no tiene entrada registrada
-                // del día anterior. Puede que ya haya cerrado o que nunca marcó entrada.
-                return res.status(409).json({
-                    status: 409,
-                    message: 'No existe una entrada del turno nocturno de ayer para cerrar.',
-                    data: null
-                });
+                // Fuera de la ventana de tolerancia → el turno de ayer quedó sin cerrar
+                // pero ya no se puede cerrar. Continúa con la lógica del día de hoy.
             }
+        }
 
-            // ══════════════════════════════════════════════════════════════
-            // VENTANA DE ENTRADA NOCTURNA (noche del mismo día)
-            // ══════════════════════════════════════════════════════════════
-            // Si llegó aquí, la hora actual es POSTERIOR a la ventana de salida matutina,
-            // por lo tanto el empleado intenta registrar una NUEVA ENTRADA nocturna.
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // PASO 2 — Resolver horario efectivo de HOY
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        const preExistingRecord = await AttendanceModel.findOne({
+            userId: user._id,
+            date: todayMidnight
+        });
 
-            // ── Evaluar tolerancia temprana: ¿Es demasiado pronto para marcar? ──
-            // earlyToleranceMinutes = 60 → permite marcar hasta 1 hora antes de startTime.
-            // Ej: si startTime = 18:00 (1080 min), se permite desde 17:00 (1020 min).
-            // Si nowMinutes < (startMinutes - 60) → el empleado llegó muy temprano, se rechaza.
-            const earlyToleranceMinutes = 60;
+        const override = preExistingRecord?.scheduleOverride;
+        const hasOverride = override?.workType;
+
+        const currentDayNumber = todayMidnight.getUTCDay();
+        const scheduleByDayMap = user?.workSchedule?.scheduleByDay;
+        const dayRule = scheduleByDayMap?.get?.(String(currentDayNumber))
+            || scheduleByDayMap?.[String(currentDayNumber)]
+            || null;
+
+        const effectiveShiftType = (hasOverride && override.shift)
+            || dayRule?.shift
+            || user?.workSchedule?.shiftType
+            || 'Diurno';
+        const isNocturno = effectiveShiftType === 'Nocturno';
+
+        // ── Validaciones de descanso (ahora seguras porque ya resolvimos la salida nocturna) ──
+        if (hasOverride && override.workType === 'descanso') {
+            return res.status(400).json({
+                status: 400,
+                message: 'Este día fue asignado como descanso por el administrador. No se requiere marcar asistencia.',
+                error: 'Bad request'
+            });
+        }
+
+        if (!hasOverride && dayRule?.workType === 'descanso') {
+            return res.status(400).json({
+                status: 400,
+                message: 'Este día está configurado como descanso en tu horario. No se requiere marcar asistencia.',
+                error: 'Bad request'
+            });
+        }
+
+        // ── Horarios efectivos de hoy ──
+        const effectiveStartTime = (hasOverride && override.startTime) || dayRule?.startTime || null;
+        const effectiveEndTime = (hasOverride && override.endTime) || dayRule?.endTime || null;
+
+        if (!effectiveStartTime) {
+            return res.status(400).json({
+                status: 400,
+                message: 'No hay horario de entrada configurado para hoy.',
+                error: 'Bad request'
+            });
+        }
+        if (!effectiveEndTime) {
+            return res.status(400).json({
+                status: 400,
+                message: 'No hay horario de salida configurado para hoy.',
+                error: 'Bad request'
+            });
+        }
+
+        const [startH, startM] = effectiveStartTime.split(':');
+        const [endH, endM] = effectiveEndTime.split(':');
+        const startHourNumber = Number(startH);
+        const startMinuteNumber = Number(startM);
+        const endHourNumber = Number(endH);
+        const endMinuteNumber = Number(endM);
+
+        if (
+            Number.isNaN(startHourNumber) || Number.isNaN(startMinuteNumber) ||
+            Number.isNaN(endHourNumber) || Number.isNaN(endMinuteNumber)
+        ) {
+            return res.status(400).json({
+                status: 400,
+                message: 'El horario del usuario tiene un formato inválido.',
+                error: 'Bad request'
+            });
+        }
+
+        const startMinutes = (startHourNumber * 60) + startMinuteNumber;
+        const isExtraDayResolved = (hasOverride && override.workType === 'extra')
+            || (!hasOverride && dayRule?.workType === 'extra');
+
+        const LATE_GRACE_MINUTES = 5;
+        const shouldCheckLate = hasOverride ? true : user?.workSchedule?.lateArrivalControl;
+        const realIsLate = shouldCheckLate
+            ? nowMinutes > (startMinutes + LATE_GRACE_MINUTES)
+            : false;
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // PASO 3 — ENTRADA de turno nocturno de hoy
+        // (la salida ya fue manejada en el PASO 1)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        if (isNocturno) {
+            const earlyToleranceMinutes = 120;
             if (nowMinutes < (startMinutes - earlyToleranceMinutes)) {
                 return res.status(400).json({
                     status: 400,
@@ -602,13 +968,9 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                 });
             }
 
-            // ── Buscar si ya existe un documento de asistencia para HOY ──
-            // Puede ser pre-creado por admin (scheduleOverride sin checkIn) o creado por marcado previo.
             const todayRecord = preExistingRecord;
 
-            // ── Si ya existe un registro para hoy → evaluar estado ──
             if (todayRecord) {
-                // ── Si tiene checkIn Y checkOut → jornada completamente cerrada ──
                 if (todayRecord.checkIn && todayRecord.checkOut) {
                     return res.status(409).json({
                         status: 409,
@@ -616,7 +978,6 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                         data: todayRecord
                     });
                 }
-                // ── Si tiene checkIn pero NO checkOut → la entrada ya fue marcada ──
                 if (todayRecord.checkIn) {
                     return res.status(409).json({
                         status: 409,
@@ -624,32 +985,10 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                         data: todayRecord
                     });
                 }
-                // ── Si NO tiene checkIn → es un documento pre-creado por admin ──
-                // Se actualiza con checkIn (primera marcada del empleado).
             }
 
-            // ══════════════════════════════════════════════════════════════
-            // CREAR NUEVA ENTRADA NOCTURNA
-            // ══════════════════════════════════════════════════════════════
-            // No existe registro de hoy → se puede crear la entrada.
-
-            // ── Calcular si el empleado llegó tarde ──
-            // Se compara nowMinutes (hora actual en zona Caracas) contra startMinutes + 5 min de gracia.
-            // Usa el horario efectivo (override si existe, si no workSchedule).
-            // Si hay override → SIEMPRE verificar retardo (el admin puso horario explícito).
-            // Si no hay override → respetar el flag lateArrivalControl del workSchedule.
-            const LATE_GRACE_MINUTES = 5;
-            const shouldCheckLate = hasOverride ? true : user?.workSchedule?.lateArrivalControl;
-            const realIsLate = shouldCheckLate
-                ? nowMinutes > (startMinutes + LATE_GRACE_MINUTES)
-                : false;
-
-            // ── Crear o actualizar el documento de asistencia en MongoDB ──
-            // Si todayRecord existe (pre-creado por admin sin checkIn) → update.
-            // Si no existe → create nuevo.
             let finalRecord;
             if (todayRecord && !todayRecord.checkIn) {
-                // Documento pre-creado por admin → agregar checkIn y datos de marcado
                 finalRecord = await AttendanceModel.findOneAndUpdate(
                     { _id: todayRecord._id },
                     {
@@ -657,7 +996,7 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                             checkIn: now,
                             isLate: realIsLate,
                             isExtraDay: isExtraDayResolved,
-                            status: (isRestDay || isExtraDayResolved) ? 'franco-trabajado' : 'presente',
+                            status: isExtraDayResolved ? 'franco-trabajado' : 'presente',
                             updatedAt: now
                         },
                         $push: { imageReference: body.imageReference }
@@ -665,48 +1004,34 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                     { new: true }
                 );
             } else {
-                // No existe documento → crear nuevo
                 finalRecord = await AttendanceModel.create({
                     userId: user._id,
                     date: todayMidnight,
                     checkIn: now,
                     isLate: realIsLate,
                     isExtraDay: isExtraDayResolved,
-                    status: (isRestDay || isExtraDayResolved) ? 'franco-trabajado' : 'presente',
+                    status: isExtraDayResolved ? 'franco-trabajado' : 'presente',
                     imageReference: [body.imageReference]
                 });
             }
 
-            // ── Emitir evento Socket.IO para actualización en tiempo real del dashboard ──
             const dateEvent = new Date(finalRecord.date);
             dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
             io.emit(`${dateEvent.toISOString()}-${user.email}`, { finalRecord, user });
-            return res.json({ finalRecord, user, message: realIsLate ? 'Entrada nocturna con retardo😥' : 'Entrada nocturna registrada🌙' });
+
+            return res.json({
+                finalRecord,
+                user,
+                message: realIsLate ? 'Entrada nocturna con retardo😥' : 'Entrada nocturna registrada🌙'
+            });
         }
 
-
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // TURNO DIURNO: Entrada y salida ocurren el MISMO día calendario
-        // Si isNocturno fue false, toda la lógica restante es diurna.
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        const recordDate = todayMidnight;
-
-        // ── Calcular si llegó tarde ──
-        // Usa horario efectivo (override > workSchedule). 5 min de gracia.
-        // Si hay override → SIEMPRE verificar retardo (el admin puso horario explícito).
-        const LATE_GRACE_MINUTES = 5;
-        const shouldCheckLate = hasOverride ? true : user?.workSchedule?.lateArrivalControl;
-        const realIsLate = shouldCheckLate
-            ? nowMinutes > (startMinutes + LATE_GRACE_MINUTES)
-            : false;
-
-        // ── Buscar si ya existe un documento de asistencia para hoy ──
-        // Ya fue consultado arriba como preExistingRecord.
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // PASO 4 — Turno DIURNO
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         const documentExist = preExistingRecord;
 
-        // ── Si ya existe registro hoy → evaluar estado ──
         if (documentExist) {
-            // ── Si tiene checkIn Y checkOut → jornada completamente cerrada → 409 ──
             if (documentExist.checkIn && documentExist.checkOut) {
                 return res.status(409).json({
                     status: 409,
@@ -715,7 +1040,6 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                 });
             }
 
-            // ── Si tiene checkIn pero NO checkOut → segundo marcado (SALIDA) ──
             if (documentExist.checkIn && !documentExist.checkOut) {
                 const finalRecord = await AttendanceModel.findOneAndUpdate(
                     { _id: documentExist._id },
@@ -732,7 +1056,7 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                 return res.status(200).json({ finalRecord, user, message: '¡Fin de la jornada diaria!🥳🥳🥳' });
             }
 
-            // ── Si NO tiene checkIn → documento pre-creado por admin → primera marcada (ENTRADA) ──
+            // Documento pre-creado por admin sin checkIn
             const finalRecord = await AttendanceModel.findOneAndUpdate(
                 { _id: documentExist._id },
                 {
@@ -740,7 +1064,7 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                         checkIn: now,
                         isLate: realIsLate,
                         isExtraDay: isExtraDayResolved,
-                        status: (isRestDay || isExtraDayResolved) ? 'franco-trabajado' : 'presente',
+                        status: isExtraDayResolved ? 'franco-trabajado' : 'presente',
                         updatedAt: now
                     },
                     $push: { imageReference: body.imageReference }
@@ -751,32 +1075,35 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
             const dateEvent = new Date(finalRecord.date);
             dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
             io.emit(`${dateEvent.toISOString()}-${user.email}`, { finalRecord, user });
-            return res.json({ finalRecord, user, message: realIsLate ? 'Registro exitoso con retardo😥' : 'Registro exitoso🕗' });
+            return res.json({
+                finalRecord,
+                user,
+                message: realIsLate ? 'Registro exitoso con retardo😥' : 'Registro exitoso🕗'
+            });
         }
 
-        // ══════════════════════════════════════════════════════════════
-        // NO EXISTE REGISTRO HOY → CREAR NUEVA ENTRADA DIURNA
-        // ══════════════════════════════════════════════════════════════
+        // No existe registro hoy → nueva entrada diurna
         const finalRecord = await AttendanceModel.create({
             userId: user._id,
-            date: recordDate,
+            date: todayMidnight,
             checkIn: now,
             isLate: realIsLate,
             isExtraDay: isExtraDayResolved,
-            status: (isRestDay || isExtraDayResolved) ? 'franco-trabajado' : 'presente',
+            status: isExtraDayResolved ? 'franco-trabajado' : 'presente',
             imageReference: [body.imageReference]
         });
-        // ── Emitir evento Socket.IO para dashboard en tiempo real ──
+
         const dateEvent = new Date(finalRecord.date);
         dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
         io.emit(`${dateEvent.toISOString()}-${user.email}`, { finalRecord, user });
-        return res.json({ finalRecord, user, message: realIsLate ? 'Registro exitoso con retardo😥' : 'Registro exitoso🕗' });
+        return res.json({
+            finalRecord,
+            user,
+            message: realIsLate ? 'Registro exitoso con retardo😥' : 'Registro exitoso🕗'
+        });
 
-    }
-    catch (error) {
+    } catch (error) {
         console.log(error);
-        // ── Captura errores de Yup (attendanceMachineValidationSchema.validate) ──
-        // Si el body no pasó la validación del schema, error.name será 'ValidationError'.
         if (error.name === 'ValidationError') {
             return res.status(400).json({
                 status: 400,
@@ -784,9 +1111,9 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                 error: error.errors || error.message
             });
         }
-        // ── Captura errores de Mongoose por IDs malformados ──
-        if (error.name === 'CastError') return res.status(400).json({ error: error, status: 400, message: 'Bad request' });
-        // ── Cualquier otro error inesperado → 500 ──
+        if (error.name === 'CastError') {
+            return res.status(400).json({ error, status: 400, message: 'Bad request' });
+        }
         return res.status(500).json({ status: 500, message: 'Error server internal', error: error.message });
     }
 });
@@ -810,14 +1137,6 @@ routerUser.get(`${nameApi}/user/multimedia/:namefile`, async (req, res) => {
 
 
 
-
-// THIS ENDPOIND IS DEPRECATED 👇
-
-routerUser.post(`/user/login`, controller.login, addCredentials);   //legace
-routerUser.get(`/user/protected`, controller.get);
-routerUser.post(`/user/signup`, controller.signup);
-routerUser.get(`/user/logout`, controller.logout);
-routerUser.get(`/user/getUser`, controller.getUser);
 
 routerUser.post(`${nameApi}/user/login`, controller.login, addCredentials);
 

@@ -34,15 +34,7 @@
         "minify-simplify",
         "remove-comments",
         "babel-plugin-add-import-extension",
-        [
-            "transform-remove-console",
-            {
-                "exclude": [
-                    "error",
-                    "warn"
-                ]
-            }
-        ],
+        
         [
             "replace-import-extension",
             {

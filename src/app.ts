@@ -55,25 +55,26 @@ app.use(compression());
 app.use(rejectInsecureConnections);
 
 
-app.use(cors({ 
-    origin: function (origin, callback) { 
-        if (!origin) return callback(null, true); // permite requests sin origen (ej. curl, server-side) 
-        if (origins.includes(origin)) {
-             return callback(null, true); 
-            } 
-            else { 
-                return callback(new Error('Not allowed by CORS')); 
-            } 
-        }, 
-    credentials: true, 
-    optionsSuccessStatus: 200, 
+
+app.set('view engine', 'pug');
+app.set('views', join(__dirname, './view'));
+
+
+
+
+app.use(cors({
+    origin: origins,
+    optionsSuccessStatus: 200,
+    credentials: true,
 }));
 
+
+/*
 app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' }, // Importante para imágenes
     contentSecurityPolicy: false // O configúrala específicamente
 }));
-
+*/
 
 
 app.use(cookieParser(config.SECRET_SERVER || 'Secreto_montaña365.*'));
@@ -138,6 +139,7 @@ app.get('/.well-known/pki-validation/AA16A519A39B28B1D06DCCAD9C255BCB.txt', (req
 const apiRouter = express.Router();
 
 app
+    .use(routerUser)
     .use(routerMultimedia)
     .use(routerPublisher)
     .use(routerFranchise)
@@ -154,8 +156,14 @@ app
     .use(authRouter)
     .use(routerDocument)
     .use(routerChat)
-    .use(routerView)
-    .use(routerUser);
+    .use(routerView);
+
+
+
+
+
+
+app.use(express.static(join(__dirname, '../public')));
 
 
 
@@ -165,12 +173,11 @@ app.use('/api/v1/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 
 
-app.use(express.static(join(__dirname, '../public')));
-
-
 app.use((req: Request, res: Response, next: NextFunction): void => {
     res.status(404).json({ error: 'route not found', status: 404 });
 });
+
+
 
 
 export { app };
