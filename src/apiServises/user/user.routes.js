@@ -420,14 +420,14 @@ routerUser.get(`${nameApi}/user/attendance/global-report`, async (req, res) => {
         // Totales globales calculados en Node.js sobre el array ya reducido.
         // Se añade totalFalta y se desglosa activos vs. inactivos.
         const totals = {
-            totalEmployees:   result.length,
-            activeEmployees:  result.filter(r => !r.inabilited).length,
+            totalEmployees: result.length,
+            activeEmployees: result.filter(r => !r.inabilited).length,
             inactiveEmployees: result.filter(r => r.inabilited).length,
             totalLateWeekday: result.reduce((a, r) => a + r.lateWeekday, 0),
             totalLateWeekend: result.reduce((a, r) => a + r.lateWeekend, 0),
-            totalExtraDays:   result.reduce((a, r) => a + r.extraDays, 0),
-            totalPresent:     result.reduce((a, r) => a + r.totalPresent, 0),
-            totalFalta:       result.reduce((a, r) => a + r.faltaCount, 0),
+            totalExtraDays: result.reduce((a, r) => a + r.extraDays, 0),
+            totalPresent: result.reduce((a, r) => a + r.totalPresent, 0),
+            totalFalta: result.reduce((a, r) => a + r.faltaCount, 0),
         };
 
         return res.status(200).json({
@@ -668,7 +668,6 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
             });
         }
 
-        // Validar que venga el ID del admin que realiza la acción (para auditoría)
         if (!adminUserId || !ObjectId.isValid(adminUserId)) {
             return res.status(400).json({
                 status: 400,
@@ -682,7 +681,6 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
 
         for (const item of updates) {
             try {
-                // Validar campos mínimos
                 if (!item.userId && !item.dni) {
                     errors.push({ item, error: 'Se requiere userId o dni.' });
                     continue;
@@ -707,43 +705,41 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
                     userId = userDoc._id;
                 }
 
-                // Normalizar la fecha a medianoche UTC (mismo formato que el endpoint de marcado)
+                // Normalizar fecha a medianoche UTC
                 const dateObj = new Date(item.date);
                 dateObj.setUTCHours(0, 0, 0, 0);
 
-                // Construir el scheduleOverride con la misma estructura que scheduleByDay
-                const overrideFields = {
-                    'scheduleOverride.workType': item.workType,
-                    'scheduleOverride.shift': item.shift || null,
-                    'scheduleOverride.startTime': item.workType === 'descanso' ? null : (item.startTime || null),
-                    'scheduleOverride.endTime': item.workType === 'descanso' ? null : (item.endTime || null),
+                // ✅ FIX: scheduleOverride como objeto completo, no notación de punto
+                const scheduleOverride = {
+                    workType: item.workType,
+                    shift: item.shift || null,
+                    startTime: item.workType === 'descanso' ? null : (item.startTime || null),
+                    endTime:   item.workType === 'descanso' ? null : (item.endTime   || null),
+                    note: []
                 };
 
-                // Upsert: crear documento si no existe, o actualizar scheduleOverride si ya existe.
-                // $set para los campos del override, $push para historial de auditoría y notas.
-                const pushOperations = {};
-                // Si el admin envió una nota, agregarla al array de notas del override
+                const updateOp = {
+                    $set: { scheduleOverride }
+                };
+
+                // $push solo si hay nota, evita errores de $push vacío en upsert
                 if (item.note) {
-                    pushOperations['scheduleOverride.note'] = {
-                        user: adminUserId,
-                        message: item.note,
-                        date: new Date()
+                    updateOp.$push = {
+                        'scheduleOverride.note': {
+                            user: adminUserId,
+                            message: item.note,
+                            date: new Date()
+                        }
                     };
                 }
-                console.log(overrideFields)
+
                 const record = await AttendanceModel.findOneAndUpdate(
                     { userId, date: dateObj },
-                    {
-                        $set: overrideFields,
-                        $push: pushOperations
-                    },
+                    updateOp,
                     { upsert: true, new: true, setDefaultsOnInsert: true }
                 ).populate('scheduleOverride.note.user', 'name surName dni');
 
-                console.log('Record after upsert:', record);
-
-                // Emitir evento Socket.IO para que Client365 actualice la celda en tiempo real.
-                // Se popula modifiedBy para que el frontend muestre quién creó/editó el override.
+                // Emitir evento Socket.IO para actualización en tiempo real
                 const userDoc = await UserModel.findById(userId);
                 if (userDoc) {
                     const dateEvent = new Date(record.date);
@@ -754,6 +750,7 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
                 results.push(record);
             }
             catch (innerErr) {
+                console.log('Error processing item:', item, innerErr);
                 errors.push({ item, error: innerErr.message });
             }
         }
@@ -769,8 +766,6 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
         return res.status(500).json({ status: 500, message: 'Error server internal', error: error.message });
     }
 });
-
-
 
 
 
