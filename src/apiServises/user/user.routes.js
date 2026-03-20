@@ -714,7 +714,7 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
                     workType: item.workType,
                     shift: item.shift || null,
                     startTime: item.workType === 'descanso' ? null : (item.startTime || null),
-                    endTime:   item.workType === 'descanso' ? null : (item.endTime   || null),
+                    endTime: item.workType === 'descanso' ? null : (item.endTime || null),
                     note: []
                 };
 

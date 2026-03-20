@@ -66,8 +66,8 @@ controller.getDishById = async (req, res) => {
         });
 
         const result = await DishesSchema.findById(id);
-        if(!result) return res.json({data: result, status: 200});
-        return res.json({error: 'Document not found',status: 404});
+        if(result) return res.json({data: result, status: 200});
+        return res.status(404).json({error: 'Document not found', status: 404});
     } 
     catch (a) {
         return console.log(a), res.status(500).json({

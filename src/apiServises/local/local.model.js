@@ -5,6 +5,7 @@ import mongoose, { Schema, model } from 'mongoose';
 
 
 const Local = new Schema({
+    
     franchise: { //is deprecated
         type: String,
     },

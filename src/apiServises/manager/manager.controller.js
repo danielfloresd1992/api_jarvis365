@@ -114,7 +114,9 @@ controller.setManager = async (req, res) => {
             return res.status(400).send('Campos nulos');
         }
 
-        if (req.files.img.length !== 3) return res.status(400).json({ error: 'Bad request', status: 400, message: 'The file limit should be 3' });
+        // ─── Validación de imágenes desactivada temporalmente ───────────────────
+        // El guardado de imágenes está en pausa; se acepta el registro sin archivos.
+        // if (req.files?.img?.length !== 3) return res.status(400).json({ error: 'Bad request', status: 400, message: 'The file limit should be 3' });
 
         let local = await Local.findOne({ _id: body.localName });
 
