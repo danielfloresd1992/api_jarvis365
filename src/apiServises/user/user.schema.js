@@ -8,7 +8,7 @@ const POSITION_ENUM = [
 
 // Sub-schema de validación para un día individual de scheduleByDay
 const dayScheduleSchema = yup.object({
-    workType: yup.string().oneOf(['laboral', 'extra', 'descanso'], 'workType inválido').default('laboral'),
+    workType: yup.string().oneOf(['laboral', 'extra', 'descanso', 'permiso', 'vacaciones', 'falta'], 'workType inválido').default('laboral'),
     shift: yup.string().oneOf(['Diurno', 'Nocturno'], 'Turno inválido').default('Diurno'),
     startTime: yup.string().matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato HH:mm').nullable().default(null),
     endTime: yup.string().matches(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Formato HH:mm').nullable().default(null),
@@ -44,7 +44,7 @@ export const userSchemaComplete = yup.object({
     dni: yup.string().nullable().default(null),
 
     user: yup.string().required().trim(),
-    name:  yup.string().required().trim(),
+    name: yup.string().required().trim(),
     surName: yup.string().required().trim(),
     phone: yup.string().required().trim(),
 
@@ -78,7 +78,7 @@ export const userUpdateSchema = yup.object({
     dni: yup.string().nullable().default(null),
     admin: yup.boolean().optional(),
     super: yup.boolean().optional(),
-    name:  yup.string().optional().trim(),
+    name: yup.string().optional().trim(),
     surName: yup.string().optional().trim(),
     inabilited: yup.boolean().optional(),
 
