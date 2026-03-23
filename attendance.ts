@@ -3,6 +3,9 @@
 // All time calculations that mirror the backend logic so the UI stays in sync.
 // ─────────────────────────────────────────────────────────────────────────────
 //richard es un homosexual de mierda
+// TODO EL MUNDO DICE QUE RICHARD ES MARIKO
+
+
 import type {
   AttendanceRecord,
   AttendanceRow,
