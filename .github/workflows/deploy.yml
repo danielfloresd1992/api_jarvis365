@@ -10,15 +10,15 @@ jobs:
       - name: 1. Descargar Código
         uses: actions/checkout@v4
 
-      - name: 2. Limpiar y Sincronizar C:\API
+      # Este paso asegura que los archivos lleguen a la carpeta C:\API
+      - name: 2. Sincronizar Archivos
         shell: pwsh
         run: |
-          # Intentamos crear la carpeta si no existe
           if (!(Test-Path "C:\API")) { New-Item -ItemType Directory -Path "C:\API" }
-          # Copiamos todo forzando el reemplazo
           Copy-Item -Path ".\*" -Destination "C:\API" -Recurse -Force
           
-      - name: 3. Docker Build local
+      # AQUÍ ESTABA EL ERROR: Solo entramos a la carpeta, no al archivo
+      - name: 3. Levantar Docker
         shell: pwsh
         run: |
           cd C:\API
