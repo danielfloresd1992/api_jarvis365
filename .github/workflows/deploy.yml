@@ -20,3 +20,7 @@ jobs:
           
           # 2. Reconstruye y actualiza las 4 instancias
           docker compose up -d --build
+      - name: 2. Sincronizar archivos a C:\API
+        run: |
+          # Esto copia el código descargado a la carpeta de trabajo del servidor
+          Copy-Item -Path .\* -Destination C:\API\ -Recurse -Force
