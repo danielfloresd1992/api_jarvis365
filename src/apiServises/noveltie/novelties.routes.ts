@@ -31,6 +31,8 @@ const controller =  new ControllerNovelty(socketAdapter);
 
 
 routerNoveltie.get(`${nameApi}/noveltiesAll`, extendSession, validateSession, controller.getNovelties);
+
+
 routerNoveltie.get(`${nameApi}/noveltie/since=/:since/until=:until`, extendSession, validateSession, zipMiddleware, controller.getNoveltie);
 
 

@@ -63,7 +63,7 @@ export default class ControllerNovelty {
             const until: string = req.params.until;
 
             const query = { date: { $gte: new Date(since).toISOString(), $lt: new Date(until).toISOString() } };
-            const result = await NoveltieModel.find(query).select('-fileNoveltie')
+            const result = await NoveltieModel.find(query).select('-fileNoveltie').populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id');
             res.zip(JSON.stringify(result), 'resultado');
         }
         catch (error) {
@@ -152,6 +152,7 @@ export default class ControllerNovelty {
 
             const searchPromise = await NoveltieModel
                 .find(query)
+                .populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id')
                 .sort({ $natural: -1 })
                 .select('-fileNoveltie -rulesForBonus -isValidate -menu -userPublic -description -local')
                 .skip(page * 10)
