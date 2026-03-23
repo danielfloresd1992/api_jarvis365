@@ -17,7 +17,7 @@ jobs:
           if (!(Test-Path "C:\API")) { New-Item -ItemType Directory -Path "C:\API" }
           Copy-Item -Path ".\*" -Destination "C:\API" -Recurse -Force
           
-      # AQUÍ ESTABA EL ERROR: Solo entramos a la carpeta, no al archivo
+      # AQUÍ ESTABA EL ERROR: Solo entramos a la carpeta, no al archiv
       - name: 3. Levantar Docker
         shell: pwsh
         run: |
