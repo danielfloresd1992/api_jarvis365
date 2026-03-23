@@ -1,26 +1,25 @@
-name: Deploy API to Windows Server
-
-# Se ejecuta solo al hacer push a la rama main
+name: Deploy API Jarvis365
 on:
   push:
     branches:
       - main
-
 jobs:
   deploy:
-    # Esta es la palabra mágica que le dice a GitHub que busque tu servidor Windows
     runs-on: self-hosted
-    
     steps:
-      - name: Actualizar contenedores con Docker Compose
-        # Aquí le decimos qué comandos ejecutar en la consola de tu servidor
+      - name: 1. Descargar Código
+        uses: actions/checkout@v4
+
+      - name: 2. Limpiar y Sincronizar C:\API
+        shell: pwsh
         run: |
-          # 1. Cambia esta ruta por la carpeta real donde pusiste tu docker-compose.yml
-          cd C:\API\docker-compose.yaml
+          # Intentamos crear la carpeta si no existe
+          if (!(Test-Path "C:\API")) { New-Item -ItemType Directory -Path "C:\API" }
+          # Copiamos todo forzando el reemplazo
+          Copy-Item -Path ".\*" -Destination "C:\API" -Recurse -Force
           
-          # 2. Reconstruye y actualiza las 4 instancias
-          docker compose up -d --build
-      - name: 2. Sincronizar archivos a C:\API
+      - name: 3. Docker Build local
+        shell: pwsh
         run: |
-          # Esto copia el código descargado a la carpeta de trabajo del servidor
-          Copy-Item -Path .\* -Destination C:\API\ -Recurse -Force
+          cd C:\API
+          docker compose up -d --build
