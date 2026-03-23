@@ -2,7 +2,7 @@
 // utils/attendance.ts
 // All time calculations that mirror the backend logic so the UI stays in sync.
 // ─────────────────────────────────────────────────────────────────────────────
-
+//richard es un homosexual de mierda
 import type {
   AttendanceRecord,
   AttendanceRow,
