@@ -45,14 +45,6 @@ io.on('connection', (socket) => {
     socket.join('lobby');
 
 
-    socket.on('updatePublisher', data => {
-        console.log(data);
-        io.emit('reciveUpdatePublisher', data);
-    });
-
-    socket.on('deletedPublisher', data => {
-        io.emit('reciveDeletePublisher', data);
-    });
 
     socket.on('user-connection', data => {
         io.emit('open-user-express', data);
@@ -66,13 +58,8 @@ io.on('connection', (socket) => {
         io.emit('reload-client-appmanager', data);
     });
 
-    socket.on('close-user-connection', data => {
-        io.emit('close-user-repost-express', data);
-    });
+  
 
-    socket.on('update-user-repost-express', userId => {
-        io.emit('update-user-client-express', userId);
-    });
 
     socket.on('update-user-app-manager', user => {
 
@@ -90,41 +77,14 @@ io.on('connection', (socket) => {
     socket.on('send-ask-user', data => {
         io.emit('return-ask-user', data);
     });
-
     //////////////////////////////////////////;
 
-
-    socket.on('receive-failure', data => {
-
-        if (!cacheFailedConcnection.setItem(`${data.idLocal}-${data.localName}`)) {
-            const dataLocal = {
-                nameItem: `${data.idLocal}-${data.localName}`,
-                ...data
-            };
-
-            cacheFailedConcnection.setItem(dataLocal.nameItem, data);
-            io.emit('failed-connection', dataLocal);
-        }
-    });
-
-
-    socket.on('receive-reconnection', data => {
-        cacheFailedConcnection.deleteItem(`${data.idLocal}-${data.localName}`);
-    });
-
-
-    socket.on('from-failed-connection', msm => {
-
-        io.emit('check-failed-connection', cacheFailedConcnection.getCacheArray());
-    });
 
 
     //jarvis365reporte
     socket.on('jarvis365reporte-alert-emit', msm => {
         io.emit('jarvis365reporte-alert-receive', msm);
     });
-
-
 
 
 });

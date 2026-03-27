@@ -25,11 +25,22 @@ class SocketAdapter implements ISocketAdapter {
             console.log(data)
             this.io.to(room).emit(event, data);
 
-          //  this.io.emit('lobby', data);
+            //  this.io.emit('lobby', data);
         } catch (error) {
             console.error('Error emitting event:', error instanceof Error ? error.message : 'Unknown error');
         }
     }
+
+
+    emit(event: string, data: DataByEnv): void {
+        try {
+
+            this.io.emit(event, data);
+        } catch (error) {
+            console.error('Error emitting event:', error instanceof Error ? error.message : 'Unknown error');
+        }
+    }
+
 }
 
 

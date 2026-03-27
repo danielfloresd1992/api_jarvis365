@@ -25,6 +25,7 @@ const __dirname: string = url.fileURLToPath(new URL('.', import.meta.url));
 const routerNoveltie = express.Router();
 
 const socketAdapter = new SocketAdapter(io);  // inyeción de dependencias
+
 const controller =  new ControllerNovelty(socketAdapter);
 
 

@@ -14,7 +14,7 @@ import nameApi from '../../libs/name_api.js';
 
 import { Request, Response } from 'express';
 
-import { Server } from 'socket.io';
+import { io } from '../../services/socket/io.js';
 
 //call servises publisher
 
@@ -29,7 +29,6 @@ config();
 
 const __dirname: string = url.fileURLToPath(new URL('.', import.meta.url));
 const documentsPath: any = process.env.DEBUG === 'true' ? '\\\\72.68.60.254\\d' : 'D:\\';
-
 
 
 export default class ControllerNovelty {
@@ -351,6 +350,13 @@ export default class ControllerNovelty {
             const result = await publisher.createPublication(newBodyRequest);
 
 
+            if (io) {
+                io.emit(
+                    'created_Alert',
+                    { doc: result, user: { idUser: req.session.userId, nameUser: `${req.session.name}` } }
+                );
+            }
+
             return res.json(result);
         }
         catch (error: any) {
@@ -447,11 +453,9 @@ export default class ControllerNovelty {
 
             const updateDocument = await NoveltieModel.findOneAndUpdate({ _id: id }, body, { new: true, runValidators: true }).populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id');
 
-            console.log(updateDocument.validationResult);
 
-            if (this.socketAdapter) {
-                this.socketAdapter.emitToRoom(
-                    'lobby',
+            if (io) {
+                io.emit(
                     'document_updated',
                     { doc: updateDocument, user: { idUser: req.session.userId, nameUser: `${req.session.name}` } }
                 );
