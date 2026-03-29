@@ -2,8 +2,11 @@ import express, { Request, Response, NextFunction, Express } from 'express';
 import { createServer, Server } from 'https';
 import { readFileSync } from 'fs';
 import { app } from './app';
-import colors from 'colors';
+
+import { io } from './services/socket/io.ts'
+
 import { config as dotenvConfig } from 'dotenv';
+import { logBanner, logServerStart, logHttpStart, logSocketStart } from './util/logger.js';
 import { join } from 'path';
 import * as url from 'url';
 import appConfig from './config/index.js';
@@ -31,6 +34,7 @@ const app_dev: Express = express();
 const httpPort: number = appConfig.PORT;
 
 
+
 const sslOptions = {
     cert: readFileSync(join(__dirname, '../cert/server/amazona365_ddns_net.crt')),
     key: readFileSync(join(__dirname, '../cert/server/privatejarvis.key'))
@@ -49,13 +53,7 @@ const handleError = (err: Error, res: Response) => {
 
 app_dev.get('/', (req: Request, res: Response, next: NextFunction) => {
     try {
-        res.send(`
-            <div style="width: 100%">
-                <h1 style="text-align: center;" > Richard es rolo de marikon </h1>
-                <img style="width: 100%" src="/IMG-20230411-WA0003.jpg" alt="Descripción de la imagen" width="300"/>
-            </div>
-            
-             `);
+        res.sendFile(join(__dirname, './view/richard.html'));
     } catch (error) {
         handleError(error as Error, res);
     }
@@ -112,11 +110,13 @@ app_dev.use(express.static(join(__dirname, '../public')));
 
 
 
-
 server.listen(httpPort, () => {
-    console.log(colors.bgGreen(`\nInit App Manager mode: ${appConfig.NODE_ENV} and port ${httpPort}`));
+    logBanner();
+    logServerStart(appConfig.NODE_ENV, httpPort);
+    io.init(server);
+    logSocketStart();
     const httpPortDev: number = 80;
     app_dev.listen(httpPortDev, () => {
-        console.log(colors.red(`\nInit App Manager mode: ${appConfig.NODE_ENV} and port ${httpPort}, for development`));
+        logHttpStart(httpPortDev);
     });
 });

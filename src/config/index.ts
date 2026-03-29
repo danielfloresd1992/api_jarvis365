@@ -4,44 +4,44 @@ import * as url from 'url';
 const __dirname: string = url.fileURLToPath(new URL('.', import.meta.url));
 
 // Carga variables desde .env (si existe)
-dotenvConfig({ path: join( __dirname + '../../.env')});
+dotenvConfig({ path: join(__dirname + '../../.env') });
 
 type Env = 'development' | 'production';
 
 function required(key: string, val?: string): string {
-  if (!val) throw new Error(`Environment variable ${key} is required`);
-  return val;
+    if (!val) throw new Error(`Environment variable ${key} is required`);
+    return val;
 }
 
 const NODE_ENV = (process.env.NODE_ENV as Env) || 'development';
 const DEV_PORT = Number(process.env.DEV_PORT || 3000);
 const PROD_PORT = Number(process.env.PROD_PORT || 443);
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/Cortes365';
-const SECRET_SERVER = process.env.SECRET_SERVER || '.bfdpSeth#FCEWG0"80435*'; 
+const SECRET_SERVER = process.env.SECRET_SERVER || '.bfdpSeth#FCEWG0"80435*';
 const REDIS_URL = process.env.REDIS_URL || '';
 const CORS_ORIGINS = (process.env.CORS_ORIGINS || '')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 
 export interface Config {
-  NODE_ENV: Env;
-  PORT: number;
-  MONGO_URI: string;
-  SECRET_SERVER: string;
-  REDIS_URL?: string;
-  CORS_ORIGINS: string[];
-  COOKIE_SECURE: boolean;
+    NODE_ENV: Env;
+    PORT: number;
+    MONGO_URI: string;
+    SECRET_SERVER: string;
+    REDIS_URL?: string;
+    CORS_ORIGINS: string[];
+    COOKIE_SECURE: boolean;
 }
 
 const config: Config = {
-  NODE_ENV,
-  PORT: NODE_ENV === 'development' ? DEV_PORT : PROD_PORT,
-  MONGO_URI,
-  SECRET_SERVER,
-  REDIS_URL: REDIS_URL || undefined,
-  CORS_ORIGINS,
-  COOKIE_SECURE: NODE_ENV === 'production',
+    NODE_ENV,
+    PORT: NODE_ENV === 'development' ? DEV_PORT : PROD_PORT,
+    MONGO_URI,
+    SECRET_SERVER,
+    REDIS_URL: REDIS_URL || undefined,
+    CORS_ORIGINS,
+    COOKIE_SECURE: NODE_ENV === 'production',
 };
 
 export default config;
