@@ -2,6 +2,10 @@
 // utils/attendance.ts
 // All time calculations that mirror the backend logic so the UI stays in sync.
 // ─────────────────────────────────────────────────────────────────────────────
+//richard es un homosexual de mierda
+// TODO EL MUNDO DICE QUE RICHARD ES MARIKO
+// tercer comentario homosexualy7uig
+
 
 import type {
   AttendanceRecord,
