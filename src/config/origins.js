@@ -2,36 +2,25 @@ const origins = process.env.NODE_ENV === 'development' ?
     ['http://localhost:5174', 'http://72.68.60.201:5174', 'http://72.68.60.201:5174', 'http://72.68.60.201:5173', 'http://localhost:5174', 'http://localhost:5173', 'https://72.68.60.201:5173', 'https://72.68.60.201:3000', 'https://72.68.60.201:3005', 'https://amazona365.ddns.net:3000', 'https://localhost:3000', 'http://72.68.60.201:3000']
     :
     [
-        'https://72.68.60.201:5173',
         'https://72.68.60.201:3000',
         'https://localhost:3000',
-        'http://72.68.60.201:3007',
-        'https://72.68.60.254:455',
-        'https://72.68.60.254:446',
-        'https://72.68.60.254:4000',
-        'https://72.68.60.254:3005',
-        'http://72.68.60.201:5173',
-        'http://72.68.60.254:8541',
-        'http://72.68.60.254:8542',
-        'https://72.68.60.201:3000',
-        'https://jarvis365report.netlify.app',
-        'https://jarvis365reporte.netlify.app',
-        'https://jarvis365.netlify.app',
-        'https://localhost:3000',
-        'https://jarvis-express.netlify.app',
+       
         'https://localhost:5173',
         'http://localhost:3000',
         'http://72.68.60.201:5174',
         'http://72.68.60.201:3000',
-        'https://localhost:3001',
+   
         'http://72.68.60.201:5174',
         'http://localhost:5173',
-        'https://amazona365.ddns.net:5173',
+
         'https://localhost:3001',
         'https://72.68.60.201:3001',
-        'http://localhost:5174',
         'https://biojarvis.netlify.app',
-        'https://jarvis365.net'
+        'https://jarvis365.net',
+        'https://jarvis365report.netlify.app',
+        'https://jarvis365reporte.netlify.app',
+        'https://jarvis365.netlify.app',
+        'https://jarvis-express.netlify.app'
     ];
 
 
