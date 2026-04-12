@@ -176,7 +176,10 @@ const Menu = new Schema({
         type: Boolean,
         default: false
     },
-
+    noSubtitleInTheReport: {
+        type: Boolean,
+        default: false
+    },
 
     groupingInTheReport: {
         type: String,

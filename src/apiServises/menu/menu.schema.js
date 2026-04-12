@@ -85,7 +85,7 @@ const menuSchema = yup.object({
     // --- Configuración de Reportes ---
     useOnlyForTheReportingDocument: yup.boolean().default(false),
     useOfLiveAlertForTheCustomer: yup.boolean().default(false),
-
+    noSubtitleInTheReport : yup.boolean().default(false),
     // Enum validation
     groupingInTheReport: yup.string()
         .oneOf(['individual', 'dual', 'quadruple'], 'Valor no válido. Opciones: individual, dual, quadruple')

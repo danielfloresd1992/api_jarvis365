@@ -4,8 +4,11 @@ import { Schema, model } from 'mongoose';
 
 
 export default model('DocumentConfig', new Schema({
+
     idEstablesment: ObjectId,
+
     activation: Boolean,
+
 
     typePageSumary: {
         type: String,
@@ -109,6 +112,11 @@ export default model('DocumentConfig', new Schema({
         enum: ['single', 'complete'],
         required: true,
         default: 'single'
-    }
+    },
 
-}));    
+    perimeterActivated: {
+        type: Boolean,
+        default: false
+    },
+
+}));
