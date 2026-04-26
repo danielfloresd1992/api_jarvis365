@@ -83,11 +83,12 @@ export default {
                     }
                     : undefined,
 
-                useOnlyForTheReportingDocument:  body.useOnlyForTheReportingDocument,
-                useOfLiveAlertForTheCustomer:    body.useOfLiveAlertForTheCustomer,
-                groupingInTheReport:             body.groupingInTheReport,
-                descriptionNoteForReportDocument: body.descriptionNoteForReportDocument,
-                doesItrequireVideo:              body.doesItrequireVideo
+                useOnlyForTheReportingDocument:    body.useOnlyForTheReportingDocument,
+                useOfLiveAlertForTheCustomer:      body.useOfLiveAlertForTheCustomer,
+                noSubtitleInTheReport:             body.noSubtitleInTheReport,
+                groupingInTheReport:               body.groupingInTheReport,
+                descriptionNoteForReportDocument:  body.descriptionNoteForReportDocument,
+                doesItrequireVideo:                body.doesItrequireVideo
             });
 
             menu.save()
@@ -162,33 +163,34 @@ export default {
             }
 
             const update = {
-                es:   body.es,
-                en:   body.en,
+                es:                  body.es,
+                en:                  body.en,
                 titleForDocumentReport: body.titleForDocumentReport
                     ? { es: body.titleForDocumentReport.es || null,
                         en: body.titleForDocumentReport.en || null }
                     : { es: null, en: null },
-                textHeader: body.textHeader || null,
-                time:       body.time,
-                timeUnique: body.timeUnique,
+                textHeader:          body.textHeader || null,
+                time:                body.time,
+                       timeUnique:   body.timeUnique,
                 amountOfSomething:   body.amountOfSomething,
-                table:   body.table,
+                            table:   body.table,
                 photos:  { length: body.photos.length, caption: body.photos.caption },
-                category: body.category,
-                especial: especial,
-                car:      body.car,
-                isArea:   body.isArea,
+                category:            body.category,
+                especial:            especial,
+                car:                 body.car,
+                isArea:              body.isArea,
                 isDescriptionPerson: body.isDescriptionPerson,
                 // DEPRECATED — se preserva para registros existentes
                 rulesForBonus: {
-                    forLocal:  body.rulesForBonus?.forLocal  ?? 'Todos',
-                    worth:     body.rulesForBonus?.worth     ?? 0,
-                    amulative: body.rulesForBonus?.amulative ?? 0
+                    forLocal:        body.rulesForBonus?.forLocal  ?? 'Todos',
+                    worth:           body.rulesForBonus?.worth     ?? 0,
+                    amulative:       body.rulesForBonus?.amulative ?? 0
                 },
                 // Nuevo sistema de bonificación
                 bonusCalculationRules: body.bonusCalculationRules ?? undefined,
                 useOnlyForTheReportingDocument:   body.useOnlyForTheReportingDocument,
                 useOfLiveAlertForTheCustomer:     body.useOfLiveAlertForTheCustomer,
+                noSubtitleInTheReport:            body.noSubtitleInTheReport,
                 groupingInTheReport:              body.groupingInTheReport,
                 descriptionNoteForReportDocument: body.descriptionNoteForReportDocument,
                 doesItrequireVideo:               body.doesItrequireVideo

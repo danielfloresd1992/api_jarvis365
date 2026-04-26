@@ -18,6 +18,24 @@ const authRouter = Router();
 
 
 
+authRouter.get(`${nameApi}/auth/existPhone=:phone`, async (req, res) => {
+    try{
+        const { phone } = req.params;
+        if(!phone) return res.status(400).json({ error: 'Bad request', status: 400, message: 'the phone property is undefined in the params' });
+
+        const existPhone = await UserModel.exists({ phone });
+        return res.status(200).json({ error: null, status: 200, exist: existPhone ? true : false });
+    }   
+    catch(error){
+        console.log(error);
+        return res.status(500).json({ error: error.message, status: 500, message: 'server internal' });
+    }
+});
+
+
+
+
+
 authRouter.post(`${nameApi}/auth/preUpdate`, async (req, res, next) => {
     try{
         const body = req.body;
@@ -105,8 +123,10 @@ authRouter.post(`${nameApi}/auth/singin`, async (req, res) => {
     try {
         const dateValidate = await userSchema.validate(req.body);
         const findEmail = await UserModel.findOne({ email: dateValidate.email });
-
         if(findEmail) return res.status(409).json({ error: 'Conflict', status: 409, message: 'The email is not available.' });
+
+        const findPhone = await UserModel.findOne({ phone: dateValidate.phone });
+        if(findPhone) return res.status(409).json({ error: 'Conflict', status: 409, message: 'The phone number is not available.' });
 
       
         if(!validateSecurityPass(dateValidate.password).pass) return res.status(400).json({ error: 'Bad request', status: 400, message: 'The password entered does not meet the requirements!' });
@@ -129,8 +149,12 @@ authRouter.post(`${nameApi}/auth/singin`, async (req, res) => {
         if(error.name === 'ValidationError'){
             return res.status(400).json({ error: error.message, stautus: 400, message: 'Bad request' });
         }
+        if(error.code === 11000){
+            const field = Object.keys(error.keyValue)[0];
+            return res.status(409).json({ error: 'Conflict', status: 409, message: `The ${field} is not available.` });
+        }
         return res.status(500).json({ error: error.message, status: 500, message: 'server internal' });
-    }       
+    }
 });
 
 
@@ -141,7 +165,7 @@ authRouter.put(`${nameApi}/auth/update-user-data`, async (req, res) => {
         const { user, password, newPassword, email, phone } = await userSchemaLegacy.validate(req.body);
        
 
-        const userExists = await UserModel.findOne({ user: user });
+        const userExists = await UserModel.findOne({ user: user }, '+password');
 
         if(!userExists) return res.status(404).json({ error: 'User not found', status: 404, message: 'the susuary does not exist!' });
 
@@ -151,9 +175,12 @@ authRouter.put(`${nameApi}/auth/update-user-data`, async (req, res) => {
 
         if(!validateSecurityPass(newPassword).pass) return res.status(400).json({ error: 'Bad request', status: 400, message: 'The password entered does not meet the requirements!' });
         
-        const emailExists =  await UserModel.exists({ email });
+        const emailExists = await UserModel.exists({ email });
         if(emailExists) return res.status(409).json({ error: 'Conflict', status: 409, message: 'The email is not available.' });
-      
+
+        const phoneExists = await UserModel.exists({ phone });
+        if(phoneExists) return res.status(409).json({ error: 'Conflict', status: 409, message: 'The phone number is not available.' });
+
         const passwordEncript = await bcrypt.hash(newPassword, 10);
     
         userExists.email = email;
@@ -168,8 +195,12 @@ authRouter.put(`${nameApi}/auth/update-user-data`, async (req, res) => {
         if(error.name === 'ValidationError'){
             return res.status(400).json({ error: error.message, stautus: 400, message: 'Bad request' });
         }
+        if(error.code === 11000){
+            const field = Object.keys(error.keyValue)[0];
+            return res.status(409).json({ error: 'Conflict', status: 409, message: `The ${field} is not available.` });
+        }
         return res.status(500).json({ error: error.message, status: 500, message: 'server internal' });
-    }       
+    }
 });
 
 
