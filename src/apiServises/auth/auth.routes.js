@@ -39,8 +39,9 @@ authRouter.get(`${nameApi}/auth/existPhone=:phone`, async (req, res) => {
 authRouter.post(`${nameApi}/auth/preUpdate`, async (req, res, next) => {
     try{
         const body = req.body;
+        console.log(typeof body);
         if(!body.user || !body.password) return res.status(400).json({ error: 'Bad request', status: 400, message: 'the name or password property is undefined in the body'})
-        const user = await UserModel.findOne({ user: body.user }) ;
+        const user = await UserModel.findOne({ user: body.user }, '+password');
         if(!user) return res.status(404).json({ error: 'Not found', status: 404, message : 'User not found'});
         if (body.password !== user.password) return res.status(400).json({ error: 'Bad request', status: 400, message: 'Invalid password'});
         if(user.inabilited) return res.status(401).json({ error: 'Unauthorized', status: 401, message: 'Banned user'});
@@ -191,7 +192,6 @@ authRouter.put(`${nameApi}/auth/update-user-data`, async (req, res) => {
         return res.status(200).json({ error: null, status: '200', result: userExists, messsage: 'User updated successfully' });
     } 
     catch(error){
-        console.log(error);
         if(error.name === 'ValidationError'){
             return res.status(400).json({ error: error.message, stautus: 400, message: 'Bad request' });
         }

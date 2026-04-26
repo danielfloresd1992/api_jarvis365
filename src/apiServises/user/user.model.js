@@ -42,7 +42,6 @@ export default model('user', new Schema({
         trim: true
     },
     email: {
-        immutable: true,
         type: String,
         unique: true,
         required: true,
@@ -62,7 +61,6 @@ export default model('user', new Schema({
         type: String,
         unique: true,
         required: true,
-        immutable: true,
         trim: true
     },
 
