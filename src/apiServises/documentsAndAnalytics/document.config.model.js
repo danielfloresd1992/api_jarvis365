@@ -10,9 +10,14 @@ export default model('DocumentConfig', new Schema({
     activation: Boolean,
 
 
+    configSumaryDinamic: {
+        type: Schema.Types.Mixed,
+    },
+
+
     typePageSumary: {
         type: String,
-        enum: ['classic', 'simplified'],
+        enum: ['classic', 'simplified', 'dinamic'],
         default: 'classic'
     },
 
@@ -119,4 +124,4 @@ export default model('DocumentConfig', new Schema({
         default: false
     },
 
-}));
+}, { minimize: false }));
