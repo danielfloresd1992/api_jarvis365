@@ -95,7 +95,7 @@ const sessionOptions: SessionOptions = {
         sameSite: 'none',
     }
 };
-app.use(morgan(':method :url :status :res[content-length] - :response-time ms'))
+//app.use(morgan(':method :url :status :res[content-length] - :response-time ms'))
 
 app.use(session(sessionOptions));
 

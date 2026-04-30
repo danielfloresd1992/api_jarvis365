@@ -16,7 +16,7 @@ import AbbreviateNumber from '../../script/abbreviate_number'
 import { FileImgToadPos } from './fileNoveltie.model';
 import { io } from '../../services/socket/io';
 import SocketAdapter from '../../adapters/SocketAdapter';
-
+import getNextDay from '../../libs/getNextTime';
 
 import * as url from 'url';
 const __dirname: string = url.fileURLToPath(new URL('.', import.meta.url));
@@ -58,10 +58,14 @@ routerNoveltie.get(`${nameApi}/noveltie/coundDocuments`, extendSession, validate
 
 
 
+
 routerNoveltie.get(`${nameApi}/noveltie/date=:date/shift=:shift/establishments=:establishments/extract`, extendSession, validateSession, async (req: Request, res: Response): Promise<void> => {
     try {
+        console.log(req.params);
+
+        // type req.params.date = 04-29-2026
         const since = `${req.params.date} 00:08:00`;
-        const until = `${req.params.date} 23:59:59`;
+        const until = `${getNextDay(req.params.date)} 07:00:00`;
         const shift = req.params.shift
         const establishments = req.params.establishments;
 
@@ -78,6 +82,7 @@ routerNoveltie.get(`${nameApi}/noveltie/date=:date/shift=:shift/establishments=:
             }
         };
 
+        console.log(query)
         if(shift && shift !== 'all') query.shift = shift;
 
         let resultSeleted: any;
