@@ -1,0 +1,51 @@
+const {
+  useState,
+  useEffect
+} = React;
+import { getManagerAndImgById } from '/profileLocal/assets/model/manager.js';
+import { arrayBufferToBase64 } from '/utils/arrayTo64.js';
+function AsideManager({
+  arraManager
+}) {
+  const [arrayManagerState, setArrayManagerState] = useState([]);
+  useEffect(() => {
+    getManger();
+  }, []);
+  const getManger = async () => {
+    const updatedArrayManagerState = [];
+    arraManager.forEach(async id => {
+      const manager = await axios.get(`https://${window.location.host}/managerLocalAndImgById/id=${id}`);
+      updatedArrayManagerState.push(manager);
+    });
+    console.log(updatedArrayManagerState);
+    setArrayManagerState(updatedArrayManagerState);
+  };
+  console.log(arrayManagerState);
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("section", {
+    className: "sidebarRigth"
+  }, /*#__PURE__*/React.createElement("h2", {
+    className: "sidebarRigth-title"
+  }, "Lista de gerentes"), /*#__PURE__*/React.createElement("hr", null), /*#__PURE__*/React.createElement("article", {
+    className: "managetBoxContent scrolltheme1",
+    id: "box-manager"
+  }, arrayManagerState.length > 0 ? arrayManagerState.map(manager => {
+    console.log(arrayManagerState);
+    return /*#__PURE__*/React.createElement("div", {
+      className: "managerBox",
+      key: manager._id
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "managerBox-imgContent"
+    }, /*#__PURE__*/React.createElement("img", {
+      className: "managerBox-img",
+      src: arrayBufferToBase64(manager.managerimg?.img[0].data?.data, manager.managerimg?.img[0].contentType),
+      alt: manager.name
+    })), /*#__PURE__*/React.createElement("div", {
+      className: "managerBox-dataContent"
+    }, /*#__PURE__*/React.createElement("p", {
+      className: "nameManager"
+    }, `${manager.burden} ${manager.name}`), /*#__PURE__*/React.createElement("p", {
+      className: "text-gray"
+    }, `${manager.burden} ${manager.numberManager}`)));
+  }) : null)));
+}
+export default AsideManager;

@@ -1,0 +1,50 @@
+[
+  {
+    "title": "Cliente",
+    "value": "client"
+  },
+  {
+    "title": "demoras",
+    "value": "delay"
+  },
+  {
+    "title": "Puerta",
+    "value": "door"
+  },
+  {
+    "title": "Empleados",
+    "value": "employee"
+  },
+  {
+    "title": "Fallas",
+    "value": "failed"
+  },
+  {
+    "title": "Comidas",
+    "value": "food"
+  },
+  {
+    "title": "Incidencias",
+    "value": "incident"
+  },
+  {
+    "title": "Incidencias en el local",
+    "value": "localIncident"
+  },
+  {
+    "title": "Mercancía",
+    "value": "merchandise"
+  },
+  {
+    "title": "Protocolos",
+    "value": "protocol"
+  },
+  {
+    "title": "Basura",
+    "value": "trash"
+  },
+  {
+    "title": "Perimetral",
+    "value": "perimeter"
+  }
+]

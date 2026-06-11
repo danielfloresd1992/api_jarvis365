@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' https://72.68.60.254:4000 'nonce-2726c7f26c' 'unsafe-eval'">
+    
+    <title>Alertas especiales</title>
+
+    <link rel="stylesheet" href="/reporte_alerta/style.css">
+    <link rel="stylesheet" href="/header/header.min.css">
+    <script src="/reporte_alerta/assets/libreries/html2canvas.min.js"></script>
+    <script src="/reporte_alerta/assets/libreries/socketIo/socket.io.min.js"></script>
+    
+</head>
+<body id="body">
+
+    <header id="clickThroughElement">
+
+        <div class="textContain">
+            <p>Alertas: </p> 
+            <span id="countTextChart">0</span> 
+        </div>
+        <div class="textContain">
+            <p>Resaltante: </p> 
+            <span id="countTextResalt">0</span>
+        </div>
+
+        <div class="banner-btn-save">
+            <button>
+                <img src="/reporte_alerta/assets/img/save_FILL0_wght400_GRAD0_opsz48.png" id="save-date" draggable="false">
+            </button>
+        </div>
+        
+    </header>
+
+
+    <main>
+
+       
+        <form action="" method="post" id="local-contain">
+
+
+        </form>
+
+
+        <aside>
+            <div class="btn-flex">
+                <div id="text-tab">«</div>
+            </div>
+                <div class="content">
+                    <div class="aside-titulo">
+                        <h2>Lista de opciones</h2>
+                    </div>
+                    <div class="aside-label">
+                        <label for=""> Activar conexion a Yarvis
+                            <input type="checkbox" class="checkbox" id="connect-yarvis" checked >
+                        </label>
+                    </div>
+                    <br>
+                    <hr>
+                    <div class="input-reset">
+                        <label for="">Limpiar los valores de campos
+                            <button type="reset" id="reset">Limpiar</button>
+                        </label>
+                    </div>
+
+                    <div class="input-reset">
+                        <label for="">Generar reporte manual
+                            <button id="generate-img-303">Generar</button>
+                        </label>
+                    </div>
+
+                    <div class="input-reset">
+                        <label for="">Eliminar reporte generado
+                            <button id="delete-img-303">Eliminar</button>
+                        </label>
+                    </div>
+
+
+                    <div class="icoWhatsapp">
+                        <h3 id="text-header" class="text-connection">Esperando conexion...</h3>
+                        <img src="reporte_alerta/assets/img/ws.png" alt="" srcset="" id="ico-whatsapp" draggable="false">
+                    </div>
+                </div>
+            </div>
+
+            <article>
+                <iframe src="https://72.68.60.254:4000" allow="autoplay"></iframe>
+                <h2 class="titleResult">Resultados de la operación</h2>
+                <div class="countAlert">
+                  
+                <div class="countAlert">
+                    <div class="countText">
+                        <h3>Monitoreo activo:</h3>
+                        <h2 id="countTextActivity" class="count">0</h2>
+                    </div>
+        
+                    <div class="countText">
+                        <h3>Monitoreo inactivo:</h3>
+                        <h2 id="countTextInactivity" class="count">0</h2>
+                    </div>
+                </div>
+        
+                <div class="countAlert">
+                    <h3>Locales con cámaras caidas:</h3>
+                    <ul id="countAlert--LocalList">
+                        <li>Ninguno</li>
+                    </ul>
+                </div>
+                
+            </article>
+
+        </aside>
+
+    </main>
+
+ 
+    
+
+    <link rel="stylesheet" href="reporte_alerta/Loading/load.css" />
+    
+
+    <script src="/libreries/socketIo/socket.io.min.js"></script>
+    <script src="/reporte_alerta/dependeces/axios/axios.min.js"></script>
+    <script type="module" src="/reporte_alerta/index.js"></script>
+</body>
+</html>

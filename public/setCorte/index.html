@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insertar corte</title>
+    <link rel="shortcut icon" href="vistaEntregaDatos/img/AppManager.ico" type="image/x-icon">
+    <link rel="stylesheet" href="vistaEntregaDatos/style.css">
+    <link rel="stylesheet" href="vistaEntregaDatos/mod/boxModel.css">
+    <script src="../dependency/html2canvas.min.js"></script>
+</head>
+<body id="body">
+    <header>
+        <section title="Volver a la página principal">
+            <img src="vistaEntregaDatos/img/LOGO-SLIDER.png">
+            <div>
+                <h1 class="text1"> <a href="/"> Cortes365 Amazonas</h1></a>
+            </div>
+            
+        </section>
+        <div>
+            <h2 id="textHeader" class="text2"></h2>
+        </div>
+    </header>
+    <div id="img2" class="intro-page">
+        <div>
+            <img draggable="false" src="vistaEntregaDatos/img/engranaje1.png" alt="" class="imgr" id="imgr1"><img src="vistaEntregaDatos/img/engranaje2.png" alt="" class="imgr" id="imgr2">
+        </div>
+        
+        <img src="vistaEntregaDatos/img/LOGO-SLIDER.png" alt="" width="200px">
+        <div class="progress">
+            
+            <div class="progress-barra">
+                <div class="progress-text"><p>Cargando</p></div>
+            </div>
+          
+        </div>
+    </div>
+
+    <main>
+        <div id="form" class="form">
+            <form action="" method="post">
+            
+                <h2>Bocas House</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="bhr" placeholder="N° de rotaciones">
+                <h4>Procesos</h4>
+                <input type="text" name="" id="bhp" placeholder="N° de procesos">
+                <h4>G1 Eliezer</h4>
+                <input type="text" name="" id="bhg1" placeholder="N° de toques">
+                <h4>G2 Andrea</h4>
+                <input type="text" name="" id="bhg2" placeholder="N° de toques">
+                <h4>G3 Emily</h4>
+                <input type="text" name="" id="bhg3" placeholder="N° de toques">
+                
+
+                <h2>Bocas Orlando</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="bor" placeholder="N° de rotaciones">
+                <h4>Procesos</h4>
+                <input type="text" name="" id="bop" placeholder="N° de procesos">
+                <h4>G1 Marco</h4>
+                <input type="text" name="" id="bog1" placeholder="N° de toques">
+                <h4>A1 Wilson</h4>
+                <input type="text" name="" id="boa1" placeholder="N° de toques">
+                <h4>A2 Vanesa</h4>
+                <input type="text" name="" id="boa2" placeholder="N° de toques">
+                
+
+                <h2>Bocas Weston</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="bwr" placeholder="N° de rotaciones">
+                <h4>Procesos</h4>
+                <input type="text" name="" id="bwp" placeholder="N° de procesos">
+                <h4>G1 Marcos</h4>
+                <input type="text" name="" id="bwg1" placeholder="N° de toques">
+                <h4>A1 Nohely</h4>
+                <input type="text" name="" id="bwa1" placeholder="N° de toques">
+                <h4>A2 Diana</h4>
+                <input type="text" name="" id="bwa2" placeholder="N° de toques">
+                <h4>A3 José</h4>
+                <input type="text" name="" id="bwa3" placeholder="N° de toques">
+                <h4>A4 Mafer</h4>
+                <input type="text" name="" id="bwa4" placeholder="N° de toques">
+               
+
+                <h2>Bocas Brickell</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="bbr" placeholder="N° de rotaciones">
+                <h4>Procesos</h4>
+                <input type="text" name="" id="bbp" placeholder="N° de procesos">
+                <h4>A1</h4>
+                <input type="text" name="" id="bba1" placeholder="N° de toques">
+                <h4>A2</h4>
+                <input type="text" name="" id="bba2" placeholder="N° de toques">
+                <h4>A3</h4>
+                <input type="text" name="" id="bba3" placeholder="N° de toques">
+
+                <h2>Bocas Grill 58</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="bg58r" placeholder="N° de rotaciones">
+                <h4>Procesos</h4>
+                <input type="text" name="" id="bg58p" placeholder="N° de procesos">
+                <h4>G1 Génesis</h4>
+                <input type="text" name="" id="bg58g1" placeholder="N° de toques">
+                <h4>A1 Román</h4>
+                <input type="text" name="" id="bg58a1" placeholder="N° de toques">
+                <h4>A2 Euvenis</h4>
+                <input type="text" name="" id="bg58a2" placeholder="N° de toques">
+                
+
+                <h2>Francisca Doral</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="fdr" placeholder="N° de rotaciones">
+                <h4>Procesos</h4>
+                <input type="text" name="" id="fdp" placeholder="N° de procesos">
+                <h4>G1</h4>
+                <input type="text" name="" id="fdg1" placeholder="N° de toques">
+                <h4>G2</h4>
+                <input type="text" name="" id="fdg2" placeholder="N° de toques">
+                <h4>G3</h4>
+                <input type="text" name="" id="fdg3" placeholder="N° de toques">
+               
+
+                <h2>Francisca Miami</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="fmr" placeholder="N° de rotaciones">
+                <h4>Procesos</h4>
+                <input type="text" name="" id="fmp" placeholder="N° de procesos">
+                <h4>G1</h4>
+                <input type="text" name="" id="fmg1" placeholder="N° de toques">
+                <h4>G2</h4>
+                <input type="text" name="" id="fmg2" placeholder="N° de toques">
+                <h4>G3</h4>
+                <input type="text" name="" id="fmg3" placeholder="N° de toques">
+               
+
+                <h2>Francisca Miami Lakes</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="fmlr" placeholder="N° de rotaciones">
+                <h4>Procesos</h4>
+                <input type="text" name="" id="fmlp" placeholder="N° de procesos">
+                <h4>G1</h4>
+                <input type="text" name="" id="fmlg1" placeholder="N° de toques">
+                <h4>G2</h4>
+                <input type="text" name="" id="fmlg2" placeholder="N° de toques">
+                <h4>G3</h4>
+                <input type="text" name="" id="fmlg3" placeholder="N° de toques">
+                <h4>G4</h4>
+                <input type="text" name="" id="fmlg4" placeholder="N° de toques">
+                
+                <!--
+                <h2>Francisca Miramar</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="fmmr" placeholder="N° de rotaciones" disabled="true" >
+                <h4>Procesos</h4>
+                <input type="text" name="" id="fmmp" placeholder="N° de procesos" disabled="true">
+                <h4>G1</h4>
+                <input type="text" name="" id="fmmg1" placeholder="N° de toques" disabled="true">
+                <h4>G2</h4>
+                <input type="text" name="" id="fmmg2" placeholder="N° de toques" disabled="true">
+                <h4>G3</h4>
+                <input type="text" name="" id="fmmg3" placeholder="N° de toques" disabled="true">
+                -->
+
+                <h2>Francisca Davie</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="fdvr" placeholder="N° de rotaciones">
+                <h4>Procesos</h4>
+                <input type="text" name="" id="fdvp" placeholder="N° de procesos">
+                <h4>G1</h4>
+                <input type="text" name="" id="fdvg1" placeholder="N° de toques">
+                <h4>G2</h4>
+                <input type="text" name="" id="fdvg2" placeholder="N° de toques">
+                <h4>G3</h4>
+                <input type="text" name="" id="fdvg3" placeholder="N° de toques">
+                <h4>G4</h4>
+                <input type="text" name="" id="fdvg4" placeholder="N° de toques">
+                <h4>G5</h4>
+                <input type="text" name="" id="fdva1" placeholder="N° de toques">
+               
+                <h2>La Fontana</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="lfr" placeholder="N° de rotaciones">
+                <h4>Procesos</h4>
+                <input type="text" name="" id="lfp" placeholder="N° de procesos">
+                <h4>G1</h4>
+                <input type="text" name="" id="lfg1" placeholder="N° de toques">
+                <h4>G2</h4>
+                <input type="text" name="" id="lfg2" placeholder="N° de toques">
+                <h4>Sommelier</h4>
+                <input type="text" name="" id="lfa1" placeholder="N° de toques">
+
+                <h2>La Fontana DownTown</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="lfdr" placeholder="N° de rotaciones">
+                <h4>Procesos</h4>
+                <input type="text" name="" id="lfdp" placeholder="N° de procesos">
+                <h4>G1</h4>
+                <input type="text" name="" id="lfdg1" placeholder="N° de toques">
+                <h4>G2</h4>
+                <input type="text" name="" id="lfdg2" placeholder="N° de toques">
+
+                <h2>Doral Steak House</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="shr" placeholder="N° de rotaciones">
+                <h4>Procesos</h4>
+                <input type="text" name="" id="shp" placeholder="N° de procesos">
+                <h4>G1</h4>
+                <input type="text" name="" id="shg1" placeholder="N° de toques">
+                <h4><s>Sommelier</s></h4>
+                <input type="text" name="" id="shg2" placeholder="N° de toques">
+
+                <h2>Bucare</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="brr" placeholder="N° de rotaciones">
+                <h4>Procesos</h4>
+                <input type="text" name="" id="brp" placeholder="N° de procesos">
+                <h4>G1</h4>
+                <input type="text" name="" id="brg1" placeholder="N° de toques">
+                <h4>G2</h4>
+                <input type="text" name="" id="brg2" placeholder="N° de toques">
+                <h4>G3</h4>
+                <input type="text" name="" id="brg3" placeholder="N° de toques">
+
+                <h2>Guatopo</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="gtr" placeholder="N° de rotaciones">
+                <h4>Procesos</h4>
+                <input type="text" name="" id="gtp" placeholder="N° de procesos">
+                <h4>G1</h4>
+                <input type="text" name="" id="gtg1" placeholder="N° de toques">
+                <h4>G2</h4>
+                <input type="text" name="" id="gtg2" placeholder="N° de toques">
+                <h4>G3</h4>
+                <input type="text" name="" id="gtg3" placeholder="N° de toques">
+
+                <h2>Macarao</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="mcror" placeholder="N° de rotaciones">
+                <h4>Procesos</h4>
+                <input type="text" name="" id="mcrop" placeholder="N° de procesos">
+                <h4>G1</h4>
+                <input type="text" name="" id="mcrog1" placeholder="N° de toques">
+                <h4>G2</h4>
+                <input type="text" name="" id="mcrog2" placeholder="N° de toques">
+                
+
+                <h2>Yacambu</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="ybr" placeholder="N° de rotaciones">
+                <h4>Procesos</h4>
+                <input type="text" name="" id="ybp" placeholder="N° de procesos">
+                <h4>G1</h4>
+                <input type="text" name="" id="ybg1" placeholder="N° de toques">
+                <h4>G2</h4>
+                <input type="text" name="" id="ybg2" placeholder="N° de toques">
+                <h4>G3</h4>
+                <input type="text" name="" id="ybg3" placeholder="N° de toques">
+
+                <h2>Mister Boca Raton</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="mbrr" placeholder="N° de rotaciones">
+                <h4>Procesos</h4>
+                <input type="text" name="" id="mbrp" placeholder="N° de procesos">
+                <h4>G1</h4>
+                <input type="text" name="" id="mbrg1" placeholder="N° de toques">
+                <h4>A1</h4>
+                <input type="text" name="" id="mbra1" placeholder="N° de toques">
+                <h4>A2</h4>
+                <input type="text" name="" id="mbra2" placeholder="N° de toques">
+                <h4>A3</h4>
+                <input type="text" name="" id="mbra3" placeholder="N° de toques">
+                
+
+                <h2>Mister Pembroke Pines</h2>
+                <hr>
+                <h4>Rotaciones</h4>
+                <input type="text" name="" id="mppr" placeholder="N° de rotaciones">
+                <h4>Procesos</h4>
+                <input type="text" name="" id="mppp" placeholder="N° de procesos">
+                <h4>G1</h4>
+                <input type="text" name="" id="mppg1" placeholder="N° de toques">
+                <h4>A1</h4>
+                <input type="text" name="" id="mppa1" placeholder="N° de toques">
+                <h4>A2</h4>
+                <input type="text" name="" id="mppa2" placeholder="N° de toques">
+                <h4>A3</h4>
+                <input type="text" name="" id="mppa3" placeholder="N° de toques">
+                
+                <input class="key" id="submit" type="submit" value="Guardar">
+                
+
+            </form>
+        </div>    
+    </main>
+
+    <aside>
+        <article>
+            <div>
+                <h2 id="date">Date: 00/00/0000 00:00:00 aa pp</h2>
+            </div>
+        </article>
+        <section>
+            <div>
+                <h3>Supported for WhatsApp</h3>
+            </div>
+            <div>
+                <img src="vistaEntregaDatos/img/ws.png" width="40px">
+            </div>
+        </section>
+    </aside>
+
+
+
+    <div class="bloqueo-pantalla" id="bloqueo-pantalla">
+        <div class="ventana-emergente" id="ventana-emergente">
+            <h1 class="tipo-mensaje" id="tipo-mensaje">Error</h1><br>
+            <button class="exit" id="exit">x</h1></button>
+            <p class="descripcion-mensaje" id="descripcion-mensaje">Asegurarse de hacerlo bien es lo mejor!</p>
+            <img class="logo-alerta" src="vistaEntregaDatos/img/logoAmazonasRenderizado.PNG" alt="" width="150px">
+        </div>
+    </div>
+
+
+    <div class="bloqueo-pantalla2" id="bloqueo-pantalla2">
+        <div class="ventana-emergente2" id="ventana-emergente2">
+            <h1 class="tipo-mensaje2" id="tipo-mensaje2">Error</h1><br>
+            <button class="exit2" id="exit2">x</h1></button>
+            <p class="descripcion-mensaje2" id="descripcion-mensaje2">Asegurarse de hacerlo bien es lo mejor!</p>
+            <div class="btn-confirt-container">
+                <button class="confirt" id="confirt">Aceptar</button><button class="confirt" id="cancel-config">Cancelar</button>
+            </div>
+            
+            <img class="logo-alerta2" src="vistaEntregaDatos/img/logoAmazonasRenderizado.PNG" alt="" width="150px">
+        </div>
+    </div>
+
+    <footer></footer>
+    
+    <script src="vistaEntregaDatos/mod/boxModel.js"></script>
+    <script src="vistaEntregaDatos/date.js"></script>
+    <script src="vistaEntregaDatos/index.js"></script>
+
+</body>
+</html>

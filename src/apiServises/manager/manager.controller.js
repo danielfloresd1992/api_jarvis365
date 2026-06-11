@@ -9,11 +9,14 @@ const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 import ManagerImg from './managerImg.model.js';
 import Manager from './manager.model.js';
 
-import Local from '../local/Local.model.js';
+import Local from '../local/local.model.js';
 
 import managerLayer from './manager.js';
 
 
+
+
+// ─── LEGACY CODE DOWNLOAD MORE 👇 ────────────────────────────────────────────────────────────────
 controller.getManagetAllLocal = async (req, res) => {
     try {
         let managers = await managerLayer.managerActive();
@@ -24,7 +27,7 @@ controller.getManagetAllLocal = async (req, res) => {
         console.log(err);
         res.status(500).send(err);
     }
-};
+};// ─── LEGACY CODE DOWNLOAD MORE 👇 ────────────────────────────────────────────────────────────────
 
 
 
@@ -38,7 +41,9 @@ controller.getByNameManager = async (req, res) => {
         console.log(err);
         return res.status(500)
     }
-}
+}// ─── LEGACY CODE DOWNLOAD MORE 👇 ────────────────────────────────────────────────────────────────
+
+
 
 
 controller.managerLocalAndImgById = async (req, res) => {
@@ -48,9 +53,11 @@ controller.managerLocalAndImgById = async (req, res) => {
         return res.json(result);
     }
     catch (err) {
-
+        console.log(err);
+        return res.status(500);
     }
-}
+}// ─── LEGACY CODE DOWNLOAD MORE 👇 ────────────────────────────────────────────────────────────────
+
 
 
 
@@ -60,12 +67,17 @@ controller.getMannager = async (req, res) => {
     let manager = await Manager.findById(id).exec();
     console.log(manager);
     return res.status(200).json(manager);
+
+
+
+
 };
 
-
+/*
+// ─── LEGACY CODE DOWNLOAD MORE 👇 ────────────────────────────────────────────────────────────────
 controller.getManagetAllFranchise = async (req, res) => {
     try {
-        let managers = await Manager.find().populate('local').populate('franchise').populate('managerimg');
+        let managers = await Manager.find().populate('local').populate('franchise');
         console.log(colors.bgCyan('Cierta aplicación a realizado una petición a la colección Manager'.black));
         return res.status(200).json(managers);
     }
@@ -73,14 +85,18 @@ controller.getManagetAllFranchise = async (req, res) => {
         console.log(colors.bgRed('Error en la consulta a get Manager All Data'));
         res.status(500).send(err);
     }
-};
+};// ─── LEGACY CODE DOWNLOAD MORE 👇 ────────────────────────────────────────────────────────────────
 
 
+*/
+
+
+/*
 controller.getManagetAllFranchise_fill = async (req, res) => {
     try {
         const param = req.params.name;
         const query = { localName: param };
-        const managers = await Manager.find(query).populate('local').populate('franchise').populate('managerimg');
+        const managers = await Manager.find(query).populate('local').populate('franchise');
         console.log(managers)
         if (managers.length < 1) return res.status(404).send('No encontrado o  no existe');
         return res.status(200).json(managers);
@@ -89,99 +105,57 @@ controller.getManagetAllFranchise_fill = async (req, res) => {
         console.log(colors.bgRed('Error en la consulta a get Manager All Data'));
         res.status(500).send(err);
     }
-}
+}// ─── LEGACY CODE DOWNLOAD MORE 👇 ────────────────────────────────────────────────────────────────
+*/
+
+
 
 
 controller.getManagerImg = async (req, res) => {
     try {
-        let manager = await Manager.find().populate('managerimg');
+        let manager = await Manager.find();
         return res.status(200).json(manager);
     }
     catch (err) {
         console.log(err);
         res.status(500).send(err);
     }
-}
+
+}// ─── LEGACY CODE DOWNLOAD MORE 👇 ────────────────────────────────────────────────────────────────
+
 
 
 controller.setManager = async (req, res) => {
     try {
-
         let body = req.body;
-        if (body.otherLocals === '') body.otherLocals = [];
-        if (!Object.entries(req.body).length) {
-            console.log('error, line 118')
-            return res.status(400).send('Campos nulos');
-        }
-
-        // ─── Validación de imágenes desactivada temporalmente ───────────────────
-        // El guardado de imágenes está en pausa; se acepta el registro sin archivos.
-        // if (req.files?.img?.length !== 3) return res.status(400).json({ error: 'Bad request', status: 400, message: 'The file limit should be 3' });
-
-        let local = await Local.findOne({ _id: body.localName });
-
-        if (!local) return res.status(400).send(`${body.name} no existe! error al crear la relación`);
-
-
-
-        /*
-        const arrImg = req.files.img.map(img => (
-            const url: string = process.env.NODE_ENV === 'development' ? `https://amazona365.ddns.net:3006${nameApi}/novelty/img=${file.img[0].filename}` : `https://amazona365.ddns.net${nameApi}/novelty/img=${file.img[0].filename}`
-        ))
-    
-        let img = new ManagerImg({
-            local: local.name,
-            img: [{
-                data: fs.readFileSync(path.join(__dirname, `../../../uploads/manager_local/${req.files.img[0].filename}`)),
-                contentType: req.files.img[0].mimetype,
-                name: req.files.img[0].filename
-            },
-            {
-                data: fs.readFileSync(path.join(__dirname, `../../../uploads/manager_local/${req.files.img[1].filename}`)),
-                contentType: req.files.img[1].mimetype,
-                name: req.files.img[1].filename
-            },
-            {
-                data: fs.readFileSync(path.join(__dirname, `../../../uploads/manager_local/${req.files.img[2].filename}`)),
-                contentType: req.files.img[2].mimetype,
-                name: req.files.img[2].filename
-            }]
-        });
-
+        
+        const establishmentId = req.query?.establishment;
+   
+        if (!establishmentId) return res.status(400).json({ error: 'Bad Request', status: 400, message: 'establishment is required' });
+      
+        if (!ObjectId.isValid(establishmentId)) return res.status(400).json({ error: 'Bad Request', status: 400, message: 'Invalid establishment ID' });    
 
         
-*/
-
-
-
-
-        let manager = new Manager({
-            local: local._id,
-            franchise: local.idLocal,
+        
+        const manager = new Manager({
             name: body.name,
             numberManager: body.numberManager,
             burden: body.burden,
             status: body.status,
             characteristic: body.characteristic,
-            localName: local.name,
-            otherLocals: JSON.parse(body.otherLocals)
-            //    managerimg: ObjectId(newImg._id),
-            ///image: 
         });
-        let newManager = await manager.save();
 
-        putManagerId(manager, local);
-
-        console.log(colors.bgCyan(`Manager ${body.name || 'gerente'} guardado en la colección manager`.black));
-        return res.status(200).json(newManager);
-
+        const result = await Local.findByIdAndUpdate({ _id: establishmentId }, { $push: { managers: manager._id } }) ;
+        if (!result) return res.status(400).json({ error: 'Bad Request', status: 400, message: `No establishment found with the provided ID: ${establishmentId}` });
+        const newManager = await manager.save();
+        return res.status(200).json({ manager : newManager, establishment: result });        console.log(colors.bgCyan(`Manager ${body.name || 'gerente'} guardado en la colección manager`.black));
     }
-    catch (err) {
-
-        console.log(err);
-        return res.status(500).send('Error server internal');
+    catch(error){
+        console.log(error);
+        return res.status(500).json({ error: 'Internal Server Error', status: 500, message: 'An error occurred while creating the manager' });  
     }
 };
+
 
 
 
@@ -196,9 +170,15 @@ controller.putManager = async (req, res) => {
         const id = req.params.id;
         const body = req.body;
 
-        let local = await Local.findOne({ _id: body.local });
-        const result = await managerLayer.putManager(id, body);
-        putManagerId(body, local);
+        delete body._id;
+        delete body.local;
+        delete body.otherLocals;
+
+
+
+        const result = await Manager.findByIdAndUpdate(id , body);
+
+       
         return res.status(200).json(body);
     }
     catch (err) {
@@ -206,7 +186,9 @@ controller.putManager = async (req, res) => {
         console.log(colors.bgRed('Error en la consulta a put Manager'));
         res.status(500).send(err);
     }
-};
+};// ─── LEGACY CODE DOWNLOAD MORE 👇 ────────────────────────────────────────────────────────────────
+
+
 
 
 controller.deleteManager = async (req, res) => {
@@ -215,7 +197,7 @@ controller.deleteManager = async (req, res) => {
         const id = req.params.id;
         //let manager = await Manager.findById(id).populate('managerimg').exec();
 
-        const manager = await Manager.findOne({ _id: id }).populate('managerimg')
+        const manager = await Manager.findOne({ _id: id });
 
         manager.otherLocals.forEach(async id => {
             try {
@@ -246,7 +228,9 @@ controller.deleteManager = async (req, res) => {
         res.status(500).send(err);
     }
 
-};
+};// ─── LEGACY CODE DOWNLOAD MORE 👇 ────────────────────────────────────────────────────────────────
+
+
 
 
 function putManagerId(body, local, manager) {
@@ -266,7 +250,6 @@ function putManagerId(body, local, manager) {
             }
         });
     }
-
     newArrayOtherLocals.forEach(async id => {
         try {
             const findLocal = await Local.find({ _id: id }).select('-img');
@@ -280,7 +263,13 @@ function putManagerId(body, local, manager) {
             console.log(err)
         }
     });
-}
+};
+
+
+
+
+
+
 
 
 

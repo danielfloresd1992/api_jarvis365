@@ -15,11 +15,7 @@ const Local = new Schema({
         require: true
     },
 
-    status: { // isDeprecated
-        type: String,
-        require: true,
-        default: 'activo'
-    },
+
 
 
     franchiseReference: {
@@ -55,11 +51,6 @@ const Local = new Schema({
 
 
 
-    order: {
-        type: Number,
-        require: true
-    },
-
     lang: {
         type: String,
         require: true,
@@ -94,7 +85,7 @@ const Local = new Schema({
     },
 
 
-
+    /*
     dishMenu: {  // is deprecated
         appetizer: {
             type: String,
@@ -119,9 +110,14 @@ const Local = new Schema({
         isEvaluationGroup: {
             type: Boolean,
             default: false
+        },
+        deprecated: {
+            type: Boolean,
+            default: true
         }
+        
     },
-
+    */
 
     dishes: [{ //////////////  in develoment
         type: Schema.Types.ObjectId,
@@ -129,11 +125,6 @@ const Local = new Schema({
     }],
 
 
-    img: { /// id deprecated
-        data: Buffer,
-        contentType: String,
-        name: String
-    },
 
 
     managers: [{
@@ -159,8 +150,6 @@ const Local = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'DocumentConfig'
     },
-
-
 
 
     date: Date,
@@ -197,8 +186,10 @@ const Local = new Schema({
         }]
     },
 
+    
     image: {
-        type: String
+        type: String,
+        default: null
     },
 
     DST: {
@@ -221,8 +212,6 @@ const Local = new Schema({
         },
         default: 'extended'
     }
-
-
 });
 
 

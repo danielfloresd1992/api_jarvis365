@@ -1,0 +1,521 @@
+
+
+body{
+    padding: 0;
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: rgb(255, 255, 255);
+    transition: .1s linear all;
+}
+body.active{
+    background-color: rgb(49, 49, 49)
+}
+
+body div{
+
+}
+
+body header{
+    position: fixed;
+    width: 100%;
+    height:50px;
+    background-color:rgb(36, 68, 136);
+    top: 0;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0);
+    display: flex;
+    justify-content:space-between;
+    align-items: center;
+    z-index: 30;
+    cursor:pointer;
+    border-bottom: 0px solid rgb(0, 0, 0);
+}
+body header.active{
+    background-color:rgb(32, 32, 32);
+}
+body header div {
+    margin: 10px;
+}
+
+body div h1{
+    color:cornsilk;
+    font-size: 2rem;
+    font-family:'Courier New', Courier, monospace;
+    font-weight: bold;
+}
+
+body div img{
+    width: 100px;
+    height: 10%
+}
+
+.text-operator{
+    position: fixed;
+    top:0;
+    width: 100%;
+    height: 0%;
+    display: flex;
+    justify-content:flex-end;
+    align-items :center;
+    flex-direction: column;
+    box-shadow: 5px 5px 10px #000;
+    border-bottom: 1px solid rgb(190, 190, 190);
+    transition: 1s ease all;
+    z-index: 28;
+   
+    /*
+    background-image: url(image/PIZARRA.jpg);
+    */
+}
+.text-operator.active{
+    height:14%;
+    box-shadow: 10px 10px 20px #000;
+}
+.text-operator.active2{
+    height:18%;
+    box-shadow: 10px 10px 20px #000;
+}
+.text-operator.active3{
+    height:24%;
+    box-shadow: 10px 10px 20px #000;
+}
+.text-operator.active4{
+    height:30%;
+    box-shadow: 10px 10px 20px #000;
+}
+.text-operator.active5{
+    height:44%;
+    box-shadow: 10px 10px 20px #000;
+}
+.text-operator.active6{
+    height:38%;
+    box-shadow: 10px 10px 20px #000;
+}
+.text-operator.active7{
+    height:60%;
+    box-shadow: 10px 10px 20px #000;
+}
+
+ 
+.text-operator div{
+    height: 45px;
+    width: 100%;
+    margin: 0;
+    color: rgb(255, 255, 255);
+    text-align: center;
+    font-size: 30px;
+    transition: 1s ease all;
+    z-index: 1;
+}
+.text-operator section{
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    background-color: rgba(105, 105, 105, 0.459) ;
+    backdrop-filter: blur(10px);
+    z-index: -1;
+}
+.text-operator div h1 span{
+    color: rgb(21, 168, 187);
+    font-style: oblique;
+    text-decoration:underline
+}
+.text-operator div h1{
+    width: 100%;
+    color: rgb(0, 0, 0);
+    text-align: center;
+    font-size: 1.3rem;
+    font-family:cursive;
+    text-shadow: 1px 1px 3px rgb(61, 61, 61);
+}
+.box-container{
+    display: flex;
+    flex-direction: row;
+}
+.container{
+    margin-top: 6%;
+    display: flex;
+    justify-content:center;
+    align-items: center;
+    position: relative;
+    align-items: flex-end;
+}
+.btnTeam{
+   position: absolute;
+   left: 9px;
+   top:10px;
+   width:50px;
+   height:22px;
+   cursor: pointer;
+   border-radius: 50px;
+   border: .5px solid rgba(0, 0, 0, 0);
+   background-color: rgb(233, 232, 232);
+   color: #fff;
+   
+}
+.toogle {
+    position: relative;
+    height: 100%;
+    width: 50%;
+    background-color:rgb(22, 48, 134);
+    border-radius: 50px;
+    transition: 1s all ease;
+}
+.toogle.active{
+    left: 25px;
+    background-color:rgb(0, 0, 0);
+}
+.btnContent{
+    display: flex;
+    flex-direction:column;
+    position: relative;
+}
+.btnContent button{
+    height: 40px;
+    width: 42px;
+    margin: 4px 0px 12px 5px;
+    cursor: pointer;
+    background-color: rgb(184, 83, 17);
+    border: none;
+    color: #fff;
+    box-shadow: 2px 2px 5px #000;
+    border-radius: 2px;
+    border: 2px solid rgba(0, 0, 0, 0)
+}
+.btnContent button:hover{
+    background-color: rgb(218, 87, 0);
+}
+
+.btn-1.active{
+    background-color: rgb(231, 0, 0);
+    color: blanchedalmond;
+}
+.btn-2.active{
+    background-color: rgb(231, 0, 0);
+    color: blanchedalmond;
+}
+.btn-3.active{
+    background-color: rgb(231, 0, 0);
+    color: blanchedalmond;
+}
+.btn-4.active{
+    background-color: rgb(231, 0, 0);
+    color: blanchedalmond;
+}
+.btn-5.active{
+    background-color: rgb(231, 0, 0);
+    color: blanchedalmond;
+}
+.btn-6.active{
+    background-color: rgb(231, 0, 0);
+    color: blanchedalmond;
+}
+.btn-7.active{
+    background-color: rgb(231, 0, 0);
+    color: blanchedalmond;
+}
+.btn-8.active{
+    background-color: rgb(231, 0, 0);
+    color: blanchedalmond;
+}
+.btn-9.active{
+    background-color: rgb(231, 0, 0);
+    color: blanchedalmond;
+}
+.btn-10.active{
+    background-color: rgb(231, 0, 0);
+    color: blanchedalmond;
+}.btn-11.active{
+    background-color: rgb(231, 0, 0);
+    color: blanchedalmond;
+}
+
+
+.btnContent button:active{
+    background-color: rgb(131, 57, 7);
+}
+table{
+    text-align: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    font-size: 1.1rem;
+    border-radius: 10px;
+    overflow: hidden;
+    width: 98%;
+    border-spacing: 10px;
+}
+
+table th{
+    width: 200px;
+    height: 40px;
+    box-shadow: 4px 4px 10px #000;
+    border-radius: 4px;
+    color: rgb(255, 255, 255);
+    background-color:rgb(219, 89, 14);
+}
+
+table td{
+    width: 200px;
+    height: 40px;
+    box-shadow: 2px 2px 5px #000;
+    background-color: rgb(255, 255, 255);
+    border-radius: 4px;
+    animation: alternateColor linear 1s ;
+    border: 2px solid rgba(0, 0, 0, 0)
+}
+.favoriteOnly{
+    border: none;
+    font-size: 1.1rem;
+    cursor:pointer
+}
+.time{
+    animation: none;
+}
+.time.active{
+    animation: alternateColor .6s infinite;
+}
+
+@keyframes alternateColor {
+    0%{
+        background-color: cornsilk;
+    }
+    50%{
+        background-color: rgb(255, 0, 0);
+    }
+}
+
+.operator.active{
+    border: 2px solid rgb(184, 83, 17);
+}
+.operator2.active{
+    border: 2px solid rgb(184, 83, 17);
+}
+.operator3.active{
+    border: 2px solid rgb(184, 83, 17);
+}
+.operator4.active{
+    border: 2px solid rgb(184, 83, 17);
+}
+.operator5.active{
+    border: 2px solid rgb(184, 83, 17);
+}
+.operator6.active{
+    border: 2px solid rgb(184, 83, 17);
+}
+.operator7.active{
+    border: 2px solid rgb(184, 83, 17);
+}
+.operator8.active{
+    border: 2px solid rgb(184, 83, 17);
+}
+.operator9.active{
+    border: 2px solid rgb(184, 83, 17);;
+}
+.operator10.active{
+    border: 2px solid rgb(184, 83, 17);
+}
+.operator11.active{
+    border: 2px solid rgb(184, 83, 17);
+}
+
+
+
+.absolute-text{
+    position: absolute;
+    width: 100%;
+    text-align: center;
+}
+
+
+
+
+
+.bloqueo-pantalla{
+    background-color: rgba(0, 0, 0, 0.699);
+    position: fixed;
+    top: 0;
+    width: 100%;
+    height: 100vh;
+    display:none;
+    z-index: 100;
+    animation: suavizadoPantalla .4s linear;
+}
+@keyframes suavizadoPantalla{
+    0%{
+        background-color: rgba(0, 0, 0, 0);
+    }
+    50%{
+        background-color: rgba(0, 0, 0, 0.404);
+    }
+    100%{
+        background-color: rgba(0, 0, 0, 0.699);
+    }
+}
+.ventana-emergente{
+    width: 420px;
+    min-height: 220px;
+    position: relative;
+    padding-top: 10px;
+    padding-left: 30px;
+    padding-right: 30px;
+    padding-bottom: 10px;
+    top: 35%;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    font-weight: bold;
+    font-size: 1.5rem;
+    font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    color:rgb(0, 64, 148);
+    background-color: rgb(235, 235, 235);
+    
+    border: 5px solid rgba(224, 76, 17, 0);
+    box-shadow: 10px 10px 20px #000;
+    display:none;
+    z-index: 110;
+}
+.tipo-mensaje{
+    color: rgb(180, 14, 14);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    font-weight: bold;
+}
+.descripcion-mensaje{
+    position: relative;
+    top: -50px;
+    margin-left: auto;
+    margin-right: auto;
+    display: inline-block;
+    
+}
+.exit{
+    position: absolute;
+    top: 5px;
+    right: 10px;
+    font-weight: bold;
+    color: brown;
+    background-color:rgba(179, 179, 179, 0);
+    border-radius: 5px;
+    border: 2px solid rgb(8, 33, 112);
+    width: 30px;
+    height: 35px;
+    font-size: 1.3rem;
+    cursor: pointer;
+    padding-bottom: 10px;
+}
+.exit:hover{
+    color: rgb(219, 127, 52);
+    background-color:rgb(206, 206, 206);
+}
+.logo-alerta{
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    height: 50px;
+    width: 120px
+}
+
+
+.bloqueo-pantalla2{
+    background-color: rgba(0, 0, 0, 0.699);
+    position: fixed;
+    top: 0;
+    width: 100%;
+    height: 100vh;
+    display:none;
+    z-index: 100;
+    animation: suavizadoPantalla .4s linear;
+}
+@keyframes suavizadoPantalla{
+    0%{
+        background-color: rgba(0, 0, 0, 0);
+    }
+    50%{
+        background-color: rgba(0, 0, 0, 0.404);
+    }
+    100%{
+        background-color: rgba(0, 0, 0, 0.699);
+    }
+}
+.ventana-emergente2{
+    width: 420px;
+    min-height: 220px;
+    position: relative;
+    padding-top: 10px;
+    padding-left: 30px;
+    padding-right: 30px;
+    padding-bottom: 10px;
+    top: 35%;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    font-weight: bold;
+    font-size: 1.5rem;
+    font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    color:rgb(0, 64, 148);
+    background-color: rgb(235, 235, 235);
+    
+    border: 5px solid rgba(224, 76, 17, 0);
+    box-shadow: 10px 10px 20px #000;
+    display:none;
+    z-index: 110;
+}
+.tipo-mensaje2{
+    color: rgb(180, 14, 14);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    font-weight: bold;
+}
+.descripcion-mensaje2{
+    position: relative;
+    top: -50px;
+    margin-left: auto;
+    margin-right: auto;
+    display: inline-block;
+    
+}
+.exit2{
+    position: absolute;
+    top: 5px;
+    right: 10px;
+    font-weight: bold;
+    color: brown;
+    background-color:rgba(179, 179, 179, 0);
+    border-radius: 5px;
+    border: 2px solid rgb(8, 33, 112);
+    width: 30px;
+    height: 35px;
+    font-size: 1.3rem;
+    cursor: pointer;
+    padding-bottom: 10px;
+}
+.exit2:hover{
+    color: rgb(219, 127, 52);
+    background-color:rgb(206, 206, 206);
+}
+.logo-alerta2{
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    height: 50px;
+    width: 120px
+}
+
+.confirt{
+    bottom: 500px;
+    margin-left: 20px;
+    margin-right: 20px;
+    border: 1px medium rgb(5, 19, 99);
+    cursor: pointer;
+    background-color: rgb(212, 212, 212);
+    
+    width: 80px;
+    height: 30px;
+    font-weight: bold;
+}
+
+.btn-confirt-container{
+    position: absolute;
+    bottom: 20%;
+    right: 120px;
+}

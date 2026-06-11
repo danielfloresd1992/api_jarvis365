@@ -1,0 +1,884 @@
+{
+    "Posible empleado sin uniforme": [
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Eduardo Giraud"
+            },
+            "local": {
+                "name": "La Fontana Doral",
+                "idLocal": "637a86331a8ed7ed7d7e7202"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 0,
+                "amulative": 0
+            },
+            "_id": "64519debd1abeeb4998d7061",
+            "fileNoveltie": "64519debd1abeeb4998d705f",
+            "date": "2023-05-02T23:34:03.000Z",
+            "title": "Posible empleado sin uniforme",
+            "menu": "*La Fontana Doral*\r\n_*Posible empleado sin uniforme*_\r\nHora: 19:32:58",
+            "description": "",
+            "__v": 0
+        }
+    ],
+    "Basura rebosada": [
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Eduardo Giraud"
+            },
+            "local": {
+                "name": "La Fontana Doral",
+                "idLocal": "637a86331a8ed7ed7d7e7202"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 0,
+                "amulative": 0
+            },
+            "_id": "64519ee9d1abeeb4998d708d",
+            "fileNoveltie": "64519ee9d1abeeb4998d708b",
+            "date": "2023-05-02T23:38:17.000Z",
+            "title": "Basura rebosada",
+            "menu": "*La Fontana Doral*\r\n_*Basura rebosada*_\r\nTiempo total:  00:16:47",
+            "description": "",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "La Fontana Doral",
+                "idLocal": "637a86331a8ed7ed7d7e7202"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 0,
+                "amulative": 0
+            },
+            "_id": "6452fe6cd1abeeb4998df37a",
+            "fileNoveltie": "6452fe6cd1abeeb4998df378",
+            "date": "2023-05-04T00:38:04.000Z",
+            "title": "Basura rebosada",
+            "menu": "*La Fontana Doral*\r\n_*Basura rebosada*_\r\nTiempo total:  00:17:50",
+            "description": "",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "Bocas Weston",
+                "idLocal": "637a77921a8ed7ed7d7e71c8"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 0,
+                "amulative": 0
+            },
+            "_id": "6455a77c1245ca02e8e4101e",
+            "fileNoveltie": "6455a77c1245ca02e8e4101c",
+            "date": "2023-05-06T01:03:56.000Z",
+            "title": "Basura rebosada",
+            "menu": "*Bocas Weston*\r\n_*Basura rebosada*_\r\nTiempo total:  00:15:27",
+            "description": "",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Modesto Perez"
+            },
+            "local": {
+                "name": "Bocas House",
+                "idLocal": "637a76d41a8ed7ed7d7e71c1"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 0,
+                "amulative": 0
+            },
+            "_id": "6457129e1245ca02e8e49f7c",
+            "fileNoveltie": "6457129e1245ca02e8e49f7a",
+            "date": "2023-05-07T02:53:18.000Z",
+            "title": "Basura rebosada",
+            "menu": "*Bocas House*\r\n_*Basura rebosada*_\r\nTiempo total:  00:15:25",
+            "description": "",
+            "__v": 0
+        }
+    ],
+    "Protocolo y organización de mesa": [
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Eduardo Giraud"
+            },
+            "local": {
+                "name": "La Fontana Doral",
+                "idLocal": "637a86331a8ed7ed7d7e7202"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 0,
+                "amulative": 0
+            },
+            "_id": "6451a0a2d1abeeb4998d714f",
+            "fileNoveltie": "6451a0a2d1abeeb4998d714d",
+            "date": "2023-05-02T23:45:38.000Z",
+            "title": "Protocolo y organización de mesa",
+            "menu": "*La Fontana Doral*\r\n_*Protocolo y organización de mesa*_\r\nMesa: 16\r\nNota: montada para dos comensales, no cuenta con cubiertos al momento.",
+            "description": "Mesa montada para dos comensales, no cuenta con cubiertos al momento.",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "Bocas Weston",
+                "idLocal": "637a77921a8ed7ed7d7e71c8"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 0,
+                "amulative": 0
+            },
+            "_id": "6455a5591245ca02e8e40fd0",
+            "fileNoveltie": "6455a5591245ca02e8e40fce",
+            "date": "2023-05-06T00:54:49.000Z",
+            "title": "Protocolo y organización de mesa",
+            "menu": "*Bocas Weston*\r\n_*Protocolo y organización de mesa*_\r\nMesa: 10\r\nNota:  montada para 4 comensales, cuenta con 3 silla al momento",
+            "description": "MONTADA PARA 4 COMENSALES, CUENTA CON 3 SILLA AL MOMENTO",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "Bocas House",
+                "idLocal": "637a76d41a8ed7ed7d7e71c1"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 0,
+                "amulative": 0
+            },
+            "_id": "6455b68d1245ca02e8e413fe",
+            "fileNoveltie": "6455b68d1245ca02e8e413fc",
+            "date": "2023-05-06T02:08:13.000Z",
+            "title": "Protocolo y organización de mesa",
+            "menu": "*Bocas House*\r\n_*Protocolo y organización de mesa*_\r\nMesa: 11\r\nNota: Montada para 7 comensales, cuenta con 6 platos al momento",
+            "description": "montada para 7 comensales, cuenta con 6 platos al momento",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Modesto Perez"
+            },
+            "local": {
+                "name": "Bocas Weston",
+                "idLocal": "637a77921a8ed7ed7d7e71c8"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 0,
+                "amulative": 0
+            },
+            "_id": "6456fd9b1245ca02e8e49c64",
+            "fileNoveltie": "6456fd9b1245ca02e8e49c62",
+            "date": "2023-05-07T01:23:39.000Z",
+            "title": "Protocolo y organización de mesa",
+            "menu": "*Bocas Weston*\r\n_*Protocolo y organización de mesa*_\r\nMesa: 10\r\nNota:  montada para 4 comensales, cuenta con 2 sillas al momento",
+            "description": "montada para 4 comensales, cuenta con 2 sillas al momento",
+            "__v": 0
+        }
+    ],
+    "Área de host sola": [
+        {
+            "isValidate": {
+                "validation": "null",
+                "for": null
+            },
+            "local": {
+                "name": "La Fontana Doral",
+                "idLocal": "637a86331a8ed7ed7d7e7202"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 1,
+                "amulative": 3
+            },
+            "_id": "6451baa0d1abeeb4998d7acb",
+            "fileNoveltie": "6451baa0d1abeeb4998d7ac9",
+            "date": "2023-05-03T01:36:32.000Z",
+            "title": "Área de host sola",
+            "menu": "*La Fontana Doral*\r\n_*Área de host sola*_\r\nTiempo total:  00:11:53",
+            "description": "",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "La Fontana Doral",
+                "idLocal": "637a86331a8ed7ed7d7e7202"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 1,
+                "amulative": 3
+            },
+            "_id": "6452ee9ad1abeeb4998deab3",
+            "fileNoveltie": "6452ee9ad1abeeb4998deab1",
+            "date": "2023-05-03T23:30:34.000Z",
+            "title": "Área de host sola",
+            "menu": "*La Fontana Doral*\r\n_*Área de host sola*_\r\nTiempo total:  00:07:44",
+            "description": "",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "La Fontana Doral",
+                "idLocal": "637a86331a8ed7ed7d7e7202"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 1,
+                "amulative": 3
+            },
+            "_id": "6452f554d1abeeb4998deda7",
+            "fileNoveltie": "6452f554d1abeeb4998deda5",
+            "date": "2023-05-03T23:59:16.000Z",
+            "title": "Área de host sola",
+            "menu": "*La Fontana Doral*\r\n_*Área de host sola*_\r\nTiempo total:  00:07:21",
+            "description": "",
+            "__v": 0
+        }
+    ],
+    "Piso mojado": [
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Gregson Padilla"
+            },
+            "local": {
+                "name": "La Fontana Doral",
+                "idLocal": "637a86331a8ed7ed7d7e7202"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 0,
+                "amulative": 0
+            },
+            "_id": "6451bdc2d1abeeb4998d7ad2",
+            "fileNoveltie": "6451bdc2d1abeeb4998d7ad0",
+            "date": "2023-05-03T01:49:54.000Z",
+            "title": "Piso mojado",
+            "menu": "*La Fontana Doral*\r\n_*Piso mojado*_\r\nTiempo total:  00:05:07",
+            "description": "",
+            "__v": 0
+        }
+    ],
+    "Uso de celular": [
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "La Fontana Doral",
+                "idLocal": "637a86331a8ed7ed7d7e7202"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 0,
+                "amulative": 0
+            },
+            "_id": "6452e9fbd1abeeb4998de927",
+            "fileNoveltie": "6452e9fbd1abeeb4998de925",
+            "date": "2023-05-03T23:10:51.000Z",
+            "title": "Uso de celular",
+            "menu": "*La Fontana Doral*\r\n_*Uso de celular*_\r\nTiempo total:  00:01:42",
+            "description": "",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "La Fontana Doral",
+                "idLocal": "637a86331a8ed7ed7d7e7202"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 0,
+                "amulative": 0
+            },
+            "_id": "6452f81ed1abeeb4998df08c",
+            "fileNoveltie": "6452f81ed1abeeb4998df08a",
+            "date": "2023-05-04T00:11:10.000Z",
+            "title": "Uso de celular",
+            "menu": "*La Fontana Doral*\r\n_*Uso de celular*_\r\nTiempo total:  00:02:48",
+            "description": "",
+            "__v": 0
+        }
+    ],
+    "Posible devolución de pedido": [
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "Francisca Doral",
+                "idLocal": "637a7ae31a8ed7ed7d7e71e0"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 1,
+                "amulative": 1
+            },
+            "_id": "645302d7d1abeeb4998df54c",
+            "fileNoveltie": "645302d7d1abeeb4998df549",
+            "date": "2023-05-04T00:56:55.000Z",
+            "title": "Posible devolución de pedido",
+            "menu": "*Francisca Doral*\r\n_*Posible devolución de pedido*_",
+            "description": "",
+            "__v": 0
+        }
+    ],
+    "Posible devolución de bebida": [
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "Francisca Doral",
+                "idLocal": "637a7ae31a8ed7ed7d7e71e0"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 1,
+                "amulative": 1
+            },
+            "_id": "6453041ed1abeeb4998df58d",
+            "fileNoveltie": "6453041ed1abeeb4998df58a",
+            "date": "2023-05-04T01:02:22.000Z",
+            "title": "Posible devolución de bebida",
+            "menu": "*Francisca Doral*\r\n_*Posible devolución de bebida*_\r\nMesa: 61",
+            "description": "",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Modesto Perez"
+            },
+            "local": {
+                "name": "Bocas Brickell",
+                "idLocal": "637a78c21a8ed7ed7d7e71d2"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 1,
+                "amulative": 1
+            },
+            "_id": "6456fd2a1245ca02e8e49bd4",
+            "fileNoveltie": "6456fd2a1245ca02e8e49bd1",
+            "date": "2023-05-07T01:21:46.000Z",
+            "title": "Posible devolución de bebida",
+            "menu": "*Bocas Brickell*\r\n_*Posible devolución de bebida*_\r\nMesa: 10",
+            "description": "",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Modesto Perez"
+            },
+            "local": {
+                "name": "Bocas House",
+                "idLocal": "637a76d41a8ed7ed7d7e71c1"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 1,
+                "amulative": 1
+            },
+            "_id": "645713881245ca02e8e49f8c",
+            "fileNoveltie": "645713881245ca02e8e49f89",
+            "date": "2023-05-07T02:57:12.000Z",
+            "title": "Posible devolución de bebida",
+            "menu": "*Bocas House*\r\n_*Posible devolución de bebida*_\r\nMesa: 64",
+            "description": "",
+            "__v": 0
+        }
+    ],
+    "Cliente ocupa mesa sin ser ubicado por el host": [
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "Francisca Doral",
+                "idLocal": "637a7ae31a8ed7ed7d7e71e0"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 1,
+                "amulative": 1
+            },
+            "_id": "64530801d1abeeb4998df5c1",
+            "fileNoveltie": "64530801d1abeeb4998df5bf",
+            "date": "2023-05-04T01:18:57.000Z",
+            "title": "Cliente ocupa mesa sin ser ubicado por el host",
+            "menu": "*Francisca Doral*\r\n_*Cliente ocupa mesa sin ser ubicado por el host*_\r\nMesa: 41",
+            "description": "",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Modesto Perez"
+            },
+            "local": {
+                "name": "Francisca Doral",
+                "idLocal": "637a7ae31a8ed7ed7d7e71e0"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 1,
+                "amulative": 1
+            },
+            "_id": "6456fe6b1245ca02e8e49d28",
+            "fileNoveltie": "6456fe6b1245ca02e8e49d26",
+            "date": "2023-05-07T01:27:07.000Z",
+            "title": "Cliente ocupa mesa sin ser ubicado por el host",
+            "menu": "*Francisca Doral*\r\n_*Cliente ocupa mesa sin ser ubicado por el host*_\r\nMesa: 41",
+            "description": "",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Modesto Perez"
+            },
+            "local": {
+                "name": "Francisca Doral",
+                "idLocal": "637a7ae31a8ed7ed7d7e71e0"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 1,
+                "amulative": 1
+            },
+            "_id": "6456ff341245ca02e8e49d48",
+            "fileNoveltie": "6456ff341245ca02e8e49d46",
+            "date": "2023-05-07T01:30:28.000Z",
+            "title": "Cliente ocupa mesa sin ser ubicado por el host",
+            "menu": "*Francisca Doral*\r\n_*Cliente ocupa mesa sin ser ubicado por el host*_\r\nMesa: 43",
+            "description": "",
+            "__v": 0
+        }
+    ],
+    "Empleado realiza produción": [
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "Bocas Weston",
+                "idLocal": "637a77921a8ed7ed7d7e71c8"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 0,
+                "amulative": 0
+            },
+            "_id": "6455a08e1245ca02e8e40dec",
+            "fileNoveltie": "6455a08e1245ca02e8e40dea",
+            "date": "2023-05-06T00:34:22.000Z",
+            "title": "Empleado realiza produción",
+            "menu": "*Bocas Weston*\r\nEmpleado realiza producción: Corta, Pesa, Porciona  y Desecha",
+            "description": "Empleado realiza producción: Corta, Pesa, Porciona  y Desecha",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "Bocas Weston",
+                "idLocal": "637a77921a8ed7ed7d7e71c8"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 0,
+                "amulative": 0
+            },
+            "_id": "6455c0861245ca02e8e4169b",
+            "fileNoveltie": "6455c0861245ca02e8e41699",
+            "date": "2023-05-06T02:50:46.000Z",
+            "title": "Empleado realiza produción",
+            "menu": "*Bocas Weston*\r\nEmpleado realiza producción: Corta, Pesa, Empaqueta  y Guarda",
+            "description": "Empleado realiza producción: Corta, Pesa, Empaqueta  y Guarda",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "Bocas Brickell",
+                "idLocal": "637a78c21a8ed7ed7d7e71d2"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 0,
+                "amulative": 0
+            },
+            "_id": "64570db21245ca02e8e49e7c",
+            "fileNoveltie": "64570db21245ca02e8e49e7a",
+            "date": "2023-05-07T02:32:18.000Z",
+            "title": "Empleado realiza produción",
+            "menu": "*Bocas Brickell*\r\nEmpleado realiza producción: Corta, Etiqueta, Guarda ",
+            "description": "Empleado realiza producción: Corta, Etiqueta, Guarda ",
+            "__v": 0
+        }
+    ],
+    "Demora de limpieza": [
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "Bocas Brickell",
+                "idLocal": "637a78c21a8ed7ed7d7e71d2"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 1,
+                "amulative": 4
+            },
+            "_id": "6455a1731245ca02e8e40e94",
+            "fileNoveltie": "6455a1731245ca02e8e40e91",
+            "date": "2023-05-06T00:38:11.000Z",
+            "title": "Demora de limpieza",
+            "table": "1.2",
+            "menu": "*Bocas Brickell*\r\n_*Demora de limpieza*_\r\nMesa: 1.2\r\nDesocupa: 20:26:17\r\nLimpieza: 20:33:57\r\nTiempo de limpieza: 00:07:40\r\n*Mesa no cumple protocolo de limpieza ❌*",
+            "description": "Desocupa 20:26:17, Limpieza 20:33:57 total: 00:07:40 ",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "null",
+                "for": null
+            },
+            "local": {
+                "name": "Bocas Brickell",
+                "idLocal": "637a78c21a8ed7ed7d7e71d2"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 1,
+                "amulative": 4
+            },
+            "_id": "6455be571245ca02e8e41565",
+            "fileNoveltie": "6455be571245ca02e8e41562",
+            "date": "2023-05-06T02:41:27.000Z",
+            "title": "Demora de limpieza",
+            "table": "10",
+            "menu": "*Bocas Brickell*\r\n_*Demora de limpieza*_\r\nMesa: 10\r\nDesocupa: 22:29:30\r\nLimpieza: 22:39:45\r\nTiempo de limpieza: 00:10:15\r\n*Mesa no cumple protocolo de limpieza ❌*",
+            "description": "Desocupa 22:29:30, Limpieza 22:39:45 total: 00:10:15 ",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "Bocas Weston",
+                "idLocal": "637a77921a8ed7ed7d7e71c8"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 1,
+                "amulative": 4
+            },
+            "_id": "645705421245ca02e8e49d96",
+            "fileNoveltie": "645705421245ca02e8e49d93",
+            "date": "2023-05-07T01:56:18.000Z",
+            "title": "Demora de limpieza",
+            "table": "19",
+            "menu": "*Bocas Weston*\r\n_*Demora de limpieza*_\r\nMesa: 19\r\nDesocupa: 21:44:31\r\nLimpieza: 21:51:54\r\nTiempo de limpieza: 00:07:23\r\n*Mesa no cumple protocolo de limpieza ❌*",
+            "description": "Desocupa 21:44:31, Limpieza 21:51:54 total: 00:07:23 ",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "Bocas Weston",
+                "idLocal": "637a77921a8ed7ed7d7e71c8"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 1,
+                "amulative": 4
+            },
+            "_id": "645707b01245ca02e8e49ddb",
+            "fileNoveltie": "645707b01245ca02e8e49dd8",
+            "date": "2023-05-07T02:06:40.000Z",
+            "title": "Demora de limpieza",
+            "table": "11",
+            "menu": "*Bocas Weston*\r\n_*Demora de limpieza*_\r\nMesa: 11\r\nDesocupa: 21:46:47\r\nLimpieza: 21:54:17\r\nTiempo de limpieza: 00:07:30\r\n*Mesa no cumple protocolo de limpieza ❌*",
+            "description": "Desocupa 21:46:47, Limpieza 21:54:17 total: 00:07:30 ",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "Bocas Weston",
+                "idLocal": "637a77921a8ed7ed7d7e71c8"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 1,
+                "amulative": 4
+            },
+            "_id": "64570ca01245ca02e8e49dfe",
+            "fileNoveltie": "64570ca01245ca02e8e49dfb",
+            "date": "2023-05-07T02:27:44.000Z",
+            "title": "Demora de limpieza",
+            "table": "17",
+            "menu": "*Bocas Weston*\r\n_*Demora de limpieza*_\r\nMesa: 17\r\nDesocupa: 22:10:22\r\nLimpieza: 22:20:39\r\nTiempo de limpieza: 00:10:17\r\n*Mesa no cumple protocolo de limpieza ❌*",
+            "description": "Desocupa 22:10:22, Limpieza 22:20:39 total: 00:10:17 ",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "Bocas House",
+                "idLocal": "637a76d41a8ed7ed7d7e71c1"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 1,
+                "amulative": 4
+            },
+            "_id": "64570e8c1245ca02e8e49f1a",
+            "fileNoveltie": "64570e8c1245ca02e8e49f17",
+            "date": "2023-05-07T02:35:56.000Z",
+            "title": "Demora de limpieza",
+            "table": "11",
+            "menu": "*Bocas House*\r\n_*Demora de limpieza*_\r\nMesa: 11\r\nDesocupa: 22:15:25\r\nLimpieza: 22:20:05\r\nTiempo de limpieza: 00:04:40\r\n*Mesa no cumple protocolo de limpieza ❌*",
+            "description": "Desocupa 22:15:25, Limpieza 22:20:05 total: 00:04:40 ",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "Bocas House",
+                "idLocal": "637a76d41a8ed7ed7d7e71c1"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 1,
+                "amulative": 4
+            },
+            "_id": "645710bb1245ca02e8e49f3b",
+            "fileNoveltie": "645710bb1245ca02e8e49f38",
+            "date": "2023-05-07T02:45:15.000Z",
+            "title": "Demora de limpieza",
+            "table": "3",
+            "menu": "*Bocas House*\r\n_*Demora de limpieza*_\r\nMesa: 3\r\nDesocupa: 22:32:11\r\nLimpieza: 22:37:58\r\nTiempo de limpieza: 00:05:47\r\n*Mesa no cumple protocolo de limpieza ❌*",
+            "description": "Desocupa 22:32:11, Limpieza 22:37:58 total: 00:05:47 ",
+            "__v": 0
+        },
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Engelbert Vargas"
+            },
+            "local": {
+                "name": "Bocas House",
+                "idLocal": "637a76d41a8ed7ed7d7e71c1"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 1,
+                "amulative": 4
+            },
+            "_id": "6457116f1245ca02e8e49f5c",
+            "fileNoveltie": "6457116f1245ca02e8e49f59",
+            "date": "2023-05-07T02:48:15.000Z",
+            "title": "Demora de limpieza",
+            "table": "24",
+            "menu": "*Bocas House*\r\n_*Demora de limpieza*_\r\nMesa: 24\r\nDesocupa: 22:35:28\r\nLimpieza: 22:40:36\r\nTiempo de limpieza: 00:05:08\r\n*Mesa no cumple protocolo de limpieza ❌*",
+            "description": "Desocupa 22:35:28, Limpieza 22:40:36 total: 00:05:08 ",
+            "__v": 0
+        }
+    ],
+    "Posible devolución de plato": [
+        {
+            "isValidate": {
+                "validation": "true",
+                "for": "Modesto Perez"
+            },
+            "local": {
+                "name": "Bocas Weston",
+                "idLocal": "637a77921a8ed7ed7d7e71c8"
+            },
+            "userPublic": {
+                "name": "Gregson Padilla",
+                "userId": "6313ce149d96142c8e304106"
+            },
+            "rulesForBonus": {
+                "worth": 0,
+                "amulative": 0
+            },
+            "_id": "6456fee81245ca02e8e49d3c",
+            "fileNoveltie": "6456fee81245ca02e8e49d39",
+            "date": "2023-05-07T01:29:12.000Z",
+            "title": "Posible devolución de plato",
+            "menu": "*Bocas Weston*\r\n_*Posible devolución de plato*_\r\nMesa: 17",
+            "description": "",
+            "__v": 0
+        }
+    ]
+}

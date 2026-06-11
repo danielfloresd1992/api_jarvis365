@@ -1,0 +1,9 @@
+window.onload = () => {
+    let invenrtClass = setInterval(() => {
+        document.getElementById('imgr1').classList.toggle('invert'); document.getElementById('imgr2').classList.toggle('reverse');
+    }, 1000);
+    let out = setTimeout(() => {
+        document.querySelector('.intro-page').remove();
+        clearInterval(invenrtClass); clearTimeout(out);
+    }, 5000); window.onload = null;
+}

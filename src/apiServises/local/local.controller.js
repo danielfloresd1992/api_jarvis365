@@ -178,6 +178,9 @@ controller.setlocal = async (req, res) => {
 };
 
 
+
+
+
 controller.updateImgImage = async (req, res) =>{
     try {
         if(req.fileValidationError) return res.status(400).json({ error: req.fileValidationError });
@@ -203,24 +206,16 @@ controller.putLocal = async (req, res) => {
         if(idParams === 'undefined' || !idParams) return res.status(400).json({ error: 'The id parameter associated with a client must be strictly added' });
         if(!mongoose.Types.ObjectId(idParams))  return res.status(400).json({ error: `The ObjectId is not valid. id: ${ idParams }` });
 
-
         const local = await Local.findOne({ _id: idParams });
         if(!local) return res.status(404).json({ error: `There is no record associated with the id: ${idParams}` });
 
-        const name = local.img.name;
+        
         const update = req.body;
 
-        if(req.file) {
-            update.img = {
-                data: fs.readFileSync(path.join(__dirname, `../../../uploads/${req.file.filename}`)),
-                contentType: req.file.mimetype,
-                name: req.file.filename
-            }
-        }
         
         try{
             const result = await Local.findByIdAndUpdate(new mongoose.Types.ObjectId(idParams), update).populate(populateQuery);
-            if(req.file) fs.unlinkSync(path.join(__dirname, `../../../uploads/${name}`));
+
             return res.status(200).json({ result: result });
         }
         catch(errMongo){

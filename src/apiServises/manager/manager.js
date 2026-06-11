@@ -25,7 +25,7 @@ export default {
 
     managerLocalAndImgById: id => {
         return new Promise((resolve, reject) => {
-            Manager.find({ _id: id }).populate('managerimg').exec((err, docs) => { 
+            Manager.find({ _id: id }).exec((err, docs) => { 
                 if(err) reject(err);
                 resolve(docs);
             });

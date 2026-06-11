@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cortes365</title>
+    <link rel="shortcut icon" href="vistaSolicitudDatos/img/AppManager.ico" type="image/x-icon">
+    <link rel="stylesheet" href="vistaSolicitudDatos/style.css">
+    <link rel="stylesheet" href="vistaSolicitudDatos/mod/boxModel.css">
+    <link rel="stylesheet" href="vistaSolicitudDatos/cssTable.css">
+</head>
+<body id="body">
+    <header>
+        <section title="Volver a la página principal">
+            <img src="vistaSolicitudDatos/img/LOGO-SLIDER.png">
+            <div>
+                <h1><a href="/">Consultas de cortes365</a></h1>
+            </div>
+            
+        </section>
+        <div id="text"> 
+            <div >
+                <h2>
+
+                </h2>
+            </div>
+        </div>
+    </header>
+    <div id="img2" class="intro-page">
+            <div>
+                <img draggable="false" src="vistaSolicitudDatos/img/engranaje1.png" alt="" class="imgr" id="imgr1"><img src="vistaSolicitudDatos/img/engranaje2.png" alt="" class="imgr" id="imgr2">
+            </div>
+            
+            <img src="vistaSolicitudDatos/img/LOGO-SLIDER.png" alt="" width="200px">
+            <div class="progress">
+                
+                <div class="progress-barra">
+                    <div class="progress-text"><p>Cargando</p></div>
+                </div>
+              
+            </div>
+    </div>
+    <main class="main">
+       
+    </main>
+    <aside>
+        <div>
+            <div>
+                <h2>Campo de consultas</h2>
+                <div>
+                    <article>
+                        <select name="favoriteOnly" id="local" class="" value="">
+                           <option>Seleccione un establecimiento</option>
+                        </select>
+                        
+                        <select name="" id="dia" value="">
+                            <option>Seleccione el dia</option>
+                            <option >Lunes</option>
+                            <option >Martes</option>
+                            <option >Miercoles</option>
+                            <option >Jueves</option>
+                            <option >Viernes</option>
+                            <option >Sabado</option>
+                            <option >Domingo</option>
+                        </select>
+                        
+                        <!--
+                        <input type="date" id="date" name="trip-start"
+                            value="2020-07-22"
+                             min="2020-07-01" max="2025-12-31">
+                        -->
+                        <input id="btn-submit-find" class="submit" type="button" value="Buscar por local" title="solicitar informacion al servidor">
+                        <input id="btn-submit" class="submit2" type="button" value="Ultimos 50 cortes" title="solicitar informacion al servidor">
+                    </article>
+                    
+                    <div>
+                        <img src="vistaSolicitudDatos/img/Captura.PNG" alt="none" class="img"id="img-local">
+                       
+                        <section>
+                            <h3 id="text-1">Elije el local y seleccione </h3> 
+                            <h3 id="text-2">la fecha que desea consultar</h3>
+                            <h3 id="text-3"></h3>
+                        </section>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </aside>
+
+
+    <div class="bloqueo-pantalla" id="bloqueo-pantalla">
+        <div class="ventana-emergente" id="ventana-emergente">
+            <h1 class="tipo-mensaje" id="tipo-mensaje">Error</h1><br>
+            <button class="exit" id="exit">x</h1></button>
+            <p class="descripcion-mensaje" id="descripcion-mensaje">Asegurarse de hacerlo bien es lo mejor!</p>
+            <img class="logo-alerta" src="vistaSolicitudDatos/img/logoAmazonasRenderizado.PNG" alt="" width="150px">
+        </div>
+    </div>
+
+    <div class="bloqueo-pantalla2" id="bloqueo-pantalla2">
+        <div class="ventana-emergente2" id="ventana-emergente2">
+            <h1 class="tipo-mensaje2" id="tipo-mensaje2">Error</h1><br>
+            <button class="exit2" id="exit2">x</h1></button>
+            <p class="descripcion-mensaje2" id="descripcion-mensaje2">Asegurarse de hacerlo bien es lo mejor!</p>
+            <div class="btn-confirt-container">
+                <button class="confirt" id="confirt">Aceptar</button><button class="confirt" id="cancel-config">Cancelar</button>
+            </div>
+             
+            <img class="logo-alerta2" src="vistaSolicitudDatos/img/logoAmazonasRenderizado.PNG" alt="" width="150px">
+        </div>
+    </div>
+    <script src="./dependency/html2canvas.min.js"></script>
+    <script src="vistaSolicitudDatos/data.js"></script>
+    <script src="vistaSolicitudDatos/index.js"></script>
+    <script src="vistaSolicitudDatos/mod/boxModel.js"></script>
+</body>
+</html>

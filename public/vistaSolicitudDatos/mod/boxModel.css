@@ -1,0 +1,191 @@
+.bloqueo-pantalla{
+    background-color: rgba(0, 0, 0, 0.699);
+    position: fixed;
+    top: 0;
+    width: 100%;
+    height: 100vh;
+    display:none;
+    z-index: 100;
+    animation: suavizadoPantalla .4s linear;
+}
+@keyframes suavizadoPantalla{
+    0%{
+        background-color: rgba(0, 0, 0, 0);
+    }
+    50%{
+        background-color: rgba(0, 0, 0, 0.404);
+    }
+    100%{
+        background-color: rgba(0, 0, 0, 0.699);
+    }
+}
+.ventana-emergente{
+    width: 420px;
+    min-height: 220px;
+    position: relative;
+    padding-top: 10px;
+    padding-left: 30px;
+    padding-right: 30px;
+    padding-bottom: 10px;
+    top: 35%;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    font-weight: bold;
+    font-size: 1.5rem;
+    color:rgb(0, 64, 148);
+    background-color: rgb(235, 235, 235);
+    border: 5px solid rgba(224, 76, 17, 0);
+    box-shadow: 10px 10px 20px #000;
+    display:none;
+    z-index: 110;
+}
+
+@media (max-width: 600px) {
+    .ventana-emergente{
+        width: 220px;
+        font-size: 1rem;
+    }
+    .tipo-mensaje{
+        color: rgb(180, 14, 14);
+        font-weight: bold;
+    }
+    .descripcion-mensaje{
+        position: relative;
+        margin-left: auto;
+        margin-right: auto;
+        display: inline-block;
+    }
+}
+.tipo-mensaje{
+    color: rgb(180, 14, 14);
+    font-weight: bold;
+    margin-top: 20px;
+}
+.descripcion-mensaje{
+    margin-top: 20px;
+}
+.exit{
+    position: absolute;
+    top: 5px;
+    right: 10px;
+    font-weight: bold;
+    color: brown;
+    background-color:rgba(179, 179, 179, 0);
+    border-radius: 5px;
+    border: 2px solid rgb(8, 33, 112);
+    width: 30px;
+    height: 35px;
+    font-size: 1.3rem;
+    cursor: pointer;
+    padding-bottom: 10px;
+}
+.exit:hover{
+    color: rgb(219, 127, 52);
+    background-color:rgb(206, 206, 206);
+}
+.logo-alerta{
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    height: 50px;
+    width: 120px
+}
+.bloqueo-pantalla2{
+    background-color: rgba(0, 0, 0, 0.699);
+    position: fixed;
+    top: 0;
+    width: 100%;
+    height: 100vh;
+    display:none;
+    z-index: 100;
+    animation: suavizadoPantalla .4s linear;
+}
+@keyframes suavizadoPantalla{
+    0%{
+        background-color: rgba(0, 0, 0, 0);
+    }
+    50%{
+        background-color: rgba(0, 0, 0, 0.404);
+    }
+    100%{
+        background-color: rgba(0, 0, 0, 0.699);
+    }
+}
+.ventana-emergente2{
+    width: 420px;
+    min-height: 220px;
+    position: relative;
+    padding-top: 10px;
+    padding-left: 30px;
+    padding-right: 30px;
+    padding-bottom: 10px;
+    top: 35%;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    font-weight: bold;
+    font-size: 1.5rem;
+    font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    color:rgb(0, 64, 148);
+    background-color: rgb(235, 235, 235);
+    border: 5px solid rgba(224, 76, 17, 0);
+    box-shadow: 10px 10px 20px #000;
+    display:none;
+    z-index: 110;
+}
+.tipo-mensaje2{
+    color: rgb(180, 14, 14);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    font-weight: bold;
+}
+.descripcion-mensaje2{
+    position: relative;
+    top: -50px;
+    margin-left: auto;
+    margin-right: auto;
+    display: inline-block;
+}
+.exit2{
+    position: absolute;
+    top: 5px;
+    right: 10px;
+    font-weight: bold;
+    color: brown;
+    background-color:rgba(179, 179, 179, 0);
+    border-radius: 5px;
+    border: 2px solid rgb(8, 33, 112);
+    width: 30px;
+    height: 35px;
+    font-size: 1.3rem;
+    cursor: pointer;
+    padding-bottom: 10px;
+}
+.exit2:hover{
+    color: rgb(219, 127, 52);
+    background-color:rgb(206, 206, 206);
+}
+.logo-alerta2{
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    height: 50px;
+    width: 120px
+}
+.confirt{
+    bottom: 500px;
+    margin-left: 20px;
+    margin-right: 20px;
+    border: 1px medium rgb(5, 19, 99);
+    cursor: pointer;
+    background-color: rgb(212, 212, 212);
+    
+    width: 80px;
+    height: 30px;
+    font-weight: bold;
+}
+.btn-confirt-container{
+    position: absolute;
+    bottom: 20%;
+    right: 120px;
+}

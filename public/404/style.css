@@ -1,0 +1,39 @@
+@font-face{
+    font-family: "BlackOpsOne";
+    src: url("../Lobby/font/Black_Ops_One/OFL.txt");
+    src: url("../Lobby/font/Black_Ops_One/BlackOpsOne-Regular.ttf");
+}
+@font-face {
+    font-family: 'Roboto';
+    src: url('../Lobby/font/Roboto/Roboto-Regular.ttf') format('truetype');
+    font-style: normal;
+    font-weight: normal;
+}
+*{
+    margin: 0;
+    padding: 0;
+    font-family: "Roboto";
+}
+body{
+    min-height: 100vh;
+    background-color: rgb(206, 206, 206);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+div h1{
+    font-size: 10rem;
+    font-family: "BlackOpsOne";
+    color: rgb(32, 32, 32);
+    font-weight: lighter;
+}
+
+div a{
+    text-decoration: none;
+    color:rgb(32, 32, 32);
+    text-decoration-line: underline;
+}
+div a h2{
+    font-size: 140%
+}

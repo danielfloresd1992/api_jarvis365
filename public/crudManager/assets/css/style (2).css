@@ -1,0 +1,400 @@
+.asideFranchise-titlecontain {
+    width: 100%;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 1rem;
+    border-bottom: 1px solid rgb(141, 141, 141);
+    padding: 0.5rem 0;
+    position: sticky;
+    top: 0px;
+    background-color: #121c2b;
+}
+.asideFranchise-img{
+    width: 30px;
+    height: 30px;
+    filter: contrast(0.1);
+}
+.delete-franchise{
+    filter: unset
+}
+.asideFranchise-subTitle{
+    color: #848484;
+    cursor:initial
+}
+.asideFranchise-li {
+    font-family: system-ui;
+    font-size: 1rem;
+    padding: 0.2rem 0;
+    color: rgb(141, 141, 141);
+}
+.asideFranchise-li:hover{
+    cursor: pointer;
+    color:rgb(255, 255, 255)
+}
+.main-localContain {
+    padding: 4rem 2rem;
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    flex-direction: row;
+}
+.ManagerContain {
+    position: relative;
+    width: 300px;
+    height: 350px;
+    box-shadow: inset 0 0 10px rgb(172 172 172);
+    background-color: #fff;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border: 10px solid;
+    border-image-slice: 1;
+    border-width: 3px;
+    border-image-source: linear-gradient(60deg, #a9a9a9, #424241);
+    transition: all .2s ease-in;
+}
+.ManagerContain:hover{
+    border-image-source: linear-gradient(0deg, #111681, #d38208);
+    animation: bordermain 2.5s infinite
+}
+@keyframes bordermain {
+    0%{
+        border-image-source: linear-gradient(0deg, #e15f00, #1c40c1);
+    }
+    50%{
+        border-image-source: linear-gradient(120deg, #e15f00, #1c40c1);
+    }
+    100%{
+        border-image-source: linear-gradient(360deg, #e15f00, #1c40c1);
+    }
+}
+
+
+.ManagerContain-imgContain {
+    width: 100%;
+    height: 50%;
+    position: relative;
+    display: flex;
+    overflow-x: scroll;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+}
+.ManagerContain-imgContain::-webkit-scrollbar{
+    display: none;
+}
+.ManagerContain-btnScrollContain {
+    width: 100%;
+    position: absolute;
+    top: 145px;
+    display: flex;
+    justify-content: space-between;
+    padding: 0rem;
+}
+.ManagerContain-btnScroll {
+    width: 45px;
+    height: 45px;
+    background-color: #999999c2;
+    border: none;
+    border-radius: 10px;
+    color: #e1e1e1;
+    font-size: 2rem;
+    text-shadow: 0 0 5px #101010;
+    transition: all .2s ease-out;
+}
+.ManagerContain-btnScroll:hover{
+    background-color: #163881;
+    color: #fff;
+    cursor: pointer;
+}
+.ManagerContain-imgManager {
+    flex: 0 0 100%;
+    width: 100%;
+    cursor: pointer;
+    object-fit: cover;
+    scroll-snap-align: center;
+    outline:1px solid #000;
+}
+
+.ManagerContain-imgManager-characterContain {
+    width: 60px;
+    height: 60px;
+    left: 10px;
+    top: 10px;
+    position: absolute;
+    z-index: 1;
+    border-radius: 100px;
+    overflow: hidden;
+    box-shadow: 1px 1px 5px #000;
+}
+.ManagerContain-imgManager-characterImg {
+    width: 100%;
+    height: 100%;
+}
+.ManagerContain-dataContain {
+    width: 100%;
+    height: 25%;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.ManagerContain-dataName {
+    text-align: center;
+    font-weight: bold;
+    font-size: 1.4rem;
+    color: #18316a;
+}
+.ManagerContain-datalocation{
+    text-align: center;
+    color: #9e0d0d;
+    font-style: italic;
+}
+.ManagerContain-btnContain {
+    height: 25%;
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+.ManagerContain-btn {
+    width: 33.333333333333336%;
+    height: 100%;
+    border: none;
+    background-color: transparent;
+    outline: solid 0.1px #dddddd;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.ManagerContain-btn:hover{
+    background-color: rgba(240, 248, 255, 0.596);
+    cursor: pointer;
+}
+.ManagerContain-btnImg {
+    width: 40%;
+    height: 40%;
+    filter: opacity(0.5);
+}
+
+/*      form input manager       */
+.form {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2rem;
+    align-items: flex-start;
+}
+.form-inputContain {
+    width: 45%;
+    background-color: #fff;
+    border-radius: 5px;
+    padding: 2rem 1rem;
+    box-shadow: 0 0 5px #383838;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: center;
+    align-items: flex-start;
+    align-content: flex-start;
+}
+.form-inputContainTitle{
+    margin: 1rem;
+    color:#616060
+}
+.form-label {
+    display: flex;
+    flex-direction: column;
+    width: 45%;
+    color: #616060;
+    font-size: 1.2rem;
+}
+.form-input {
+    width: 100%;
+    font-size: 1.2rem;
+    padding: 0.2rem 0;
+    border: none;
+    background-color: #f3f3f3;
+    border-bottom: 1px solid #959595;
+    margin: 0.5rem 0;
+}
+.form-input:focus, .form-input:focus-visible{
+    outline: none;
+    border-bottom: 1px solid #010a81;
+}
+.select-local-alternative {
+    background-color: #9b9b9b;
+    color: #fff;
+    border: none;
+    padding: 0.2rem;
+    font-size: 1.2rem;
+    margin: 1rem 0;
+    border-radius: 2px;
+}
+.select-local-alternative:focus,.select-local-alternative:focus-visible{
+    outline: none;
+}
+.form-inputContain-divLocalAlternative {
+    padding: 0.5rem;
+    width: 90%;
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.local-alternative-div {
+    position: relative;
+    background-color: #010088;
+    color: #fff;
+    padding: 0.4rem 1.5rem 0.4rem 0.5rem;
+    font-size: 1rem;
+    border-radius: 5px;
+    box-shadow: 2px 2px 5px #000;
+}
+.local-alternative-p{
+
+}
+.local-alternative-button{
+    position: absolute;
+    right: 5px;
+    top: 2px;
+    background-color: transparent;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    font-weight: bold;
+    text-shadow: #000;
+    color: rgb(139, 139, 139);
+}
+.local-alternative-button:hover{
+    color:#ffff
+}
+.form-divContainImg {
+    padding: 1rem;
+    width: 45%;
+    background-color: #fff;
+    border-radius: 5px;
+    box-shadow: 0 0 5px #373737;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 1rem;
+}
+.form-divZoneDrop {
+    width: 90%;
+    height: 300px;
+    border: dotted 3px #7a7a7a;
+    background-color: #87878700;
+    z-index: 20
+}
+.drag-enter{
+    border: dotted 3px #0d0a82;
+    background-color: #bebebe;
+}
+.form-divZoneDrop-img{
+    width: 100%;
+    height: 100%;
+    background-color: transparent;
+    border: none;
+}
+.form-divZoneDrop-img{
+    width: 100%;
+    height: 100%;
+}
+/**************************/
+
+.form-divImgspreview {
+    width: 90%;
+    height: 80px;
+    border: solid 1px #000;
+    padding: 0.2rem;
+    display: flex;
+    gap: 0.2rem;
+    transition: all .2s linear;
+}
+.img-previewDiv{
+    position: relative;
+}
+.img-preview {
+    width: 100px;
+    height: 100%;
+    position: relative;
+    cursor: pointer;
+}
+.div-img-preview {
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+    background-color: #00000094;
+
+}
+.img-preview-window{
+    width: 60%;
+    height: 500px;
+    box-shadow: 2px 2px 20px #000;
+    object-fit: cover;
+}
+.imgContain{
+    display: flex;
+    gap: 0.7rem;
+    width: 100%;
+    justify-content: center;
+    align-items: center;
+    flex-direction: row;
+    padding: 0.5rem;
+    background-color: #000000ad;
+}
+.imgContain-img {
+    width: 100px;
+    height: 80px;
+    cursor: pointer;
+}
+.imgContain-img:focus, .imgContain-img:focus-visible {
+    outline: 2px solid rgb(224, 82, 0);
+}
+.img-preview:focus, .img-preview:focus-visible{
+    outline: 2px solid rgb(0, 0, 94);
+}
+.img-preview-deletebtn {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 20px;
+    height: 20px;
+    color: #fff;
+    background-color: transparent;
+    cursor: pointer;
+    font-size: 1.5rem;
+    text-shadow: 0 0 5px black;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: none;
+}
+.img-preview-deletebtn:hover{
+}
+.form-btnSubmit{
+    width: 90%;
+    border: none;
+    font-size: 1.5rem;
+    padding: 0.5rem 0;
+    border-radius: 5px;
+    transition: all .1s linear;
+}
+.form-btnSubmit:hover{
+    background-color: #07336b;
+    color: #fff;
+    cursor: pointer;
+}

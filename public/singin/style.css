@@ -1,0 +1,622 @@
+@font-face {
+    font-family: 'Roboto';
+    src: url('../font/Roboto/Roboto-Regular.ttf') format('truetype');
+    font-style: normal;
+    font-weight: normal;
+}
+@font-face {
+    font-family: 'Coda_Caption';
+    src: url('../font/font_family/Coda_Caption/CodaCaption-ExtraBold.ttf') format('truetype');
+    font-style: normal;
+    font-weight: normal;
+}
+@font-face{
+    font-family: "BlackOpsOne";
+    src: url("../font/Black_Ops_One/OFL.txt");
+    src: url("../font/Black_Ops_One/BlackOpsOne-Regular.ttf");
+}
+
+@font-face{
+    font-family: "faustina";
+    src: url("../font/faustina/Faustina-VariableFont_wght.ttf");
+    
+}
+
+    
+:root {
+    --input: rgb(8, 46, 77);
+    --input2: 2px 2px 5px rgb(0, 0, 0);
+    --input3:  rgb(255, 102, 0);
+    --input-color: rgb(231, 231, 231);
+    --color: rgb(255, 255, 255);
+    --cursor: text;
+    /*banner*/
+    --color-tema1: rgb(190, 190, 190);
+    /*logo*/
+    --color-tema2: rgb(141, 141, 141);
+    /*img box*/
+    --color-tema3: rgb(57, 61, 73);
+    /*body*/
+    --color-3: rgb(230, 230, 230);
+    /*aside*/
+    --color-4: #fff;
+    /*
+        --color-tema1: rgb(16, 134, 143);
+    */
+    --width: 0px;
+  }
+*{
+    padding: 0;
+    margin:0;
+    box-sizing: border-box;
+    font-family: 'Roboto';
+}
+
+
+body {
+    min-height: 100vh;
+    display: flex;
+    background-color: #fff;
+    font-family: 'Roboto';
+    align-content: flex-start;
+    flex-direction: column;
+}
+
+
+.header-banner {
+    display: none;
+    top: 0;
+    position: fixed;
+    width: 100%;
+    background-color: rgb(51 77 8 / 47%);
+    z-index: 20;
+
+    position: sticky;
+    top: 0;
+    width: 100%;
+}
+
+
+.banner{
+    display: flex
+}
+
+
+.banner-kink{
+    padding: 10px 20px 10px 20px;
+    text-decoration: none;
+    color: #fff;
+    font-size: 1rem;
+    font-weight: bold;
+}
+
+
+.banner-kink:hover{
+    text-decoration: overline underline;
+}
+
+
+.prensetantionContent {
+    position: relative;
+    width: 100%;
+    background-image: radial-gradient( #378009, #e6ff68);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    z-index: 1;
+    flex-direction: column;
+}
+
+
+.decorationpresentation{
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+
+.content {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    flex-direction: column;
+    width: 100%;
+    min-height: 100vh;
+    z-index: 100;
+    box-shadow: 1px 2px 16px 1px #000000;
+    border-radius: 0px;
+    overflow: hidden;
+    animation: forForm 3s cubic-bezier(0.25, 0.46, 0.45, 0.94), spectrum 1s linear;
+}
+
+
+.imgCelContent{
+    display: none;
+}
+
+
+.textContain{
+    display: none;
+}
+
+
+
+
+@keyframes forForm{
+    0%{
+        transform: translateY(20px)
+
+    }
+    50%{
+        transform: translateY(-5px)
+    }
+    100%{
+        transform: translateY(0px)
+    }
+}
+
+@keyframes spectrum{
+    from{
+        filter: opacity(0);
+    }
+    to{
+        filter: opacity(1);
+    }
+}
+
+
+
+.themes {
+    position: absolute;
+    width: 150px;
+    right: 100px;
+    top: 120px;
+    transform: rotateZ(357deg);
+}
+
+
+.theme1{
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    border-radius: 50px;
+    background-color: #fff;
+    top: 100px;
+    right: 100px;
+    box-shadow: 0 0 120px #fff;
+    animation: Moon 8s infinite linear
+}
+@keyframes Moon {
+    0%{
+        box-shadow:  0 0 50px #fff;
+    }
+    50%{
+        box-shadow: 0 0 120px #fff;
+    }
+    100%{
+        box-shadow: 0 0 50px #fff;
+    }
+}
+
+
+.form-itemsContent{
+    width: 100%;
+}
+
+
+.form {
+    width: 100%;
+    min-height: 50vh;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.8rem;
+    color: #ffffff;
+    justify-content: space-evenly;
+}
+
+
+.form-p {
+    font-size: 1.4rem;
+    text-align: center;
+}
+
+
+.form-label {
+    width: 100%;
+    font-size: 1.2rem;
+    padding: 0.5rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+
+.form-label-p{
+    transition: .3s ease-in;
+}
+
+.intro{
+    transform: translateY(31px) translateX(10px);
+}
+
+
+
+.form-input {
+    width: 100%;
+    font-size: 1rem;
+    padding: 0.5rem 0.3rem;
+    border: 0;
+    border-bottom: 1px solid rgb(77, 65, 8);
+    background-color: transparent;
+    color: #fff;
+    z-index: 10;
+}
+
+
+.form-input:focus,.form-input:focus-visible{
+    outline: none;
+    border-bottom: 1px solid var(--input3);
+}
+
+
+.inputBtnContain{
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+}
+
+
+.password{
+    width: 90%;
+}
+
+
+.btnPassword{
+    width: 10%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+}
+
+
+.btnPassword-img {
+    width: 100%;
+    filter: invert(1);
+}
+
+
+.form-btnSubmit {
+    position: relative;
+    width: 100%;
+    font-size: 1.3rem;
+    margin: 1rem 0 0 0;
+    color: #3a4425;
+    font-weight: bold;
+    padding: 0.5rem;
+    border: none;
+    background-color: rgb(255 255 255);
+    cursor: pointer;
+    border-radius: 5px;
+    overflow: hidden;
+    z-index: 2;
+    transition: all .5s linear;
+}
+
+
+.form-btnSubmit::before{
+    content: '';
+    position: absolute;
+    display: block;
+    filter: brightness();
+    top: 0;
+    left: 0;
+    width: 0%;
+    height: 100%;
+    background-color: rgb(67, 83, 7);
+    
+    z-index: -1;
+}
+
+.form-btnSubmit:hover{
+    color: #fff
+}
+
+.form-btnSubmit:hover::before{
+    width: 100%;
+    transition: all .5s linear;
+}
+
+
+.text-mens{
+    color: rgb(248, 0, 0);
+    text-align: center;
+    bottom: 30px;
+}
+
+
+.form-btnSubmit:disabled{
+    background-color: var(--input-color);
+}
+
+
+.presentation {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 50vh;
+    background-color: #fff;
+}
+
+
+.presentation-img{
+    position: absolute;
+    height: 100%;
+    width: 100%;
+    z-index: -1;
+}
+
+
+.logo-amazonas {
+    position: absolute;
+    width: 180px;
+    bottom: 20px;
+    display: none;
+}
+
+
+.titleContain{
+    display: flex;
+    gap: 0.5rem;
+    flex-direction: column;
+    z-index: 1000;
+}
+
+
+.invert {
+    display: block;
+    filter: contrast(0.5);
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+
+.title {
+    position: relative;
+    width: 100%;
+}
+
+.title-h2{
+    text-align: center;
+    font-family: "BlackOpsOne";
+    color: #fff;
+    font-size: 2rem;
+    text-shadow: 2px 0 0 rgb(0, 0, 0), -2px 0 0 rgba(105, 105, 105, 0), 0 5px 0 #000, 0 -2px 0 rgba(141, 141, 141, 0), 3px 3px rgba(133, 133, 133, 0), -5px -2px 0 rgba(122, 122, 122, 0), 6px -4px 0 rgba(141, 139, 139, 0), -1px 1px 0 rgb(134, 133, 133);
+}
+
+
+.title-img {
+    width: 250px;
+    position: absolute;
+    z-index: -1;
+    right: 30px;
+    top: -51px;
+    filter: hue-rotate(263deg);
+}
+
+
+.sub-title {
+    color: #787878;
+    text-align: center;
+    font-weight: 100;
+}
+
+
+@media screen and (min-width : 767px) {
+    .header-banner{
+        display: flex;
+    }
+
+    .prensetantionContent {
+        height: 750px;
+    }
+
+
+    .decorationpresentation{
+        display: block;
+    }
+
+    .content {
+        width: unset;
+        min-height: auto;
+        flex-direction: unset;
+        border-radius: 0px;
+        width: 100%;
+        height: 100%;
+        
+    }
+
+    .imgCelContent{
+        position: absolute;
+        left: 50px;
+        top: 80px;
+        animation: smartphones 2s ease;
+    }
+
+
+    .textContain{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0 rem;
+        gap: 1rem;
+    }
+
+    .textContain-h1{
+        font-size: 2rem;
+        font-family: faustina;
+        text-shadow: 2px 2px 5px #000;
+    }
+
+    .textContain-p {
+        font-size: 1.2rem
+    }
+
+
+    .titleContain{
+        display: none;
+    }
+
+    .themes{
+    }
+    
+
+    .form {
+        width: 50%;
+        min-height: 350px;
+    }
+
+
+    .form-itemsContent {
+        width: 300px;
+        height: 350px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-evenly;
+    }
+
+
+    .presentation {
+        width: 50%;
+        min-height: 100%;
+        background-color: transparent;
+    }
+
+
+    .imgCelContent{
+        display: block;
+    }
+
+    .presentation-img{
+        width: 400px;
+    }
+
+    .section-secound{
+        min-height: 100vh;
+        width: 100%;
+    }
+
+
+    .logo-amazonas{
+        display: block;
+    }
+
+
+}
+
+
+
+/*particle*/
+
+
+#particles-js {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    background-image: radial-gradient(#0e8009, #d3fd00);
+}
+
+
+.video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: opacity(0.3);
+}
+
+
+.box {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    box-shadow: 2px 2px 11px 2px #252525;
+    border-radius: 5px;
+    animation: boxAnimation 7s cubic-bezier(0.41, -0.02, 0.57, 1.08) infinite;
+    border: soli 2px #fff;
+    backdrop-filter: blur(10px);
+    background-color: #56800a3d;
+}
+
+
+@keyframes boxAnimation {
+    0%{
+        transform: translateY(0px);
+    }
+   
+    50%{
+        transform: translateY(20px);
+    }
+    
+    100%{
+        transform: translateY(0px);
+    }
+}
+
+.box1{
+    bottom: 200px;
+    left: 50px;
+    height: 50px;
+    width: 50px;
+}
+
+
+.box2{
+    top: 300px;
+    right: 100px;
+    height: 100px;
+    width: 100px;
+}
+
+
+.box3{
+    bottom: 100px;
+    right: 500px;
+    height: 80px;
+    width: 80px;
+}
+
+
+.box4{
+    bottom: 80px;
+    right: 150px;
+    height: 80px;
+    width: 80px;
+}
+
+
+.box5{
+    top: 80px;
+    left: 400px;
+    height: 150px;
+    width: 150px;
+}
+
+
+@keyframes smartphones {
+    from{
+        filter: opacity(0);
+        transform: translateY(-50px)
+    }
+    to{
+        filter: opacity(1);
+        transform: translateY(0px)
+    }
+}

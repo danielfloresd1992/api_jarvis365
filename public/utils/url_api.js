@@ -1,0 +1,1 @@
+export default location.hostname === '72.68.60.201' ?  '72.68.60.201:3006/api_jarvis_dev/v1' : '72.68.60.254:443/api_jarvis/v1';         

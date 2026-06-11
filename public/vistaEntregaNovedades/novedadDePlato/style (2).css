@@ -1,0 +1,88 @@
+@font-face {
+    font-family: "Ubuntu_Condensed";
+    src: url("./Lobby/font/Ubuntu_Condensed/UFL.txt");
+    src: url("./Lobby/font/Ubuntu_Condensed/UbuntuCondensed-Regular.ttf");
+}
+*{
+    padding: 0;
+    margin: 0;
+    
+}
+
+body{
+    min-height: 100vh;
+    min-height: 100vh;
+    background-color: rgb(255, 255, 255);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: 150px 0px 100px 0px;
+}
+
+header{
+    position: fixed;
+    background-color: rgb(255, 123, 0);
+    width: 100%;
+    top: 0;
+    height: 100px;
+    box-shadow: 2px 2px 40px #000;
+    display: flex;
+    align-items: center;
+    z-index: 100;
+}
+
+header div:first-child{
+    background-color:rgb(0, 23, 66);
+    height: 100%;
+    display:flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0px 20px 0px 20px;
+    margin: 0px 10px 0px 0px ;
+}
+.img1{
+    width: 80px;
+    position: relative;
+    -webkit-animation: 1.5s rotate linear infinite;
+    animation: 1.5s rotate linear infinite;
+    -webkit-transform-origin: 50% 50%;
+    transform-origin: 50% 50%;
+}
+header div h1{
+    color:rgb(255, 255, 255);
+}
+.img-container{
+    width: 200px;
+    height: 300px;
+    background-color: rgb(0, 16, 37);
+    border: 3px dotted rgb(196, 196, 196);
+    z-index: 10;
+    margin:30px
+}
+
+.img-container.active{
+    background-color: rgba(14, 48, 121, 0.973);
+    border: 3px dotted rgb(255, 255, 255);
+}
+.img-container.desaptive{
+    background-color: rgba(21, 76, 153, 0);
+    border: 1px solid rgb(83, 83, 83);
+}
+
+.imd-demora{
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+.input-container{
+    margin: 30px
+}
+.input-container input{
+    margin: 5px 0px 10px 0px
+}
+.input-container select{
+    margin: 5px 0px 10px 0px
+}

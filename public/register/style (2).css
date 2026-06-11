@@ -1,0 +1,138 @@
+@font-face {
+    font-family: 'Roboto';
+    src: url('../font/Roboto/Roboto-Regular.ttf') format('truetype');
+    font-style: normal;
+    font-weight: normal;
+}
+
+*{
+    padding: 0;
+    margin:0;
+    font-family: 'Roboto';
+}
+
+body{
+    min-height: 100vh;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgb(0, 11, 19);
+}
+
+.box-form{
+    width: 720px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    background-color: rgb(255, 255, 255);
+}
+
+.titulo{
+    width: 100%;
+    padding: 10px 0px 10px 0px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background-color: rgb(255, 102, 0);
+}
+
+.containerInput{
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+}
+form{
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+section{
+    width: 100%;
+    margin: 20px 0px 20px 0px;
+    display: flex;
+    justify-content: center;
+    align-items:center;
+    flex-wrap: wrap;
+}
+label{
+    display: flex;
+    flex-direction: column;
+    width: 300px;
+    margin: 10px 20px 10px 20px;
+    overflow: hidden;
+}
+input{
+    width: 100%;
+    padding: 8px;
+    margin-top:5px;
+    height: 10px;
+    border:  2px solid rgba(240, 236, 232, 0);
+    background-color: rgb(1, 26, 80);
+    color: #fff; 
+    font-size: 1.2rem;
+}
+input.active{
+    background-color: rgb(255, 255, 255);
+    color: rgb(192, 31, 31); 
+    border-bottom:1px solid rgb(255, 0, 0);
+}
+input:focus{
+    outline:1px solid rgb(245, 98, 0);
+}
+.chekbox{
+    display:flex;
+    align-items: center;
+    text-align:center;
+    
+}
+input[type = checkbox]{
+    margin: 5px;
+    background-color: rgb(1, 26, 80);
+    color: #fff;
+    width: 20px;
+    height: 20px
+}
+
+/*particle*/
+#particles-js{
+    position: absolute;
+    width: 100%;
+    height: 100%;
+  
+    z-index: -1;
+    background-color: rgb(0, 11, 19);
+}
+
+.btn{
+    width: 110px;
+    height: 40px;
+    margin-bottom: 20px;
+    border: none;
+    background-color: rgb(245, 118, 0);
+    cursor:pointer;
+    color: #fff;
+    font-weight: bold;
+    transition: .1s ease-in;
+}
+
+.btn:hover{
+    background-color: rgb(250, 135, 41);
+    box-shadow: 5px 5px 10px #000;
+    transform: scale(105%);
+}
+.btn:disabled{
+    background-color: rgb(206, 206, 206);
+}
+
+.link{
+    margin: 10px 0px 30px 0px;
+    text-decoration: none;
+    color:rgb(0, 11, 19);
+    text-decoration: underline;
+    font-weight: bold;
+}

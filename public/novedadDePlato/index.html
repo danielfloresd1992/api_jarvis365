@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="style.css">
+
+</head>
+<body>
+    <header>
+        <a href="">
+            <img src="../Lobby/img/tuerquin_removebg_preview.png" alt="" class="img1">
+        </a>
+        <div>
+            <h1 id="header-text">Complete los campos</h1>
+        </div>
+    </header>
+
+    <div class="img-container" id="container-demora">
+    </div>
+    
+    <div class="input-container">
+        <form id="form" action="" method="post">
+
+            <h4>Selecione la franquicia</h4>
+            <select name="" id="select-franquicia" class="franquicia" value="">
+                <option>Seleccione una franquicia</option>
+                <option>Bocas</option>
+                <option>Francisca</option>
+                <option>Mister</option>
+            </select>
+
+            <h4>Selecione la Localidad</h4>
+            <select name="" id="select-local" value="Selecione la Localidad" class="local">
+            </select>
+
+            <h4>Tipo de plato</h4>
+            <select name="" id="select-plato" value="" class="plato">
+            </select>
+
+            <h4>Numero de mesa o orden</h4>
+            <input type="number" name="" id="number-table" step="any">
+                
+            <h4>Tiempo toma de orden</h4>
+            <article>
+                <select name="" id="hour-start" value="" class="selected">
+                    <option>hora</option>
+                </select>
+
+                <select name="" id="minute-start" value="" class="selected">
+                    <option>minutos</option>
+                </select>
+                <select name="" id="second-start" value="" class="selected">
+                    <option>Segundos</option>
+                </select>
+            </article>
+
+            <h4>Tiempo listo en tablet</h4>
+            <article>
+                <select name="" id="hour-end" value="" class="selected">
+                    <option>hora</option>
+                </select>
+
+                <select name="" id="minute-end" value="" class="selected">
+                    <option>minutos</option>
+                </select>
+                <select name="" id="secound-end" value="" class="selected">
+                    <option>Segundos</option>
+                </select>
+            </article>
+
+            <input type="submit" id="btn-submit" class="btn-submit" value="Enviar">
+
+        </form>
+    </div>
+
+   
+</body>
+<script src="index.js"></script>
+</html>

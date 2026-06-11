@@ -1,0 +1,295 @@
+:root {
+    --input: rgb(0, 73, 157);
+    --input2: 2px 2px 5px rgb(0, 0, 0);
+    --input3: rgb(255, 100, 0);
+    --input-color: rgb(231, 231, 231);
+    --color: rgb(255, 255, 255);
+    --cursor: text;
+    /*banner*/
+    --color-tema1: rgb(190, 190, 190);
+    /*logo*/
+    --color-tema2: rgb(141, 141, 141);
+    /*img box*/
+    --color-tema3: rgb(57, 61, 73);
+    /*body*/
+    --color-3: rgb(230, 230, 230);
+    /*aside*/
+    --color-4: #fff;
+    /*
+        --color-tema1: rgb(16, 134, 143);
+    */
+  }
+
+@font-face {
+    font-family: "Ubuntu_Condensed";
+    src: url("../Lobby/font/Ubuntu_Condensed/UFL.txt");
+    src: url("../Lobby/font/Ubuntu_Condensed/UbuntuCondensed-Regular.ttf");
+}
+*{
+    padding: 0;
+    margin: 0;
+    font-family: "Ubuntu_Condensed";
+}
+
+body{
+    min-height: 100vh;
+    min-height: 100vh;
+    background-color: rgb(219, 219, 219);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: 150px 0px 100px 0px;
+}
+
+header{
+    position: fixed;
+    background-color: rgb(255, 123, 0);
+    width: 100%;
+    top: 0;
+    height: 100px;
+    box-shadow: 2px 2px 40px #000;
+    display: flex;
+    align-items: center;
+    z-index: 100;
+}
+
+header a{
+    background-color:rgb(0, 23, 66);
+    height: 100%;
+    display:flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0px 20px 0px 20px;
+    margin: 0px 10px 0px 0px ;
+}
+.img1{
+    width: 80px;
+    position: relative;
+    -webkit-animation: 3s rotate linear infinite;
+    animation: 3s rotate linear infinite;
+    -webkit-transform-origin: 50% 50%;
+    transform-origin: 50% 50%;
+}
+@keyframes rotate {from {transform: rotate(0deg);}
+    to {transform: rotate(360deg);}}
+@-webkit-keyframes rotate {from {-webkit-transform: rotate(0deg);}
+  to {-webkit-transform: rotate(360deg);}}
+
+header div h1{
+    color:rgb(255, 255, 255);
+}
+.img-container{
+    width: 300px;
+    height: 350px;
+    margin:10px 30px 10px 30px;
+    background-color: rgb(0, 16, 37);
+    border: 3px solid rgba(196, 196, 196, 0);
+    z-index: 10;
+    filter: opacity(100);
+    background-color: rgb(255, 255, 255);
+    box-shadow: 2px 2px 5px #000;
+}
+
+.img-container.active{
+    background-color: rgba(14, 48, 121, 0.973);
+    border: 3px dotted rgb(255, 255, 255);
+    filter: opacity(0.4);
+}
+.img-container.desaptive{
+    background-color: rgba(21, 76, 153, 0);
+    border: 3px solid rgb(83, 83, 83);
+    filter: opacity(100);
+}
+
+.imd-demora{
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+.camera{
+    width: 0.1px;
+    height: 0.1px;
+    opacity: 0;
+    overflow: hidden;
+    position: absolute;
+    z-index: -1;
+}
+ label {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    z-index: 100;
+}
+.input-container{
+    position: relative;
+    margin:10px 30px 10px 30px;
+    padding: 20px 10px 20px 10px;
+    background-color: rgb(255, 255, 255);
+    box-shadow: 2px 2px 5px #000000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+.input-container article{
+    margin: 5px 10px 10px 0px;
+    width: 300px;
+}
+
+.input-container article select{
+    border: none;
+    background-color: rgba(0, 0, 0, 0);
+    width: 95px;
+    height: 30px;
+    background-color:  var(--input);
+    border: 2px solid rgba(18, 41, 105, 0);
+    cursor: var(--cursor);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    font-size: 20px;
+    color: #fff;
+    transition: 0.2s ease all;
+}
+
+.input-container article input:focus{
+    border: none;
+    background-color: rgba(0, 0, 0, 0);
+}
+.input-container input::-webkit-datetime-edit-ampm-field {
+    display: none;
+}
+
+.input-container select , input{
+    margin: 5px 0px 10px 0px;
+    width: 300px;
+    height: 30px;
+    border:none;
+    background-color:  var(--input);
+    border: 2px solid rgba(18, 41, 105, 0);
+    cursor: var(--cursor);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    font-size: 20px;
+    color: #fff;
+    transition: 0.2s ease all;
+
+}
+.input-container select.active, input.active{
+    border-radius: 5px;
+    background-color: rgb(255, 214, 214);
+    border: 2px solid rgb(255, 0, 0);
+    color:rgb(0, 0, 0);
+}
+form{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+section{
+    position: relative;
+    width: 350px;
+    height: 300px;
+    margin:10px 30px 10px 30px;
+    background-color: rgb(255, 255, 255);
+    box-shadow: 2px 2px 5px #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+
+section div{
+    top: 0;
+    padding: 25px 0px 25px 0px;
+    position: absolute;
+    width: 100%;
+    background-color: rgb(2, 25, 87);
+    color: #fff;
+    text-align: center;
+    font-size: 1.8em
+}
+
+.input-container .btn-submit{
+    position: relative;
+    display: block;
+    width: 250px;
+    height: 80px;
+    margin: 10px 0px 10px 0px;
+    border: none;
+    background-color: rgb(103, 206, 0);
+    color: #fff;
+    font-weight: bold;
+    font-size: 1.6rem;
+    background-color: rgb(103, 206, 0);
+    cursor: pointer;
+}
+.input-container .btn-submit:disabled{
+    background-color: rgba(103, 206, 0, 0.575);
+    cursor:progress
+}
+.input-container .btn-submit::before{
+    content:'';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 4%;
+    background-color: rgb(128, 255, 0);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.5s ease-in-out;
+}
+.input-container .btn-submit::after{
+    content:'';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 100%;
+    height: 4%;
+    background-color: rgb(128, 255, 0);
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform 0.5s ease-in-out;
+}
+.input-container .btn-submit:hover::before {
+    transform: scaleX(1);
+}
+.input-container .btn-submit:hover::after {
+    transform: scaleX(1);
+}
+.input-container[data-animation="to-left"]  .btn-submit::before {
+    transform-origin: right;
+}
+
+.input-container[data-animation="to-right"]  .btn-submit::after {
+    transform-origin: left;
+}
+
+.input-container .btn-submit:active{
+    background-color: rgb(75, 150, 0);
+}
+
+@media (max-width: 450px){
+    section div{
+        top: 0;
+        padding: 25px 0px 25px 0px;
+        position: absolute;
+        width: 100%;
+        background-color: rgb(2, 25, 87);
+        color: #fff;
+        text-align: center;
+        font-size: 1.4rem
+    }
+    .input-container{
+        margin: 30px;
+        padding: 20px 10px 20px 10px;
+      
+    }
+    .img-container{
+        margin:30px;
+    }
+    
+}

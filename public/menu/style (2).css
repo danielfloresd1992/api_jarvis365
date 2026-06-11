@@ -1,0 +1,359 @@
+
+
+.mainContain {
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    position: absolute;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-around;
+    padding: 50px 0 0 0;
+}
+
+
+.seachContain {
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    gap: 1rem;
+    align-items: center;
+    font-family: sans-serif;
+    justify-content: space-around;
+}
+
+
+.labelSelect{
+    font-size: 1.1rem;
+   
+}
+
+
+
+
+
+#menu-length{
+    font-size: .8rem;
+    font-weight: 700;
+}
+
+
+.list-inputSeach {
+    font-size: 1.2rem;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    color: #3b3b3b;
+    width: 50%;
+}
+
+
+
+
+.listContain {
+    width: 40%;
+    height: 90vh;
+    background-color: #fff;
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem;
+    align-items: center;
+    gap: 1rem;
+}
+
+
+.listContent {
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem;
+    align-items: center;
+    gap: 1rem;
+    
+}
+
+
+.listContent{
+    width: 100%;
+    height: 100%;
+    overflow-y: scroll;
+}
+
+
+.listContent::-webkit-scrollbar, .configurationMenu::-webkit-scrollbar{
+    background-color: rgba(138, 138, 138, 0);
+    width: 10px;
+}
+
+
+.listContent::-webkit-scrollbar-button, .configurationMenu::-webkit-scrollbar-button{
+    background-color: rgb(54, 54, 54);
+    height: 5px;
+    width: 5px;
+}
+
+.listContent::-webkit-scrollbar-thumb, .configurationMenu::-webkit-scrollbar-thumb{
+    background-color: rgb(184, 184, 184);
+    width: 10px;
+    border-radius: 5px;
+}
+
+
+
+.itemMenu {
+    position: relative;
+    display: flex;
+    width: 95%;
+    background: #ddd;
+    text-align: left;
+    padding: 0.4rem 0.5rem;
+    border-radius: 5px;
+    align-items: flex-start;
+    justify-content: space-around;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+
+
+.titleList {
+    font-size: 1.1rem;
+    font-family: system-ui;
+    text-decoration: underline;
+    font-weight: 500;
+    cursor: pointer;
+    width: 85%;
+    color: #082b99;
+}
+
+
+.titleEn {
+    font-family: system-ui;
+    width: 85%;
+}
+
+
+.btnDelete {
+    position: absolute;
+    border: none;
+    background-color: transparent;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    filter: contrast(0.5);
+    right: 10px;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+
+.imgDelete{
+    width: 100%;
+    height: 100%;
+    pointer-events:none;
+}
+
+
+.manuContentContain {
+    width: 50%;
+    height: 90vh;
+    background-color: white;
+    box-shadow: 1px 1px 5px #2a2a2a;
+    display: flex;
+    flex-direction: column;
+}
+
+
+.menuConfigurtationHeader {
+    width: 100%;
+    height: 5%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+
+.btn-reset{
+    margin: 0 1rem;
+    cursor: pointer;
+    padding: .2rem .5rem;
+    font-size: 1rem;
+}
+
+
+.menuConfigurtationHeader-text {
+    font-family: system-ui;
+    font-weight: 500;
+    text-align: center;
+}
+
+
+.configurationMenu {
+    height: 100%;
+    width: 100%;
+    overflow-y: scroll;
+    border-top: 1px solid #939393;
+}
+
+
+.configurationMenu-form {
+    width: 100%;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    font-family: system-ui;
+    padding: 2rem 0;
+    justify-content: flex-start;
+}
+
+
+.configurationMenu-div {
+    width: 100%;
+    display: flex;
+    justify-content: space-evenly;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+
+.configurationMenu-inputContain{
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 0;
+}
+
+
+
+.configurationMenu-divMenuS{
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+
+.configurationMenu-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    width: 40%;
+}
+
+
+.configurationMenu-label-radioContaint {
+    display: flex;
+    justify-content: space-around;
+}
+
+
+hr {
+    width: 100%
+}
+
+
+.radius{
+    cursor: pointer;
+}
+
+
+.configurationMenu-input {
+    width: 100%;
+    border: none;
+    padding: 0.3rem 0.2rem 0.3rem 0.2rem;
+    font-size: 1.1rem;
+    border-bottom: 1px solid #011e8c;
+    color: #535353;
+    background-color: transparent;
+}
+
+
+.configurationMenu-input:disabled{
+    background-color: #d1d1d1;
+}
+
+
+.configurationMenu-input:invalid{
+    border-bottom: 1px solid #ff0000;
+}
+
+
+.configurationMenu-input:focus, .configurationMenu-input:focus-visible{
+   outline: none;
+   background-color: #ffd5a7;
+}
+
+
+.configurationMenu-check {
+    background: #ededed;
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    position: relative;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.4);
+    margin: 0.56rem auto;
+    cursor: pointer;
+}
+
+
+.configurationMenu-divBtnForm {
+    width: 50%;
+    height: 3rem;
+    margin: auto;
+    cursor: pointer;
+    border: none;
+    background: rgb(8, 29, 70);
+    color: #ffff;
+}
+
+
+.configurationMenu-divBtnForm:disabled {
+    background-color: #a7a7a7;
+}
+
+
+.count-img-form-child {
+    box-shadow: 1px 1px 2px #a0a0a0;
+    padding: 1rem;
+    background-color: #e9e9e9;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+
+.label-countImg{
+    flex-direction: row;
+}
+
+
+.textCenter{
+    text-align: center;
+}
+
+
+.center{
+    display: flex;
+    align-items: center;
+    gap: 1rem
+}
+
+
+.count-img-form-child-label{
+    display: flex;
+    flex-direction: column;
+}
+
+/* predeterminater */
+
+
+.searchContain{
+    display: none;
+}
