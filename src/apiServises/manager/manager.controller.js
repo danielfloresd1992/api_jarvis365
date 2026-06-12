@@ -170,16 +170,17 @@ controller.putManager = async (req, res) => {
         const id = req.params.id;
         const body = req.body;
 
-        delete body._id;
-        delete body.local;
-        delete body.otherLocals;
+        delete body?._id;
+        delete body?.local;
+        delete body?.otherLocals;
 
 
 
-        const result = await Manager.findByIdAndUpdate(id , body);
+        const result = await Manager.findByIdAndUpdate(id , body, {new: true} );
+        if(!result) return res.status(404).json({error: 'Document not fount', message: `This manager id:${id} no exist.`, status: 404});
 
-       
-        return res.status(200).json(body);
+
+        return res.status(200).json(result);
     }
     catch (err) {
         console.log(err);
