@@ -6,10 +6,12 @@ let manager = new Schema({
 
     burden: {
         type: String,
-        required: true
+        required: true,
+        trim: true
     },
     name: {
         type: String,
+        default: null
     },
     numberManager: {
         type: Number,
@@ -18,7 +20,8 @@ let manager = new Schema({
     
     characteristic: {
         type: String,
-        required: true
+        required: true,
+        trim: true
     },
 
     status: {
@@ -27,7 +30,13 @@ let manager = new Schema({
     },
 
 
-    otherLocals: []  //DEPRECATED
+    img: [{
+        type:String,
+        default: [],
+        trim: true
+    }],
+
+    
 });
 
 export default model('Manager', manager);

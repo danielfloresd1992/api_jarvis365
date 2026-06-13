@@ -175,7 +175,6 @@ controller.putManager = async (req, res) => {
         delete body?.otherLocals;
 
 
-
         const result = await Manager.findByIdAndUpdate(id , body, {new: true} );
         if(!result) return res.status(404).json({error: 'Document not fount', message: `This manager id:${id} no exist.`, status: 404});
 
@@ -185,7 +184,7 @@ controller.putManager = async (req, res) => {
     catch (err) {
         console.log(err);
         console.log(colors.bgRed('Error en la consulta a put Manager'));
-        res.status(500).send(err);
+        res.status(500).json({status: '500', message: 'Error bad  server', error : error});
     }
 };// ─── LEGACY CODE DOWNLOAD MORE 👇 ────────────────────────────────────────────────────────────────
 

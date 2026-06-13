@@ -57,6 +57,8 @@ export default {
                 isArea:            body.isArea,
                 isDescriptionPerson: body.isDescriptionPerson,
 
+                managerReferenceId: body.managerReferenceId,
+                managerReferenceTitle: body.managerReferenceTitle,
                 // DEPRECATED — se mantiene por compatibilidad con registros anteriores
                 rulesForBonus: {
                     forLocal:  body.rulesForBonus?.forLocal  ?? 'Todos',
@@ -180,6 +182,8 @@ export default {
                 car:                 body.car,
                 isArea:              body.isArea,
                 isDescriptionPerson: body.isDescriptionPerson,
+                managerReferenceId: body.managerReferenceId,
+                managerReferenceTitle: body.managerReferenceTitle,
                 // DEPRECATED — se preserva para registros existentes
                 rulesForBonus: {
                     forLocal:        body.rulesForBonus?.forLocal  ?? 'Todos',

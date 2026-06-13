@@ -42,7 +42,8 @@ const menuSchema = yup.object({
     amountOfSomething: yup.boolean(),
     time: yup.boolean().required(),
     table: yup.boolean().required(),
-
+    managerReferenceId: yup.boolean().required(),
+    managerReferenceTitle: yup.boolean().required(),
     // --- Fotos ---
     photos: yup.object({
         length: yup.number().required(),

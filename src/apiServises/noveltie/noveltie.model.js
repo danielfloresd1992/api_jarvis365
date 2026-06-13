@@ -61,10 +61,18 @@ const Novelties = new Schema({
         default: null,
         type: Schema.Types.Mixed
     },
+
+    manager: {
+        default: null,
+        type: Schema.Types.ObjectId, 
+        ref: 'Manager'
+    },
+
     time:{
         default: null,
         type: String
     },
+    
     menuRef: {
         type: Schema.Types.ObjectId, 
         ref: 'Menu'

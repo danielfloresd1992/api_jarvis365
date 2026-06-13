@@ -340,7 +340,8 @@ export default class ControllerNovelty {
             if (novelties.body.timePeriod) newNoveltie.timePeriod = novelties.body.timePeriod;
             if (novelties.body.nameDish) newNoveltie.nameDish = novelties.body.nameDish;
 
-            if (novelties.body.amount) newNoveltie.amount = novelties.body.amount;
+            if(novelties.body.amount) newNoveltie.amount = novelties.body.amount;
+            if(novelties.body.manager) newNoveltie.manager = novelties.body.manager;
 
             if ('for_the_report' in novelties.body) newNoveltie.for_the_report = novelties.body.for_the_report;
 

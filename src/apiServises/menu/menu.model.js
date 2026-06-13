@@ -68,6 +68,18 @@ const Menu = new Schema({
         require: true,
     },
 
+    managerReferenceId:{
+        type: Boolean,
+        require: true,
+        default: false
+    },
+
+    managerReferenceTitle:{
+        type: Boolean,
+        require: true,
+        default: false 
+    },
+
     photos: {
         length: {
             type: Number,
