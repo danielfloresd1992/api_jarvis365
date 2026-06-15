@@ -115,7 +115,7 @@ server.listen(httpPort, () => {
     logServerStart(appConfig.NODE_ENV, httpPort);
     io.init(server);
     logSocketStart();
-    const httpPortDev: number = 80;
+    const httpPortDev: number = 8080;
     app_dev.listen(httpPortDev, () => {
         logHttpStart(httpPortDev);
     });

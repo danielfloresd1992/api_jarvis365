@@ -214,7 +214,9 @@ controller.putLocal = async (req, res) => {
 
         
         try{
-            const result = await Local.findByIdAndUpdate(new mongoose.Types.ObjectId(idParams), update).populate(populateQuery);
+            const result = await Local.findByIdAndUpdate(new mongoose.Types.ObjectId(idParams), update,  {new: true}).populate(populateQuery);
+            console.log(result);
+            if(!result) return res.status(404).json({ message: 'Establishment no exist', error: 'Document not fount', status: 404 });
 
             return res.status(200).json({ result: result });
         }
