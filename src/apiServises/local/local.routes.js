@@ -81,7 +81,7 @@ routerLocal.get(`${nameApi}/establishment`,  extendSession, validateSession, asy
 
 routerLocal.get(`${nameApi}/local`,  extendSession, validateSession, controller.getAllLocal); // datos solos del local
 
-routerLocal.get(`${nameApi}/localLigth`,  extendSession, controller.getAllLocalLigth);
+routerLocal.get(`${nameApi}/localLigth`,  extendSession, validateSession, controller.getAllLocalLigth);
 
 routerLocal.get(`${nameApi}/localforCort`, extendSession, validateSession, controller.getCortLocal);
 

@@ -38,7 +38,7 @@ controller.getAllLocalLigth = async (req, res) => {
         const allParams = convertBoolean(req.query.all);
         const populateQuery = req.query.populate;
         const query = {};
-        if(!allParams) query.status = 'activo';
+        if(!allParams) query.isActive = true;
         const local = await Local.find(query).select('-managers -img -touchs').populate(populateQuery);
         return res.json(local);
     } 
