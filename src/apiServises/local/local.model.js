@@ -4,7 +4,7 @@ import mongoose, { Schema, model } from 'mongoose';
 
 
 
-const Local = new Schema({
+export default model('Local', new Schema({
     
     franchise: { //is deprecated
         type: String,
@@ -14,8 +14,6 @@ const Local = new Schema({
         type: String,
         require: true
     },
-
-
 
 
     franchiseReference: {
@@ -29,7 +27,6 @@ const Local = new Schema({
     },
 
 
-    
     name: {
         require: true,
         unique: true,
@@ -45,10 +42,16 @@ const Local = new Schema({
         default: true
     },
 
+
     typeMonitoring: {
         type: String,
-        default: null
+        default: null,
+        enum: {
+            values: ['analytical','analytical and perimeter', 'perimeter'],
+            message: "'{typeMonitoring}' is not a valid value. Allowed values are: 'analytical','analytical and perimeter', 'perimeter'"
+        },
     },
+
 
 
 
@@ -59,15 +62,14 @@ const Local = new Schema({
     },
 
 
-
     touchs: {
         totalManager: {
             type: Number,
-            default: 5
+            default: 0
         },
         totalAttendee: {
             type: Number,
-            default: 5
+            default: 0
         },
 
         typeEvaluationTouch: {
@@ -126,8 +128,6 @@ const Local = new Schema({
     }],
 
 
-
-
     managers: [{
         type: Schema.Types.ObjectId,
         ref: 'Manager',
@@ -140,18 +140,22 @@ const Local = new Schema({
     },
 
 
+    timeDelays: {
+        type: Schema.Types.ObjectId,
+        ref: 'ConfigTimeDelays',
+    },
+
+
     shedules: {
         type: Schema.Types.ObjectId,
         ref: 'Shedules',
     },
 
 
-
     config_report: {
         type: Schema.Types.ObjectId,
         ref: 'DocumentConfig'
     },
-
 
     date: Date,
 
@@ -186,7 +190,6 @@ const Local = new Schema({
             },
         }]
     },
-
     
     image: {
         type: String,
@@ -204,7 +207,6 @@ const Local = new Schema({
         }
     },
 
-
     alertLength: {    ///////  uso para la creación de la alerta en JARVIS_EXPRESS
         type: String,
         enum: {
@@ -213,8 +215,19 @@ const Local = new Schema({
         },
         default: 'extended'
     }
-});
+}));
 
 
 
-export default mongoose.models['Local'] || model('Local', Local);
+
+export const TimeServicesModel = model('TimeServices', new Schema({
+        TableCleaning: {
+            type: String,
+            default: '00:00:00'
+        },
+        firstAtenttion: {
+            type: String,
+            default: '00:00:00'
+        },
+        rest: []
+}));    

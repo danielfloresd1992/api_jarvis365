@@ -46,7 +46,7 @@ routerLocal.get(`${nameApi}/establishment`,  extendSession, validateSession, asy
             const skip = (currentPage - 1) * pageSize;
 
             const totalDocuments = await LocalModel.countDocuments(query);
-            const result = await LocalModel.find(query).select('-managers -img -dishes -touchs -dishMenu')
+            const result = await LocalModel.find(query).select('-managers -img -dishes -touchs -dishMenu').populate('timeServices')
                 .skip(skip)
                 .limit(pageSize);
 

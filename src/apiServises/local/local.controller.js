@@ -1,10 +1,11 @@
 const controller = {};
 import os from 'os';
-import fs  from 'fs';
+import fs from 'fs';
 import path from 'path';
 import * as url from 'url';
-import Local from './local.model.js';
-import { localValidateComplete } from '../../libs/localValidate.js'
+import Local, { TimeServicesModel } from './local.model.js';
+import { localValidateComplete, timeServicesValidate } from './local.schema.js'
+import { ValidationError } from 'yup';
 import localLayer from './local.layer.js';
 import Franchise from '../franchise/franchiseImg.model.js';
 import colors from 'colors';
@@ -38,11 +39,11 @@ controller.getAllLocalLigth = async (req, res) => {
         const allParams = convertBoolean(req.query.all);
         const populateQuery = req.query.populate;
         const query = {};
-        if(!allParams) query.isActive = true;
+        if (!allParams) query.isActive = true;
         const local = await Local.find(query).select('-managers -img -touchs').populate(populateQuery);
         return res.json(local);
-    } 
-    catch(error){
+    }
+    catch (error) {
         console.log(error)
         return res.status(500).json({ error: error })
     }
@@ -51,11 +52,11 @@ controller.getAllLocalLigth = async (req, res) => {
 
 
 controller.getCortLocal = async (req, res) => {
-    try{
+    try {
         const result = await localLayer.getCortLocal();
         return res.json(result);
     }
-    catch(err){
+    catch (err) {
         console.log(err);
         return res.status(500);
     }
@@ -65,17 +66,17 @@ controller.getCortLocal = async (req, res) => {
 
 controller.getlocal = async (req, res) => {
     try {
-      
+
         const idParams = req.params.id;
-       
+
         const { populate } = req.query;
         const local = await Local.findById(idParams).populate(populate);
-        
-        if(!local) return res.send('not found').status(404);
+
+        if (!local) return res.send('not found').status(404);
         return res.json(local).status(200);
 
-    } 
-    catch(err){
+    }
+    catch (err) {
         console.log(err);
         return res.status(500).send('Error server internal');
     }
@@ -84,12 +85,12 @@ controller.getlocal = async (req, res) => {
 
 
 controller.getlocalAndManager = async (req, res) => {
-    try{
+    try {
         const id = req.params.id;
         const result = await localLayer.getLocalAndManager(id);
         return res.json(result);
     }
-    catch(err){
+    catch (err) {
         console.log(colors.bgRed(`Error al obtener datos relacionados de la colección Local`.black));
         console.log(err);
     }
@@ -99,7 +100,7 @@ controller.getlocalAndManager = async (req, res) => {
 
 controller.local_cache = (req, res) => {
     const param = req.params.boolean;
-    if(Boolean(param)){
+    if (Boolean(param)) {
         pathLocal();
     }
     res.status(200).json(local);
@@ -110,9 +111,9 @@ controller.local_cache = (req, res) => {
 controller.getImage = async (req, res) => {
     const img = req.params.image;
     const pathImg = path.join(dirPath, img);
-    
+
     res.sendFile(pathImg, err => {
-        if(err){
+        if (err) {
             console.log(err);
             res.status(404).json({ error: 'File not found' });
         }
@@ -122,11 +123,11 @@ controller.getImage = async (req, res) => {
 
 
 controller.getAllLocalManager = async (req, res) => {
-    try{
+    try {
         let locals = await Local.find().populate('managers').exec();
         return res.json(locals);
     }
-    catch(err){
+    catch (err) {
         console.log(err);
         return res.status(500).send('Error server internal');
     }
@@ -135,12 +136,12 @@ controller.getAllLocalManager = async (req, res) => {
 
 
 controller.getLocalAndImgByName = async (req, res) => {
-    try{
+    try {
         const name = req.params.name;
         const result = await localLayer.getLocalAndImgByName(name);
         return res.json(result);
-    }   
-    catch( err ){
+    }
+    catch (err) {
         console.log(err);
         return res.status(500);
     }
@@ -149,31 +150,59 @@ controller.getLocalAndImgByName = async (req, res) => {
 
 
 controller.setlocal = async (req, res) => {
+
     try {
-       
         const body = req.body;
-        const dominiun = req.ip.split(':')[req.ip.split(':').length-1];
-     
-      //  const route_image = req.file ? `https://${dominiun}:${httpPort}/local/image=${ req.file.filename }` :
+        const establishment = body.establishment;
+        const TimeServices = body.timeServices;
         
-        const validate = await localValidateComplete.validate(body);
-       
-        try{
-            const newLocal = new Local({ ...validate, image: `https://${dominiun}:${httpPort}/local/image=${ 'default.jpg' }` });
-            const result = await newLocal.save();
-            return res.status(200).json(result);
+        const validateEstablishment = await localValidateComplete.validate(establishment, { abortEarly: false });
+        const isPerimeter = validateEstablishment?.typeMonitoring === 'perimeter';
+
+        if (isPerimeter) {
+            delete validateEstablishment.touchs;
+            delete validateEstablishment.timeServices;
         }
-        catch(err){
-            console.log(err);
-            return res.status(500).send('Error server internal');
+        else {
+            const validatedTimeServices = await timeServicesValidate.validate(TimeServices, { abortEarly: false });
+            const configTimeServices = new TimeServicesModel(validatedTimeServices);
+            await configTimeServices.save();
+            validateEstablishment.timeServices = configTimeServices._id;
         }
-        
-    
-     
-    } 
-    catch(error) {
+        const newLocal = new Local({ ...validateEstablishment });
+        const result = await newLocal.save();
+        return res.status(200).json(result);
+    }
+    catch (error) {
         console.log(error);
-        return res.status(400).json({ error: error });
+        if (error instanceof ValidationError) {
+            return res.status(400).json({
+                source: 'yup',
+                message: error.message,
+                status: 400,
+                errors: error.errors,
+                path: error.path
+            });
+        }
+
+        if (error instanceof mongoose.Error.ValidationError) {
+            return res.status(400).json({
+                source: 'mongoose',
+                status: 400,
+                message: error.message,
+                errors: Object.keys(error.errors)
+            });
+        }
+
+        if (error instanceof mongoose.Error) {
+            return res.status(400).json({ source: 'mongoose', message: error.message, status: 400 });
+        }
+
+        if (error.code === 11000) {
+            return res.status(409).json({ source: 'mongodb', message: 'Registro duplicado', fields: error.keyValue, status: 409 });
+        }
+
+        return res.status(500).json({ error: error.message, status: 500 });
     }
 };
 
@@ -181,15 +210,15 @@ controller.setlocal = async (req, res) => {
 
 
 
-controller.updateImgImage = async (req, res) =>{
+controller.updateImgImage = async (req, res) => {
     try {
-        if(req.fileValidationError) return res.status(400).json({ error: req.fileValidationError });
+        if (req.fileValidationError) return res.status(400).json({ error: req.fileValidationError });
 
         const id = req.params.id;
-      //  const clientUpdate = await User.findOneAndUpdate({ image: })
-    } 
-    catch(error){
-        
+        //  const clientUpdate = await User.findOneAndUpdate({ image: })
+    }
+    catch (error) {
+
     }
 };
 
@@ -198,38 +227,85 @@ controller.updateImgImage = async (req, res) =>{
 
 
 controller.putLocal = async (req, res) => {
-    try{
-        const body = req.body;
+    try {
+       
+        const establishment = req.body?.establishment;
+        const timeServices = req.body?.timeServices;
+
         const idParams = req.params.id;
         const populateQuery = req.query.populate;
 
-        if(idParams === 'undefined' || !idParams) return res.status(400).json({ error: 'The id parameter associated with a client must be strictly added' });
-        if(!mongoose.Types.ObjectId(idParams))  return res.status(400).json({ error: `The ObjectId is not valid. id: ${ idParams }` });
+        if (idParams === 'undefined' || !idParams) return res.status(400).json({ error: 'The id parameter associated with a client must be strictly added' });
+        if (!mongoose.Types.ObjectId.isValid(idParams)) return res.status(400).json({ error: `The ObjectId is not valid. id: ${idParams}` });
 
         const local = await Local.findOne({ _id: idParams });
-        if(!local) return res.status(404).json({ error: `There is no record associated with the id: ${idParams}` });
+        if (!local) return res.status(404).json({ error: `There is no record associated with the id: ${idParams}` });
 
-        
-        const update = req.body;
+        const validatedEstablishment = establishment;
+        const isPerimeter = validatedEstablishment?.typeMonitoring === 'perimeter';
 
-        
-        try{
-            const result = await Local.findByIdAndUpdate(new mongoose.Types.ObjectId(idParams), update,  {new: true}).populate(populateQuery);
-            console.log(result);
-            if(!result) return res.status(404).json({ message: 'Establishment no exist', error: 'Document not fount', status: 404 });
+        const update = { $set: validatedEstablishment };
+   
+        if (isPerimeter) {
+            delete validatedEstablishment.touchs;
+            delete validatedEstablishment.timeServices;
+            update.$unset = { touchs: '', timeServices: '' };
 
-            return res.status(200).json({ result: result });
+            if (local.timeServices) {
+                await TimeServicesModel.findByIdAndDelete(local.timeServices);
+            }
         }
-        catch(errMongo){
-            console.log(errMongo);
-            return res.status(500).json({ error: errMongo });
-        }
-       
+        else {
+            const validatedTimeServices = await timeServicesValidate.validate(timeServices, { abortEarly: false });
+            console.log('validatedTimeServices', validatedTimeServices);
 
+            if (local.timeServices) {
+                const resultTimeServices = await TimeServicesModel.findByIdAndUpdate(local.timeServices, validatedTimeServices);
+            }
+            else {
+                const configTimeServices = new TimeServicesModel(validatedTimeServices);
+                await configTimeServices.save();
+                validatedEstablishment.timeServices = configTimeServices._id;
+            }
+        }
+
+        const result = await Local.findByIdAndUpdate(idParams, update, { new: true }).populate(populateQuery);
+   
+        if (!result) return res.status(404).json({ message: 'Establishment no exist', error: 'Document not fount', status: 404 });
+
+        return res.status(200).json({ result: result });
+        
     }
-    catch(err){
-        console.log(err);
-        return res.status(500).json({ error: err });
+    catch (error) {
+        console.log(error);
+        if (error instanceof ValidationError) {
+            return res.status(400).json({
+                source: 'yup',
+                message: error.message,
+                status: 400,
+                errors: error.errors,
+                path: error.path
+            });
+        }
+
+        if (error instanceof mongoose.Error.ValidationError) {
+            return res.status(400).json({
+                source: 'mongoose',
+                status: 400,
+                message: error.message,
+                errors: Object.keys(error.errors)
+            });
+        }
+
+        if (error instanceof mongoose.Error) {
+            return res.status(400).json({ source: 'mongoose', message: error.message, status: 400 });
+        }
+
+        if (error.code === 11000) {
+            return res.status(409).json({ source: 'mongodb', message: 'Registro duplicado', fields: error.keyValue, status: 409 });
+        }
+
+        return res.status(500).json({ error: error.message, status: 500 });
     }
 };
 
@@ -238,32 +314,32 @@ controller.putLocal = async (req, res) => {
 
 
 controller.deleteLocal = async (req, res) => {
-    if(!req.params.id) return res.status(400).send('params "Id" is invalid or null');   
+    if (!req.params.id) return res.status(400).send('params "Id" is invalid or null');
     const id = req.params.id;
     const local = await Local.findById(id).exec();
-    if(!local) return res.status(400).send('local in not found');
+    if (!local) return res.status(400).send('local in not found');
 
     Local.deleteOne({ _id: local._id })
-    .then(element => {
-        fs.unlinkSync(path.join(__dirname, `../../../uploads/${local.img.name}`))
-        return res.status(200).send('local eliminado con exito de la collección Local');
-    })
-    .catch(err => {
-        console.log(err);
-        return res.status(500).send('Error server internal');
-    });
+        .then(element => {
+            fs.unlinkSync(path.join(__dirname, `../../../uploads/${local.img.name}`))
+            return res.status(200).send('local eliminado con exito de la collección Local');
+        })
+        .catch(err => {
+            console.log(err);
+            return res.status(500).send('Error server internal');
+        });
 };
 
 
 
-async function pathLocal(){
+async function pathLocal() {
     const findLocal = await Local.find({ status: 'activo' }).populate('managers');
     const result = findLocal.filter(local => local.typeMonitoring !== 'perimetral');
-    local = result;    
+    local = result;
     result.forEach(name => {
-       if(name.typeMonitoring === 'perimetral'){
-            
-       }
+        if (name.typeMonitoring === 'perimetral') {
+
+        }
     });
 };
 
