@@ -215,7 +215,7 @@ export default class ControllerNovelty {
     getNoveltieImgById = async (req: Request, res: any): Promise<void> => {
         try {
             const id = req.params.id;
-            const noveltie = await NoveltieModel.find({ _id: id }).populate('fileNoveltie sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id')
+            const noveltie = await NoveltieModel.find({ _id: id }).populate('fileNoveltie sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id establishment')
             res.json(noveltie);
         }
         catch (err) {
