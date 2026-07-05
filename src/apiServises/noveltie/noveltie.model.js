@@ -188,6 +188,11 @@ const Novelties = new Schema({
         }
     },
 
+    establishment: {
+        type: Schema.Types.ObjectId,
+        ref: 'Local'
+    },
+
 
 
     /*

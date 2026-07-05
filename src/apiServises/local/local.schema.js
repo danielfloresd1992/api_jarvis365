@@ -81,6 +81,9 @@ export const localValidateComplete = yup.object({
             }).required(),
         }).required(),
     }).required(),
+
+
+    groupId: yup.string().nullable().default(null)
 });
 
 

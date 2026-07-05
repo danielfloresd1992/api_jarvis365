@@ -214,6 +214,12 @@ export default model('Local', new Schema({
             message: "'{alertLength}' is not a valid value. Allowed values are: simplified, Extended"
         },
         default: 'extended'
+    },
+
+
+    groupId: {
+        type: String,
+        default: null
     }
 }));
 

@@ -297,15 +297,18 @@ export default class ControllerNovelty {
                     for: null
                 },
 
-                local: {
+                local: { //DEPRECATED, USE establishment property instead
                     name: novelties.body.localName,
                     idLocal: novelties.body.localId,
                     lang: novelties.body.lang
                 },
 
+
+                establishment: novelties.body.localId,
+
                 /*
                userPublic: {
-                   name: novelties.body.userName,
+                   name: novelties.body.userName, 
                    userId: novelties.body.userId,
                },
               
