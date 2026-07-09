@@ -25,10 +25,11 @@ const dirConfigImgReport = path.join(dirPath, 'config_document_report');
 const dirPageImgReport = path.join(dirPath, 'document_report_page');
 const dirPathImageNovelty = path.join(dirPath, 'imageNovelty');
 const dirPathVideo = path.join(dirPath, 'video');
+const dirPathChat = path.join(dirPath, 'chat');
 
 
 // Crear directorios si no existen
-[dirPath, dirPathImageNovelty, dirPathVideo, dirConfigImgReport, dirPageImgReport].forEach(dir => {
+[dirPath, dirPathImageNovelty, dirPathVideo, dirConfigImgReport, dirPageImgReport, dirPathChat].forEach(dir => {
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
     }
@@ -140,6 +141,43 @@ const uploadFileProfile: Multer = multer({
 
 
 
+// ── Archivos del chat: imágenes, video, PDF y documentos (hasta 100 MB) ──
+const CHAT_ALLOWED_MIME_PREFIXES = [
+    'image/',
+    'video/',
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument',
+    'application/vnd.ms-excel',
+    'application/vnd.ms-powerpoint',
+    'text/plain',
+    'application/zip'
+];
+
+const chatFileFilter = (req: Request, file: Express.Multer.File, callback: FileFilterCallback) => {
+    const ok = CHAT_ALLOWED_MIME_PREFIXES.some(p => file.mimetype.startsWith(p));
+    if (!ok) return callback(new Error('Tipo de archivo no permitido en el chat.'));
+    callback(null, true);
+};
+
+const uploadChatFile: Multer = multer({
+    storage: diskStorage({
+        destination: (req: Request, file: Express.Multer.File, cb: DestinationCallback) => {
+            cb(null, dirPathChat);
+        },
+        // Nombre único en disco, conservando la extensión original (para PDF/documentos).
+        // El nombre visible/descarga real se guarda en el modelo (originalname).
+        filename: (req: Request, file: Express.Multer.File, cb: FileNameCallback) => {
+            const ext = path.extname(file.originalname).toLowerCase() || `.${file.mimetype.split('/')[1] || 'bin'}`;
+            cb(null, `chat_${Date.now()}_${Math.round(Math.random() * 1e6)}${ext}`);
+        }
+    }),
+    fileFilter: chatFileFilter,
+    limits: { fileSize: 100 * 1024 * 1024 } // 100 MB
+});
+
+
+
 export {
     uploadLocal,
     uploadManager,
@@ -150,5 +188,7 @@ export {
     dirConfigImgReport,
     dirPageImgReport,
     userMultimedia,
-    uploadFileProfile
+    uploadFileProfile,
+    uploadChatFile,
+    dirPathChat
 };

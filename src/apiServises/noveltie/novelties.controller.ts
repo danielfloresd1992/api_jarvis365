@@ -1,6 +1,7 @@
 import colors from 'colors';
 import os from 'os';
 import NoveltieModel, { CommentSchema } from './noveltie.model.js';
+import LocalModel from '../local/local.model.js';
 import { commentYupSchema } from './novelty.squema.js';
 
 import MenuModel from '../menu/menu.model.js';
@@ -62,7 +63,7 @@ export default class ControllerNovelty {
             const until: string = req.params.until;
 
             const query = { date: { $gte: new Date(since).toISOString(), $lt: new Date(until).toISOString() } };
-            const result = await NoveltieModel.find(query).select('-fileNoveltie').populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id');
+            const result = await NoveltieModel.find(query).select('-fileNoveltie').populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id establishment');
             res.zip(JSON.stringify(result), 'resultado');
         }
         catch (error) {
@@ -151,7 +152,7 @@ export default class ControllerNovelty {
 
             const searchPromise = await NoveltieModel
                 .find(query)
-                .populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id')
+                .populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id establishment')
                 .sort({ $natural: -1 })
                 .select('-fileNoveltie -rulesForBonus -isValidate -menu -userPublic -description -local')
                 .skip(page * 10)
@@ -350,11 +351,15 @@ export default class ControllerNovelty {
 
             const resultNovelty = await newNoveltie.save();
 
+
             newBodyRequest.idCategory = resultNovelty._id;
             const result = await publisher.createPublication(newBodyRequest);
-
+            
 
             if (io) {
+                
+              
+
                 io.emit(
                     'created_Alert',
                     { doc: result, user: { idUser: req.session.userId, nameUser: `${req.session.name}` } }
@@ -455,7 +460,7 @@ export default class ControllerNovelty {
 
 
 
-            const updateDocument = await NoveltieModel.findOneAndUpdate({ _id: id }, body, { new: true, runValidators: true }).populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id');
+            const updateDocument = await NoveltieModel.findOneAndUpdate({ _id: id }, body, { new: true, runValidators: true }).populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id establishment');
 
 
             if (io) {

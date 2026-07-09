@@ -1,6 +1,6 @@
 import os from 'os';
 import { Router, Request, Response } from 'express';
-import { uploadNoveltie } from '../../util/multer';
+import { uploadNoveltie, uploadChatFile, dirPathChat } from '../../util/multer';
 import nameApi from '../../libs/name_api';
 import { validateSession } from '../../middleware/validateSessionAndUser';
 import { join } from 'path';
@@ -57,6 +57,44 @@ routerMultimedia.post(`${nameApi}/multimedia`,  uploadNoveltie.fields([{ name: '
     }
 });
 
+
+
+
+// ── Subir un archivo del chat (imagen, video, PDF o documento) ──
+routerMultimedia.post(`${nameApi}/multimedia/chat`, validateSession, uploadChatFile.single('file'), async (req: Request, res: Response): Promise<void> => {
+    try {
+        const f = req.file;
+        if (!f) { res.status(400).json({ error: 'No file uploaded', status: 400 }); return; }
+
+        const kind = f.mimetype.startsWith('image/') ? 'image'
+            : f.mimetype.startsWith('video/') ? 'video'
+                : f.mimetype === 'application/pdf' ? 'pdf'
+                    : 'document';
+
+        const host: string = process.env.NODE_ENV === 'development' ? 'https://amazona365.ddns.net:3006' : 'https://amazona365.ddns.net';
+        const fileUrl: string = `${host}${nameApi}/multimedia/chat/file=${f.filename}`;
+
+        res.status(200).json({ url: fileUrl, kind, mimeType: f.mimetype, name: f.originalname, size: f.size });
+    }
+    catch (error) {
+        console.log(error);
+        res.status(500).json({ message: 'Error server internal', status: 500, error });
+    }
+});
+
+
+
+// ── Servir un archivo del chat ──
+routerMultimedia.get(`${nameApi}/multimedia/chat/file=:filename`, async (req: Request, res: Response): Promise<void> => {
+    try {
+        const pathFile = join(dirPathChat, req.params.filename);
+        await fs.promises.access(pathFile, fs.constants.F_OK);
+        res.status(200).sendFile(pathFile);
+    }
+    catch (error) {
+        res.status(404).json({ error: 'File not found', status: 404 });
+    }
+});
 
 
 
