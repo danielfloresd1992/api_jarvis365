@@ -13,7 +13,7 @@ controller.getChatPaginate = async (req, res) => {
         console.log( { page, limit } );
 
 
-            const chat = await ChatModel.find().sort({
+            const chat = await ChatModel.find().populate('submittedUser').sort({
               $natural: -1
             }).skip(Number(page) * Number(limit)).limit(Number(limit));
         
@@ -86,6 +86,8 @@ controller.setMessage = async (req, res) => {
             name: req.session.name,
             userId: req.session.userId
         }
+
+        submittedUser = req.session.userId;
 
         const message = new ChatModel(body);
         

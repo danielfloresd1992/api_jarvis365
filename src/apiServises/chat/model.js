@@ -19,6 +19,13 @@ export default model('Chat', new Schema({
             type: ObjectId,
             require: true
         }
+
+    },
+
+
+    submittedUser = {
+        type: ObjectId,
+        ref: 'User'
     },
 
     establishment: {
