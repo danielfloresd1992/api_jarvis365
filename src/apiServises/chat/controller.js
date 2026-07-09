@@ -87,7 +87,7 @@ controller.setMessage = async (req, res) => {
             userId: req.session.userId
         }
 
-        submittedUser = req.session.userId;
+        body.submittedUser = req.session.userId;
 
         const message = new ChatModel(body);
         

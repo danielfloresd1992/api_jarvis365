@@ -1,6 +1,7 @@
 import { model, Schema } from 'mongoose';
 import { ObjectId } from 'mongodb';
 
+
 export default model('Chat', new Schema({
 
     message: {
@@ -23,7 +24,7 @@ export default model('Chat', new Schema({
     },
 
 
-    submittedUser = {
+    submittedUser : {
         type: ObjectId,
         ref: 'User'
     },
