@@ -13,6 +13,9 @@ import { userMultimedia } from '../../util/multer.js'
 
 import AttendanceModel from './attendance.model.js';
 import { attendanceMachineValidationSchema } from './attendance.squema.js';
+import { buildDailyAttendanceReport } from './attendanceReport.service.js';
+import { buildAttendanceReportPdf } from './attendanceReport.pdf.js';
+import { runDailyAttendanceReport } from './attendanceReport.job.js';
 import { parseISO, format, getDay, startOfDay, isValid } from 'date-fns';
 
 
@@ -573,6 +576,57 @@ routerUser.get(`${nameApi}/user/attendance/report`, async (req, res) => {
     catch (error) {
         console.log(error);
         return res.status(500).json({ status: 500, message: 'Error server internal', error: error.message });
+    }
+});
+
+
+
+// ══════════════════════════════════════════════════════════════════════
+// ENDPOINT: Corte diario de asistencia (retardos y ausencias)
+// ══════════════════════════════════════════════════════════════════════
+// IMPORTANTE: debe declararse ANTES de /user/attendance/:dni para que
+// "daily-report" no sea capturado como un DNI.
+//
+// GET  .../user/attendance/daily-report            → datos del corte en JSON
+// GET  .../user/attendance/daily-report?format=pdf → descarga el PDF (previsualización)
+// POST .../user/attendance/daily-report/send       → genera el PDF y lo envía por WhatsApp
+//        body opcional: { "cutLabel": "...", "number": "584..." }
+routerUser.get(`${nameApi}/user/attendance/daily-report`, async (req, res) => {
+    try {
+        const report = await buildDailyAttendanceReport();
+
+        if (req.query?.format === 'pdf') {
+            const cutLabel = req.query?.cutLabel || 'Previsualización de corte';
+            const pdfBuffer = await buildAttendanceReportPdf(report, cutLabel);
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', 'inline; filename="Reporte_Asistencia.pdf"');
+            return res.status(200).send(pdfBuffer);
+        }
+
+        return res.status(200).json({ status: 200, result: report });
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ status: 500, message: 'Error server internal', error: error.message });
+    }
+});
+
+
+
+routerUser.post(`${nameApi}/user/attendance/daily-report/send`, async (req, res) => {
+    try {
+        const { cutLabel, number } = req.body || {};
+        const result = await runDailyAttendanceReport({ cutLabel, number });
+
+        return res.status(200).json({
+            status: 200,
+            message: 'Reporte generado y enviado por WhatsApp.',
+            result
+        });
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ status: 500, message: 'No se pudo generar/enviar el reporte.', error: error.message });
     }
 });
 
