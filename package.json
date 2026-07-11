@@ -34,7 +34,7 @@
     "gulp-pug": "^5.0.0",
     "gulp-rename": "^2.0.0",
     "nodemon": "^3.1.13",
-    "tsx": "^4.19.3",
+    "tsx": "^4.23.0",
     "typescript": "^5.8.2"
   },
   "dependencies": {

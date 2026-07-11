@@ -117,6 +117,7 @@ import { routesDishes } from './apiServises/dishes/dishes.router.js';
 import { authRouter } from './apiServises/auth/auth.routes.js';
 import { routerDocument } from './apiServises/documentsAndAnalytics/document.routes.js';
 import { routerChat } from './apiServises/chat/router.js';
+import { routerAiChat } from './apiServises/aiChat/aiChat.routes.js';
 import { routerUser } from './apiServises/user/user.routes.js';
 import routerMultimedia from './apiServises/multimedia/routes.index.ts'
 import swaggerUi from 'swagger-ui-express';
@@ -156,6 +157,7 @@ app
     .use(authRouter)
     .use(routerDocument)
     .use(routerChat)
+    .use(routerAiChat)
     .use(routerView);
 
 
