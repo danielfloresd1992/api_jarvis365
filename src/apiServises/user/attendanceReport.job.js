@@ -9,8 +9,10 @@ import { buildAttendanceReportPdf } from './attendanceReport.pdf.js';
 // Variables de entorno (todas opcionales, con estos defaults):
 //   WHATSAPP_BOT_URL           https://amazona365.ddns.net:4000
 //   ATTENDANCE_REPORT_NUMBER   584143041220  (acepta también un id @g.us)
-//   ATTENDANCE_REPORT_TIMES    13:30,19:30   (horas Venezuela, separadas por coma)
 //   ATTENDANCE_REPORT_ENABLED  true|false    (default: solo en producción)
+//
+// Cortes fijos (ver REPORT_CUTS): 13:10 enfocado en personal Diurno y
+// 19:30 enfocado en personal Nocturno (horas Venezuela).
 //
 // El bot expone POST /bot/imgV2/number=:number y recibe JSON:
 //   { "my-file": <base64>, "type": <mime>, "my-text": <caption>, "filename": <nombre> }
@@ -19,10 +21,13 @@ const ATTENDANCE_TIMEZONE = 'America/Caracas';
 
 const BOT_URL = process.env.WHATSAPP_BOT_URL || 'https://amazona365.ddns.net:4000';
 const REPORT_NUMBER = process.env.ATTENDANCE_REPORT_NUMBER || '584143041220';
-const REPORT_TIMES = (process.env.ATTENDANCE_REPORT_TIMES || '13:30,19:30')
-    .split(',')
-    .map(t => t.trim())
-    .filter(t => /^\d{1,2}:\d{2}$/.test(t));
+
+// Cortes programados: cada uno se enfoca en un tipo de turno.
+//   13:10 → personal Diurno   ·   19:30 → personal Nocturno
+const REPORT_CUTS = [
+    { time: '13:10', shift: 'Diurno', label: 'Corte diurno · Mediodía' },
+    { time: '19:30', shift: 'Nocturno', label: 'Corte nocturno · Cierre' }
+];
 
 
 const toChatId = (number) => number.includes('@') ? number : `${number}@c.us`;
@@ -74,7 +79,7 @@ export async function sendReportToWhatsapp({ pdfBuffer, caption, filename, numbe
 
 
 const buildCaption = (report, cutLabel) => [
-    '📋 *REPORTE DE ASISTENCIA*',
+    `📋 *REPORTE DE ASISTENCIA${report.shiftFocus ? ` — ${report.shiftFocus.toUpperCase()}` : ''}*`,
     `🕐 ${cutLabel}`,
     `📅 ${report.dateLabel}`,
     '',
@@ -89,7 +94,9 @@ const buildCaption = (report, cutLabel) => [
 ].join('\n');
 
 
-const cutLabelForNow = () => {
+const cutLabelForNow = (shiftFocus) => {
+    if (shiftFocus === 'Diurno') return 'Corte diurno · Mediodía';
+    if (shiftFocus === 'Nocturno') return 'Corte nocturno · Cierre';
     const hour = moment.tz(ATTENDANCE_TIMEZONE).hours();
     return hour < 15 ? 'Primer corte · Mediodía' : 'Segundo corte · Cierre';
 };
@@ -102,13 +109,14 @@ const cutLabelForNow = () => {
  * @param {string} [options.number]   - Número/chat destino (default env o 584143041220).
  * @returns {Promise<object>} Resumen de la ejecución.
  */
-export async function runDailyAttendanceReport({ cutLabel, number } = {}) {
-    const label = cutLabel || cutLabelForNow();
-    const report = await buildDailyAttendanceReport();
+export async function runDailyAttendanceReport({ cutLabel, number, shiftFocus } = {}) {
+    const label = cutLabel || cutLabelForNow(shiftFocus);
+    const report = await buildDailyAttendanceReport(new Date(), shiftFocus);
     const pdfBuffer = await buildAttendanceReportPdf(report, label);
 
+    const shiftTag = shiftFocus ? `${shiftFocus}_` : '';
     const dateStamp = moment.tz(ATTENDANCE_TIMEZONE).format('YYYY-MM-DD_HHmm');
-    const filename = `Reporte_Asistencia_${dateStamp}.pdf`;
+    const filename = `Reporte_Asistencia_${shiftTag}${dateStamp}.pdf`;
 
     const sent = await sendReportToWhatsapp({
         pdfBuffer,
@@ -119,6 +127,7 @@ export async function runDailyAttendanceReport({ cutLabel, number } = {}) {
 
     return {
         cutLabel: label,
+        shiftFocus: shiftFocus || null,
         date: report.dateLabel,
         totals: report.totals,
         sentTo: sent.chatId,
@@ -141,23 +150,23 @@ const msUntilNext = (hhmm) => {
     return next.diff(now);
 };
 
-const scheduleAt = (hhmm) => {
-    const delay = msUntilNext(hhmm);
+const scheduleAt = (cut) => {
+    const delay = msUntilNext(cut.time);
     setTimeout(async () => {
         try {
-            const result = await runDailyAttendanceReport();
-            console.log(`[attendance-report] Corte ${hhmm} enviado a ${result.sentTo} · retardos: ${result.totals.late} · ausencias: ${result.totals.absent}`);
+            const result = await runDailyAttendanceReport({ cutLabel: cut.label, shiftFocus: cut.shift });
+            console.log(`[attendance-report] Corte ${cut.time} (${cut.shift}) enviado a ${result.sentTo} · retardos: ${result.totals.late} · ausencias: ${result.totals.absent}`);
         }
         catch (error) {
-            console.log(`[attendance-report] Error en corte ${hhmm}:`, error?.message || error);
+            console.log(`[attendance-report] Error en corte ${cut.time} (${cut.shift}):`, error?.message || error);
         }
         finally {
-            scheduleAt(hhmm); // re-agendar para el día siguiente
+            scheduleAt(cut); // re-agendar para el día siguiente
         }
     }, delay);
 
     const nextRun = moment.tz(ATTENDANCE_TIMEZONE).add(delay, 'ms').format('YYYY-MM-DD hh:mm A');
-    console.log(`[attendance-report] Próximo corte ${hhmm} → ${nextRun} (hora Venezuela)`);
+    console.log(`[attendance-report] Próximo corte ${cut.time} (${cut.shift}) → ${nextRun} (hora Venezuela)`);
 };
 
 
@@ -177,11 +186,12 @@ export function startAttendanceReportScheduler() {
         console.log('[attendance-report] Scheduler DESACTIVADO (ATTENDANCE_REPORT_ENABLED/NODE_ENV). El envío manual por endpoint sigue disponible.');
         return;
     }
-    if (REPORT_TIMES.length === 0) {
-        console.log('[attendance-report] ATTENDANCE_REPORT_TIMES sin horas válidas; scheduler no iniciado.');
+    if (REPORT_CUTS.length === 0) {
+        console.log('[attendance-report] REPORT_CUTS sin cortes definidos; scheduler no iniciado.');
         return;
     }
 
-    console.log(`[attendance-report] Scheduler activo · cortes: ${REPORT_TIMES.join(', ')} · destino: ${toChatId(REPORT_NUMBER)} · bot: ${BOT_URL}`);
-    REPORT_TIMES.forEach(scheduleAt);
+    const resumen = REPORT_CUTS.map(c => `${c.time} (${c.shift})`).join(', ');
+    console.log(`[attendance-report] Scheduler activo · cortes: ${resumen} · destino: ${toChatId(REPORT_NUMBER)} · bot: ${BOT_URL}`);
+    REPORT_CUTS.forEach(scheduleAt);
 }

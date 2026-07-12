@@ -593,7 +593,8 @@ routerUser.get(`${nameApi}/user/attendance/report`, async (req, res) => {
 //        body opcional: { "cutLabel": "...", "number": "584..." }
 routerUser.get(`${nameApi}/user/attendance/daily-report`, async (req, res) => {
     try {
-        const report = await buildDailyAttendanceReport();
+        const shiftFocus = req.query?.shiftFocus || null;
+        const report = await buildDailyAttendanceReport(new Date(), shiftFocus);
 
         if (req.query?.format === 'pdf') {
             const cutLabel = req.query?.cutLabel || 'Previsualización de corte';
@@ -615,8 +616,8 @@ routerUser.get(`${nameApi}/user/attendance/daily-report`, async (req, res) => {
 
 routerUser.post(`${nameApi}/user/attendance/daily-report/send`, async (req, res) => {
     try {
-        const { cutLabel, number } = req.body || {};
-        const result = await runDailyAttendanceReport({ cutLabel, number });
+        const { cutLabel, number, shiftFocus } = req.body || {};
+        const result = await runDailyAttendanceReport({ cutLabel, number, shiftFocus });
 
         return res.status(200).json({
             status: 200,

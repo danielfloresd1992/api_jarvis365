@@ -71,7 +71,7 @@ const resolveEffectiveRule = (user, record, dayNumber) => {
  * @param {Date} [referenceDate] - Momento de referencia (default: ahora).
  * @returns {Promise<object>} Datos clasificados + totales.
  */
-export async function buildDailyAttendanceReport(referenceDate = new Date()) {
+export async function buildDailyAttendanceReport(referenceDate = new Date(), shiftFocus = null) {
     const now = moment.tz(referenceDate, ATTENDANCE_TIMEZONE);
 
     // Medianoche UTC de la fecha civil de Caracas (mismo criterio del marcado)
@@ -92,10 +92,17 @@ export async function buildDailyAttendanceReport(referenceDate = new Date()) {
     const pending = [];
     const notRequired = [];
     const noSchedule = [];
+    let consideredEmployees = 0;
 
     for (const user of users) {
         const record = recordByUser.get(String(user._id)) || null;
         const rule = resolveEffectiveRule(user, record, dayNumber);
+
+        // Corte enfocado por turno: si se pide un turno específico (Diurno /
+        // Nocturno) se omiten los empleados cuyo turno efectivo de hoy no coincide.
+        if (shiftFocus && rule.shift !== shiftFocus) continue;
+        consideredEmployees++;
+
         const startMinutes = toMinutes(rule.startTime);
 
         const base = {
@@ -184,8 +191,9 @@ export async function buildDailyAttendanceReport(referenceDate = new Date()) {
         dateLabel,
         generatedAtLabel: `${formatTime12(now)} (hora Venezuela)`,
         timezone: ATTENDANCE_TIMEZONE,
+        shiftFocus: shiftFocus || null,
         totals: {
-            activeEmployees: users.length,
+            activeEmployees: shiftFocus ? consideredEmployees : users.length,
             expected: presentOnTime.length + lateArrivals.length + absents.length + pending.length,
             presentOnTime: presentOnTime.length,
             late: lateArrivals.length,
