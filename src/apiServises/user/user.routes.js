@@ -883,11 +883,11 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                     });
                 }
 
-                const [endH, endM] = yesterdayEndTime.split(':');
-                const endMinutes = (Number(endH) * 60) + Number(endM);
-
-                const NOCTURNAL_CHECKOUT_TOLERANCE_MINUTES = 210;
-                const checkoutLimitMinutes = endMinutes + NOCTURNAL_CHECKOUT_TOLERANCE_MINUTES;
+                // Límite fijo: el personal nocturno puede marcar su salida hasta
+                // las 10:00 AM (hora Venezuela), sin importar a qué hora termine su
+                // turno. 600 = 10 horas × 60 min contados desde la medianoche.
+                const NOCTURNAL_CHECKOUT_LIMIT_MINUTES = 10 * 60;
+                const checkoutLimitMinutes = NOCTURNAL_CHECKOUT_LIMIT_MINUTES;
 
                 if (nowMinutes <= checkoutLimitMinutes) {
                     // ✅ Estamos dentro de la ventana de salida → cerrar turno
@@ -997,7 +997,7 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
         const isExtraDayResolved = (hasOverride && override.workType === 'extra')
             || (!hasOverride && dayRule?.workType === 'extra');
 
-        const LATE_GRACE_MINUTES = 5;
+        const LATE_GRACE_MINUTES = 8;
         const shouldCheckLate = hasOverride ? true : user?.workSchedule?.lateArrivalControl;
         const realIsLate = shouldCheckLate
             ? nowMinutes > (startMinutes + LATE_GRACE_MINUTES)
