@@ -633,6 +633,103 @@ routerUser.post(`${nameApi}/user/attendance/daily-report/send`, async (req, res)
 
 
 
+// ══════════════════════════════════════════════════════════════════════
+// ENDPOINT: ¿El empleado registró su asistencia hoy? (gate de login)
+// ══════════════════════════════════════════════════════════════════════
+// GET .../user/attendance/authenticated/:dni
+// Pensado para que jarvis-express lo consulte ANTES del login: si responde
+// authenticated=false, el frontend debe bloquear el acceso e indicar que
+// primero se debe registrar la jornada en el control de asistencia.
+//
+// Respuesta: { status, authenticated: boolean, dni, reason, ... }
+//   authenticated=true  → marcó su entrada hoy, o no está sujeto a control de
+//                         asistencia (sin jobInformation/workSchedule configurados).
+//   authenticated=false → está bajo control de asistencia y hoy es día libre
+//                         o aún no ha registrado su llegada laboral.
+//
+// IMPORTANTE: debe declararse ANTES de /user/attendance/:dni para que
+// "authenticated" no sea capturado como un DNI.
+routerUser.get(`${nameApi}/user/attendance/authenticated/:dni`, async (req, res) => {
+    try {
+        const dni = req.params?.dni;
+        if (!dni) {
+            return res.status(400).json({ status: 400, authenticated: false, message: 'El DNI es obligatorio', error: 'Bad request' });
+        }
+
+        const user = await UserModel.findOne({ dni });
+        if (!user) {
+            return res.status(404).json({ status: 404, authenticated: false, message: 'Usuario no encontrado' });
+        }
+
+        // Fecha civil de hoy en Venezuela (mismo criterio que el marcaje)
+        const nowParts = getZonedDateParts(new Date());
+        const todayMidnight = toUtcMidnightFromZonedParts(nowParts);
+        const dayNumber = todayMidnight.getUTCDay();
+
+        const record = await AttendanceModel.findOne({ userId: user._id, date: todayMidnight });
+
+        // 1) Marcó su entrada hoy → autenticado (cubre también franco-trabajado)
+        if (record?.checkIn) {
+            return res.status(200).json({
+                status: 200,
+                authenticated: true,
+                dni,
+                reason: 'Registró su entrada hoy',
+                checkIn: record.checkIn
+            });
+        }
+
+        // 2) ¿Está sujeto a control de asistencia? Requiere jobInformation y
+        //    workSchedule (con al menos un día de horario) configurados.
+        const scheduleMap = user.workSchedule?.scheduleByDay;
+        const scheduleSize = scheduleMap
+            ? (typeof scheduleMap.size === 'number' ? scheduleMap.size : Object.keys(scheduleMap).length)
+            : 0;
+        const underAttendanceControl =
+            Boolean(user.jobInformation && user.jobInformation.department) && scheduleSize > 0;
+
+        if (!underAttendanceControl) {
+            return res.status(200).json({
+                status: 200,
+                authenticated: true,
+                dni,
+                reason: 'No sujeto a control de asistencia (sin jobInformation/workSchedule configurados)'
+            });
+        }
+
+        // 3) Resolver la regla efectiva de hoy: override del día → scheduleByDay
+        const override = record?.scheduleOverride;
+        const hasOverride = Boolean(override?.workType);
+        const dayRule = scheduleMap?.get?.(String(dayNumber)) || scheduleMap?.[String(dayNumber)] || null;
+        const workType = (hasOverride && override.workType) || dayRule?.workType || 'laboral';
+
+        // 3a) Día sin asistencia requerida → libre
+        const NOT_REQUIRED = ['descanso', 'permiso', 'vacaciones', 'falta'];
+        if (NOT_REQUIRED.includes(workType)) {
+            return res.status(200).json({
+                status: 200,
+                authenticated: false,
+                dni,
+                reason: 'día libre',
+                workType
+            });
+        }
+
+        // 3b) Debía trabajar y no ha marcado su entrada
+        return res.status(200).json({
+            status: 200,
+            authenticated: false,
+            dni,
+            reason: 'No ha registrado su llegada laboral'
+        });
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ status: 500, authenticated: false, message: 'Error server internal', error: error.message });
+    }
+});
+
+
 routerUser.get(`${nameApi}/user/attendance/:dni`, async (req, res) => {
     try {
         const { dni } = req.params;

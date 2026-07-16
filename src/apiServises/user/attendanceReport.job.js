@@ -21,11 +21,11 @@ const ATTENDANCE_TIMEZONE = 'America/Caracas';
 
 const BOT_URL = process.env.WHATSAPP_BOT_URL || 'https://amazona365.ddns.net:4000';
 const REPORT_NUMBER = process.env.ATTENDANCE_REPORT_NUMBER || '584143041220';
-
+const List_Number = ['584166268380', '584120242884'];
 // Cortes programados: cada uno se enfoca en un tipo de turno.
 //   13:10 → personal Diurno   ·   19:30 → personal Nocturno
 const REPORT_CUTS = [
-    { time: '13:10', shift: 'Diurno', label: 'Corte diurno · Mediodía' },
+    { time: '13:30', shift: 'Diurno', label: 'Corte diurno · Mediodía' },
     { time: '19:30', shift: 'Nocturno', label: 'Corte nocturno · Cierre' }
 ];
 
@@ -59,7 +59,8 @@ const postJsonToBot = (url, payload) => new Promise((resolve, reject) => {
 
 
 // Envía el PDF (base64) con caption a través de la API del bot de WhatsApp.
-export async function sendReportToWhatsapp({ pdfBuffer, caption, filename, number = REPORT_NUMBER }) {
+export async function sendReportToWhatsapp({ pdfBuffer, caption, filename, number = REPORT_NUMBER, listNumner = [] }) {
+
     const chatId = toChatId(number);
     const url = `${BOT_URL}/bot/imgV2/number=${encodeURIComponent(chatId)}`;
 
@@ -69,6 +70,20 @@ export async function sendReportToWhatsapp({ pdfBuffer, caption, filename, numbe
         'my-text': caption,
         'filename': filename
     });
+
+        if (listNumner.length > 0) {
+        for (const num of listNumner) {
+            const chatId = toChatId(num);
+            const url = `${BOT_URL}/bot/imgV2/number=${encodeURIComponent(chatId)}`;
+
+            const response = await postJsonToBot(url, {
+                'my-file': pdfBuffer.toString('base64'),
+                'type': 'application/pdf',
+                'my-text': caption,
+                'filename': filename
+            });
+        }
+    }
 
     if (response.status < 200 || response.status >= 300) {
         throw new Error(`WhatsApp bot respondió ${response.status}: ${response.body}`);
@@ -122,7 +137,8 @@ export async function runDailyAttendanceReport({ cutLabel, number, shiftFocus } 
         pdfBuffer,
         caption: buildCaption(report, label),
         filename,
-        number
+        number,
+        listNumner: List_Number
     });
 
     return {
