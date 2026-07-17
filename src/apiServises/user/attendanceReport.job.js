@@ -23,10 +23,10 @@ const BOT_URL = process.env.WHATSAPP_BOT_URL || 'https://amazona365.ddns.net:400
 const REPORT_NUMBER = process.env.ATTENDANCE_REPORT_NUMBER || '584143041220';
 const List_Number = ['584166268380', '584120242884'];
 // Cortes programados: cada uno se enfoca en un tipo de turno.
-//   13:10 → personal Diurno   ·   19:30 → personal Nocturno
+//   15:00 → personal Diurno   ·   21:00 → personal Nocturno
 const REPORT_CUTS = [
-    { time: '13:30', shift: 'Diurno', label: 'Corte diurno · Mediodía' },
-    { time: '19:30', shift: 'Nocturno', label: 'Corte nocturno · Cierre' }
+    { time: '15:00', shift: 'Diurno', label: 'Corte diurno · Tarde' },
+    { time: '21:00', shift: 'Nocturno', label: 'Corte nocturno · Cierre' }
 ];
 
 
@@ -58,38 +58,30 @@ const postJsonToBot = (url, payload) => new Promise((resolve, reject) => {
 });
 
 
-// Envía el PDF (base64) con caption a través de la API del bot de WhatsApp.
-export async function sendReportToWhatsapp({ pdfBuffer, caption, filename, number = REPORT_NUMBER, listNumner = [] }) {
+// Envía el PDF (base64) con caption a la API del bot de WhatsApp, a uno o varios
+// destinatarios. La lista se DEDUPLICA (número principal + adicionales) para que
+// ningún número reciba el mismo reporte dos veces aunque aparezca en ambas listas.
+export async function sendReportToWhatsapp({ pdfBuffer, caption, filename, number = REPORT_NUMBER, listNumber = [] }) {
+    const chatIds = [...new Set([number, ...listNumber].filter(Boolean).map(toChatId))];
 
-    const chatId = toChatId(number);
-    const url = `${BOT_URL}/bot/imgV2/number=${encodeURIComponent(chatId)}`;
-
-    const response = await postJsonToBot(url, {
+    const payload = {
         'my-file': pdfBuffer.toString('base64'),
         'type': 'application/pdf',
         'my-text': caption,
         'filename': filename
-    });
+    };
 
-        if (listNumner.length > 0) {
-        for (const num of listNumner) {
-            const chatId = toChatId(num);
-            const url = `${BOT_URL}/bot/imgV2/number=${encodeURIComponent(chatId)}`;
-
-            const response = await postJsonToBot(url, {
-                'my-file': pdfBuffer.toString('base64'),
-                'type': 'application/pdf',
-                'my-text': caption,
-                'filename': filename
-            });
+    const recipients = [];
+    for (const chatId of chatIds) {
+        const url = `${BOT_URL}/bot/imgV2/number=${encodeURIComponent(chatId)}`;
+        const response = await postJsonToBot(url, payload);
+        if (response.status < 200 || response.status >= 300) {
+            throw new Error(`WhatsApp bot respondió ${response.status} para ${chatId}: ${response.body}`);
         }
+        recipients.push(chatId);
     }
 
-    if (response.status < 200 || response.status >= 300) {
-        throw new Error(`WhatsApp bot respondió ${response.status}: ${response.body}`);
-    }
-
-    return { chatId, status: response.status };
+    return { chatId: chatIds[0] || null, recipients, count: recipients.length };
 }
 
 
@@ -138,7 +130,7 @@ export async function runDailyAttendanceReport({ cutLabel, number, shiftFocus } 
         caption: buildCaption(report, label),
         filename,
         number,
-        listNumner: List_Number
+        listNumber: List_Number
     });
 
     return {
@@ -147,6 +139,7 @@ export async function runDailyAttendanceReport({ cutLabel, number, shiftFocus } 
         date: report.dateLabel,
         totals: report.totals,
         sentTo: sent.chatId,
+        recipients: sent.count,
         filename,
         pdfSizeKB: Math.round(pdfBuffer.length / 1024)
     };
@@ -166,14 +159,30 @@ const msUntilNext = (hhmm) => {
     return next.diff(now);
 };
 
+// Guard de idempotencia: fecha (Caracas) del último envío por corte, para no
+// enviar el mismo corte dos veces el mismo día si el timer se dispara de más.
+const sentToday = {};
+
 const scheduleAt = (cut) => {
     const delay = msUntilNext(cut.time);
     setTimeout(async () => {
+        const cutKey = `${cut.time}-${cut.shift}`;
+        const today = moment.tz(ATTENDANCE_TIMEZONE).format('YYYY-MM-DD');
+
+        // Ya se envió este corte hoy → no reenviar, solo re-agendar para mañana.
+        if (sentToday[cutKey] === today) {
+            console.log(`[attendance-report] Corte ${cut.time} (${cut.shift}) ya enviado hoy; se omite el reenvío.`);
+            scheduleAt(cut);
+            return;
+        }
+
         try {
+            sentToday[cutKey] = today; // marca ANTES de enviar (evita reentradas concurrentes)
             const result = await runDailyAttendanceReport({ cutLabel: cut.label, shiftFocus: cut.shift });
-            console.log(`[attendance-report] Corte ${cut.time} (${cut.shift}) enviado a ${result.sentTo} · retardos: ${result.totals.late} · ausencias: ${result.totals.absent}`);
+            console.log(`[attendance-report] Corte ${cut.time} (${cut.shift}) enviado a ${result.recipients} dest. · retardos: ${result.totals.late} · ausencias: ${result.totals.absent}`);
         }
         catch (error) {
+            sentToday[cutKey] = null; // falló el envío: permitir reintento
             console.log(`[attendance-report] Error en corte ${cut.time} (${cut.shift}):`, error?.message || error);
         }
         finally {

@@ -9,7 +9,8 @@ export function runDailyAttendanceReport(options?: {
     shiftFocus: 'Diurno' | 'Nocturno' | null;
     date: string;
     totals: Record<string, number>;
-    sentTo: string;
+    sentTo: string | null;
+    recipients: number;
     filename: string;
     pdfSizeKB: number;
 }>;
@@ -19,4 +20,5 @@ export function sendReportToWhatsapp(options: {
     caption: string;
     filename: string;
     number?: string;
-}): Promise<{ chatId: string; status: number }>;
+    listNumber?: string[];
+}): Promise<{ chatId: string | null; recipients: string[]; count: number }>;

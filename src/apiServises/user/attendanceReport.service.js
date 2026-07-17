@@ -21,7 +21,19 @@ import AttendanceModel from './attendance.model.js';
 // marcado (date = medianoche UTC de la fecha civil de Caracas).
 
 const ATTENDANCE_TIMEZONE = 'America/Caracas';
-const LATE_GRACE_MINUTES = 5; // misma tolerancia que el endpoint de marcado
+const LATE_GRACE_MINUTES = 8; // misma tolerancia que el endpoint de marcado
+
+// Descuento por retardo: SOLO cuentan los bloques de 20 min COMPLETOS pasada
+// la tolerancia (8 min); un bloque parcial no descuenta. Ej. entrada 09:00
+// (tolerancia hasta 09:08):
+//   hasta 09:27 → 0  ·  09:28 → 1  ·  09:48 → 2  ·  10:08 → 3 …
+// Por eso 55 min de retardo = 2 (dos bloques de 20 min completos; el resto no cuenta).
+const DISCOUNT_BLOCK_MINUTES = 20;
+
+const computeDiscountUnits = (minutesLate) => {
+    if (minutesLate === null || minutesLate <= LATE_GRACE_MINUTES) return 0;
+    return Math.floor((minutesLate - LATE_GRACE_MINUTES) / DISCOUNT_BLOCK_MINUTES);
+};
 
 const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const MONTH_NAMES = [
@@ -131,6 +143,7 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
                 ...base,
                 checkIn: formatTime12(checkInMoment),
                 minutesLate,
+                discountUnits: computeDiscountUnits(minutesLate),
                 isJustified: Boolean(record.isJustified),
                 lateJustification: record.lateJustification || '',
                 isExtraDay: Boolean(record.isExtraDay),
@@ -200,7 +213,8 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
             absent: absents.length,
             pending: pending.length,
             notRequired: notRequired.length,
-            noSchedule: noSchedule.length
+            noSchedule: noSchedule.length,
+            discountUnits: lateArrivals.reduce((sum, r) => sum + (r.discountUnits || 0), 0)
         },
         lateArrivals,
         absents,

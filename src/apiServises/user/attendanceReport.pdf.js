@@ -7,17 +7,23 @@ import PDFDocument from 'pdfkit';
 // Buffer con un PDF A4 presentable: encabezado, tarjetas de resumen y
 // tablas de retardos / ausencias / pendientes con salto de página.
 
+// Paleta inspirada en Claude / Anthropic: fondo crema (ivory), tipografía
+// en negro cálido y acentos en naranja "book cloth". Tonos terracota para
+// las señales para mantener la estética cálida.
 const COLORS = {
-    header: '#1e293b',      // banda superior
-    accent: '#0ea5e9',      // acento corporativo
-    late: '#b45309',        // ámbar oscuro (retardos)
-    absent: '#b91c1c',      // rojo (ausencias)
-    ok: '#15803d',          // verde (a tiempo)
-    pending: '#475569',     // gris azulado (pendientes)
-    text: '#111827',
-    muted: '#6b7280',
-    zebra: '#f3f4f6',
-    line: '#d1d5db',
+    header: '#CC785C',      // naranja Claude "book cloth" (banda superior)
+    accent: '#D97757',      // naranja Claude (acento / línea)
+    late: '#C15F3C',        // terracota (retardos)
+    absent: '#B4472F',      // rojo terracota (ausencias)
+    ok: '#7A8471',          // verde salvia apagado (a tiempo)
+    pending: '#8A8780',     // gris cálido (pendientes)
+    discount: '#B84A2E',    // naranja intenso (a descontar)
+    text: '#141413',        // negro cálido
+    muted: '#73726C',       // gris cálido
+    cream: '#F0EEE6',       // crema Claude (tarjetas)
+    page: '#FAF9F5',        // fondo de página (ivory)
+    zebra: '#F0EEE6',       // filas alternas (crema)
+    line: '#E3E0D6',        // líneas cálidas
     white: '#ffffff'
 };
 
@@ -55,7 +61,8 @@ const drawSummaryCards = (doc, totals) => {
         { label: 'A tiempo', value: totals.presentOnTime, color: COLORS.ok },
         { label: 'Retardos', value: totals.late, color: COLORS.late },
         { label: 'Ausencias', value: totals.absent, color: COLORS.absent },
-        { label: 'Turno no inicia', value: totals.pending, color: COLORS.pending }
+        { label: 'Turno no inicia', value: totals.pending, color: COLORS.pending },
+        { label: 'A descontar', value: totals.discountUnits ?? 0, color: COLORS.discount }
     ];
 
     const gap = 8;
@@ -65,13 +72,13 @@ const drawSummaryCards = (doc, totals) => {
 
     cards.forEach((card, i) => {
         const x = PAGE.margin + i * (cardW + gap);
-        doc.roundedRect(x, y, cardW, cardH, 6).fillAndStroke('#fafafa', COLORS.line);
+        doc.roundedRect(x, y, cardW, cardH, 8).fillAndStroke(COLORS.cream, COLORS.line);
         doc.rect(x, y, cardW, 4).fill(card.color);
 
         doc.fill(card.color).font('Helvetica-Bold').fontSize(20)
             .text(String(card.value), x, y + 12, { width: cardW, align: 'center' });
 
-        doc.fill(COLORS.muted).font('Helvetica').fontSize(7.5)
+        doc.fill(COLORS.muted).font('Helvetica').fontSize(7)
             .text(card.label.toUpperCase(), x + 2, y + 38, { width: cardW - 4, align: 'center' });
     });
 
@@ -172,6 +179,13 @@ export function buildAttendanceReportPdf(report, cutLabel) {
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
 
+        // Fondo crema (ivory) en todas las páginas — estética Claude. Se pinta
+        // antes de cualquier contenido: en la página 1 aquí, y en las que se
+        // agregan por paginación vía el evento 'pageAdded'.
+        const paintBackground = () => doc.rect(0, 0, PAGE.width, PAGE.height).fill(COLORS.page);
+        doc.on('pageAdded', paintBackground);
+        paintBackground();
+
         drawHeader(doc, {
             cutLabel,
             dateLabel: report.dateLabel,
@@ -186,19 +200,19 @@ export function buildAttendanceReportPdf(report, cutLabel) {
             drawEmptySection(doc, 'Sin retardos registrados al momento del corte.');
         } else {
             drawTable(doc, [
-                { key: 'name', label: 'Empleado', width: 120 },
-                { key: 'dni', label: 'DNI', width: 70 },
-                { key: 'department', label: 'Departamento', width: 85 },
-                { key: 'startTime', label: 'Entrada', width: 50, align: 'center' },
-                { key: 'checkIn', label: 'Marcó', width: 55, align: 'center' },
-                { key: 'minutesLateLabel', label: 'Retraso', width: 50, align: 'center' },
-                { key: 'justifiedLabel', label: 'Just.', width: 35, align: 'center' },
-                { key: 'sourceShort', label: 'Horario', width: 50, align: 'center' }
+                { key: 'name', label: 'Empleado', width: 110 },
+                { key: 'dni', label: 'DNI', width: 66 },
+                { key: 'department', label: 'Departamento', width: 78 },
+                { key: 'startTime', label: 'Entrada', width: 51, align: 'center' },
+                { key: 'checkIn', label: 'Marcó', width: 50, align: 'center' },
+                { key: 'minutesLateLabel', label: 'Retraso', width: 53, align: 'center' },
+                { key: 'discountLabel', label: 'A descontar', width: 70, align: 'center' },
+                { key: 'justifiedLabel', label: 'Just.', width: 37, align: 'center' }
             ], report.lateArrivals.map(r => ({
                 ...r,
                 minutesLateLabel: r.minutesLate !== null ? `${r.minutesLate} min` : '—',
-                justifiedLabel: r.isJustified ? 'Sí' : 'No',
-                sourceShort: sourceLabel(r.scheduleSource)
+                discountLabel: String(r.discountUnits ?? 0),
+                justifiedLabel: r.isJustified ? 'Sí' : 'No'
             })), COLORS.late);
         }
 
