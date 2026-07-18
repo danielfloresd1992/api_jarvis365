@@ -80,6 +80,7 @@ export const userUpdateSchema = yup.object({
     super: yup.boolean().optional(),
     name: yup.string().optional().trim(),
     surName: yup.string().optional().trim(),
+    email: yup.string().email('Correo inválido').optional().trim(),
     inabilited: yup.boolean().optional(),
 
     jobInformation: yup.object({

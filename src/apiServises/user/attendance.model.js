@@ -98,6 +98,39 @@ const AttendanceSchema = new mongoose.Schema({
 
     imageReference: {
         type: []
+    },
+
+    // ══════════════════════════════════════════════════════════════
+    // AUDITORÍA DEL DOCUMENTO
+    // ══════════════════════════════════════════════════════════════
+    // createdBy: quién originó el documento — el propio empleado al marcar
+    // asistencia, o el admin que asignó un scheduleOverride sobre un día
+    // sin registro. Documentos antiguos no lo tienen (default null):
+    // compatible hacia atrás. Por convención no se modifica tras crearse.
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'user',
+        default: null
+    },
+    // editedBy: historial de ediciones administrativas con los campos del
+    // scheduleOverride que cambiaron en cada una. Los marcajes de entrada y
+    // salida (checkIn/checkOut) NO se registran aquí a propósito.
+    editedBy: {
+        type: [{
+            user: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'user'
+            },
+            // Cada cambio: { field, from, to } (Mixed para tolerar entradas
+            // antiguas que eran strings con solo el nombre del campo)
+            change: { type: [mongoose.Schema.Types.Mixed], default: [] },
+            date: {
+                type: Date,
+                default: Date.now
+            },
+            _id: false
+        }],
+        default: []
     }
 
 }, { timestamps: true });

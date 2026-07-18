@@ -23,16 +23,15 @@ import AttendanceModel from './attendance.model.js';
 const ATTENDANCE_TIMEZONE = 'America/Caracas';
 const LATE_GRACE_MINUTES = 8; // misma tolerancia que el endpoint de marcado
 
-// Descuento por retardo: SOLO cuentan los bloques de 20 min COMPLETOS pasada
-// la tolerancia (8 min); un bloque parcial no descuenta. Ej. entrada 09:00
-// (tolerancia hasta 09:08):
-//   hasta 09:27 → 0  ·  09:28 → 1  ·  09:48 → 2  ·  10:08 → 3 …
-// Por eso 55 min de retardo = 2 (dos bloques de 20 min completos; el resto no cuenta).
+// Descuento por retardo: pasada la tolerancia (8 min), el primer tramo (de 8 a
+// 20 min) ya cuenta 1 unidad, y de ahí en adelante cada 20 min suma otra.
+// Ej. entrada 09:00 (tolerancia hasta 09:08):
+//   hasta 09:08 → 0 · 09:09–09:20 → 1 · 09:21–09:40 → 2 · 09:41–10:00 → 3 …
 const DISCOUNT_BLOCK_MINUTES = 20;
 
 const computeDiscountUnits = (minutesLate) => {
     if (minutesLate === null || minutesLate <= LATE_GRACE_MINUTES) return 0;
-    return Math.floor((minutesLate - LATE_GRACE_MINUTES) / DISCOUNT_BLOCK_MINUTES);
+    return Math.ceil(minutesLate / DISCOUNT_BLOCK_MINUTES);
 };
 
 const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];

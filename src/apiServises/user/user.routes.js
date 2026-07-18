@@ -173,9 +173,27 @@ routerUser.put(`${nameApi}/user/:id`, validateSessionAndUserSuper, async (req, r
 
         const body = req.body;
         const dataValidate = await userUpdateSchema.validate(body);
-        const dataUserChange = { idRef: idUserQuiery, change: Object.keys(dataValidate) }
 
-        const userUpdate = await UserModel.findByIdAndUpdate(id, { $set: dataValidate, $push: { updateByUser: dataUserChange } }, { new: true, runValidators: true });
+        // Persistir SOLO las claves que el cliente envió realmente.
+        // yup inyecta defaults (dni:null, img:null, workSchedule con solo los
+        // flags, jobInformation:{detail:null}) para claves ausentes; hacer $set
+        // con esos defaults borraría datos reales en actualizaciones parciales.
+        const partialUpdate = {};
+        for (const key of Object.keys(dataValidate)) {
+            if (Object.prototype.hasOwnProperty.call(body, key)) partialUpdate[key] = dataValidate[key];
+        }
+
+        const changedKeys = Object.keys(partialUpdate);
+        if (changedKeys.length === 0) {
+            return res.status(400).json({ error: 'Bad request', status: 400, message: 'No valid fields to update.' });
+        }
+
+        // El historial registra únicamente los campos realmente modificados
+        const dataUserChange = { idRef: idUserQuiery, change: changedKeys }
+
+        const userUpdate = await UserModel.findByIdAndUpdate(id, { $set: partialUpdate, $push: { updateByUser: dataUserChange } }, { new: true, runValidators: true })
+            .select('+updateByUser')
+            .populate('updateByUser.idRef', 'name surName');
 
         if (!userUpdate) return res.status(404).json({ error: 'Not found', status: 404, mmesage: 'The user does not exist.' })
 
@@ -473,7 +491,9 @@ routerUser.get(`${nameApi}/user/attendance/report`, async (req, res) => {
         const records = await AttendanceModel.find({
             userId: userId,
             date: { $gte: fromDate, $lte: toDate }
-        }).sort({ date: 1 });
+        }).sort({ date: 1 })
+            // Nombres de quién modificó cada día (scheduleOverride.note.user)
+            .populate('scheduleOverride.note.user', 'name surName');
 
         const recordMap = new Map();
         records.forEach(r => recordMap.set(r.date.toISOString(), r));
@@ -764,11 +784,13 @@ routerUser.get(`${nameApi}/user/attendance/:dni`, async (req, res) => {
 
 
 
-        // 4. Buscar el registro de asistencia
+        // 4. Buscar el registro de asistencia (con auditoría populada para el popover)
         const attendance = await AttendanceModel.findOne({
             userId: user._id,
             date: searchDate.toISOString()
-        });
+        })
+            .populate('createdBy', 'name surName img')
+            .populate('editedBy.user', 'name surName img');
 
         // 5. Respuesta si NO hay registro (Muy importante para el frontend)
         if (!attendance) {
@@ -861,27 +883,47 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
                 const dateObj = new Date(item.date);
                 dateObj.setUTCHours(0, 0, 0, 0);
 
-                // ✅ FIX: scheduleOverride como objeto completo, no notación de punto
+                // Conservar el historial de notas y registrar SIEMPRE quién modifica.
+                // (El $set del objeto completo con note:[] borraba el historial en
+                // cada edición, y un $push sobre scheduleOverride.note junto a ese
+                // $set genera conflicto de paths en MongoDB.)
+                const previousRecord = await AttendanceModel.findOne({ userId, date: dateObj })
+                    .select('scheduleOverride')
+                    .lean();
+                const previousNotes = previousRecord?.scheduleOverride?.note || [];
+
                 const scheduleOverride = {
                     workType: item.workType,
                     shift: item.shift || null,
                     startTime: item.workType === 'descanso' ? null : (item.startTime || null),
                     endTime: item.workType === 'descanso' ? null : (item.endTime || null),
-                    note: []
+                    note: [
+                        ...previousNotes,
+                        { user: adminUserId, message: item.note || 'Cambio de horario', date: new Date() }
+                    ]
                 };
+
+                // Auditoría del documento:
+                //  - Si NO existía → el admin lo crea (createdBy vía $setOnInsert).
+                //  - Si ya existía → se registra la edición en editedBy con los
+                //    campos del override que realmente cambiaron.
+                const prevOverride = previousRecord?.scheduleOverride || {};
+                const changedFields = ['workType', 'shift', 'startTime', 'endTime']
+                    .filter(field => (prevOverride?.[field] ?? null) !== (scheduleOverride[field] ?? null))
+                    // Guardar también el valor anterior y el nuevo de cada campo
+                    .map(field => ({
+                        field,
+                        from: prevOverride?.[field] ?? null,
+                        to: scheduleOverride[field] ?? null
+                    }));
 
                 const updateOp = {
-                    $set: { scheduleOverride }
+                    $set: { scheduleOverride },
+                    $setOnInsert: { createdBy: adminUserId }
                 };
-
-                // $push solo si hay nota, evita errores de $push vacío en upsert
-                if (item.note) {
+                if (previousRecord && changedFields.length > 0) {
                     updateOp.$push = {
-                        'scheduleOverride.note': {
-                            user: adminUserId,
-                            message: item.note,
-                            date: new Date()
-                        }
+                        editedBy: { user: adminUserId, change: changedFields, date: new Date() }
                     };
                 }
 
@@ -889,7 +931,10 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
                     { userId, date: dateObj },
                     updateOp,
                     { upsert: true, new: true, setDefaultsOnInsert: true }
-                ).populate('scheduleOverride.note.user', 'name surName dni');
+                )
+                    .populate('scheduleOverride.note.user', 'name surName dni')
+                    .populate('createdBy', 'name surName img')
+                    .populate('editedBy.user', 'name surName img');
 
                 // Emitir evento Socket.IO para actualización en tiempo real
                 const userDoc = await UserModel.findById(userId);
@@ -1158,8 +1203,11 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                     isLate: realIsLate,
                     isExtraDay: isExtraDayResolved,
                     status: isExtraDayResolved ? 'franco-trabajado' : 'presente',
-                    imageReference: [body.imageReference]
+                    imageReference: [body.imageReference],
+                    // Auditoría: el empleado origina su propio registro al marcar
+                    createdBy: user._id
                 });
+                await finalRecord.populate('createdBy', 'name surName img');
             }
 
             const dateEvent = new Date(finalRecord.date);
@@ -1237,8 +1285,11 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
             isLate: realIsLate,
             isExtraDay: isExtraDayResolved,
             status: isExtraDayResolved ? 'franco-trabajado' : 'presente',
-            imageReference: [body.imageReference]
+            imageReference: [body.imageReference],
+            // Auditoría: el empleado origina su propio registro al marcar
+            createdBy: user._id
         });
+        await finalRecord.populate('createdBy', 'name surName img');
 
         const dateEvent = new Date(finalRecord.date);
         dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
