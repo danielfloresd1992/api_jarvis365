@@ -103,6 +103,7 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
     const pending = [];
     const notRequired = [];
     const noSchedule = [];
+    const extraDays = [];
     let consideredEmployees = 0;
 
     for (const user of users) {
@@ -148,6 +149,10 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
                 isExtraDay: Boolean(record.isExtraDay),
                 status: record.status
             };
+
+            // Día extra (franco trabajado): se lista aparte, además de entrar en
+            // su grupo por puntualidad, para que quede reflejado en el reporte.
+            if (entry.isExtraDay) extraDays.push(entry);
 
             if (record.isLate) lateArrivals.push(entry);
             else presentOnTime.push(entry);
@@ -195,6 +200,7 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
     absents.sort(byDeptName);
     pending.sort(byDeptName);
     presentOnTime.sort(byDeptName);
+    extraDays.sort(byDeptName);
 
     const dateLabel = `${DAY_NAMES[dayNumber]}, ${now.date()} de ${MONTH_NAMES[now.month()]} de ${now.year()}`;
 
@@ -213,6 +219,7 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
             pending: pending.length,
             notRequired: notRequired.length,
             noSchedule: noSchedule.length,
+            extraDays: extraDays.length,
             discountUnits: lateArrivals.reduce((sum, r) => sum + (r.discountUnits || 0), 0)
         },
         lateArrivals,
@@ -220,6 +227,7 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
         pending,
         presentOnTime,
         notRequired,
-        noSchedule
+        noSchedule,
+        extraDays
     };
 }

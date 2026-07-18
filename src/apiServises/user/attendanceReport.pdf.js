@@ -18,6 +18,8 @@ const COLORS = {
     ok: '#7A8471',          // verde salvia apagado (a tiempo)
     pending: '#8A8780',     // gris cálido (pendientes)
     discount: '#B84A2E',    // naranja intenso (a descontar)
+    extra: '#9A7B4F',       // ocre cálido (días extra / franco trabajado)
+    extraRow: '#F3E7D3',    // ocre muy claro: resalta la fila de un día extra
     text: '#141413',        // negro cálido
     muted: '#73726C',       // gris cálido
     cream: '#F0EEE6',       // crema Claude (tarjetas)
@@ -128,7 +130,9 @@ const drawTable = (doc, columns, rows, accentColor) => {
             drawTableHeader();
         }
         const y = doc.y;
-        if (idx % 2 === 0) doc.rect(PAGE.margin, y, CONTENT_WIDTH, rowH).fill(COLORS.zebra);
+        // Una fila resaltada (ej. día extra) tiene prioridad sobre el zebra.
+        const rowFill = row.__highlight || (idx % 2 === 0 ? COLORS.zebra : null);
+        if (rowFill) doc.rect(PAGE.margin, y, CONTENT_WIDTH, rowH).fill(rowFill);
 
         let x = PAGE.margin;
         doc.fill(COLORS.text).font('Helvetica').fontSize(8.5);
@@ -210,10 +214,20 @@ export function buildAttendanceReportPdf(report, cutLabel) {
                 { key: 'justifiedLabel', label: 'Just.', width: 37, align: 'center' }
             ], report.lateArrivals.map(r => ({
                 ...r,
+                // Día extra: marca junto al nombre (legible también impreso en
+                // blanco y negro) + fila resaltada en ocre.
+                name: r.isExtraDay ? `${r.name}  *` : r.name,
                 minutesLateLabel: r.minutesLate !== null ? `${r.minutesLate} min` : '—',
                 discountLabel: String(r.discountUnits ?? 0),
-                justifiedLabel: r.isJustified ? 'Sí' : 'No'
+                justifiedLabel: r.isJustified ? 'Sí' : 'No',
+                __highlight: r.isExtraDay ? COLORS.extraRow : null
             })), COLORS.late);
+
+            if (report.lateArrivals.some(r => r.isExtraDay)) {
+                doc.fill(COLORS.extra).font('Helvetica-Oblique').fontSize(7.5)
+                    .text('*  Fila resaltada: trabajó en su día franco (día extra); el retardo se le descuenta igual.', PAGE.margin + 2, doc.y - 11);
+                doc.y += 4;
+            }
         }
 
         // ── Ausencias ───────────────────────────────────────────────────
@@ -233,6 +247,24 @@ export function buildAttendanceReportPdf(report, cutLabel) {
                 ...r,
                 sourceShort: sourceLabel(r.scheduleSource)
             })), COLORS.absent);
+        }
+
+        // ── Días extra (franco trabajado) ───────────────────────────────
+        // Empleados que marcaron en un día que no les correspondía trabajar.
+        if ((report.extraDays?.length || 0) > 0) {
+            drawSectionTitle(doc, 'Días extra · franco trabajado', report.extraDays.length, COLORS.extra);
+            drawTable(doc, [
+                { key: 'name', label: 'Empleado', width: 120 },
+                { key: 'dni', label: 'DNI', width: 70 },
+                { key: 'department', label: 'Departamento', width: 85 },
+                { key: 'shift', label: 'Turno', width: 55, align: 'center' },
+                { key: 'startTime', label: 'Entrada', width: 55, align: 'center' },
+                { key: 'checkIn', label: 'Marcó', width: 60, align: 'center' },
+                { key: 'statusLabel', label: 'Estado', width: 70, align: 'center' }
+            ], report.extraDays.map(r => ({
+                ...r,
+                statusLabel: r.status === 'franco-trabajado' ? 'Franco trab.' : (r.status || '—')
+            })), COLORS.extra);
         }
 
         // ── Pendientes (turno aún no inicia) ────────────────────────────
