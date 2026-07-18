@@ -790,7 +790,8 @@ routerUser.get(`${nameApi}/user/attendance/:dni`, async (req, res) => {
             date: searchDate.toISOString()
         })
             .populate('createdBy', 'name surName img')
-            .populate('editedBy.user', 'name surName img');
+            .populate('editedBy.user', 'name surName img')
+            .populate('comments.user', 'name surName img');
 
         // 5. Respuesta si NO hay registro (Muy importante para el frontend)
         if (!attendance) {
@@ -957,6 +958,73 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
             message: `Procesados ${results.length} de ${updates.length} registros.`,
             data: { results, errors }
         });
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ status: 500, message: 'Error server internal', error: error.message });
+    }
+});
+
+
+
+// ══════════════════════════════════════════════════════════════════════
+// ENDPOINT: Comentarios de asistencia (solo usuarios super)
+// ══════════════════════════════════════════════════════════════════════
+// POST .../user/attendance/comment
+// body: { userId | dni, date, message }
+// Agrega un comentario al documento Attendance del día (lo crea si no
+// existe). El autor sale de la sesión (req.session.userId), nunca del body.
+routerUser.post(`${nameApi}/user/attendance/comment`, validateSessionAndUserSuper, async (req, res) => {
+    try {
+        const authorId = req.session.userId;
+        const { userId, dni, date, message } = req.body || {};
+
+        const cleanMessage = typeof message === 'string' ? message.trim() : '';
+        if (!cleanMessage) {
+            return res.status(400).json({ status: 400, error: 'Bad request', message: 'El comentario no puede estar vacío.' });
+        }
+        if (!date) {
+            return res.status(400).json({ status: 400, error: 'Bad request', message: 'La fecha (date) es obligatoria.' });
+        }
+
+        // Resolver el usuario objetivo por id o por dni
+        let targetUserId = userId && ObjectId.isValid(userId) ? userId : null;
+        let userDoc = null;
+        if (targetUserId) {
+            userDoc = await UserModel.findById(targetUserId);
+        } else if (dni) {
+            userDoc = await UserModel.findOne({ dni });
+            targetUserId = userDoc?._id;
+        }
+        if (!userDoc) {
+            return res.status(404).json({ status: 404, error: 'Not found', message: 'Usuario no encontrado.' });
+        }
+
+        const dateObj = new Date(date);
+        dateObj.setUTCHours(0, 0, 0, 0);
+        if (!isValid(dateObj)) {
+            return res.status(400).json({ status: 400, error: 'Bad request', message: 'Formato de fecha inválido.' });
+        }
+
+        const record = await AttendanceModel.findOneAndUpdate(
+            { userId: targetUserId, date: dateObj },
+            {
+                $push: { comments: { user: authorId, message: cleanMessage, date: new Date() } },
+                // Si el documento no existía, quien comenta lo origina
+                $setOnInsert: { createdBy: authorId }
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        )
+            .populate('comments.user', 'name surName img')
+            .populate('createdBy', 'name surName img')
+            .populate('editedBy.user', 'name surName img');
+
+        // Refrescar la celda en tiempo real (mismo canal que los demás flujos)
+        const dateEvent = new Date(record.date);
+        dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
+        io.emit(`${dateEvent.toISOString()}-${userDoc.email}`, { finalRecord: record, user: userDoc });
+
+        return res.status(200).json({ status: 200, result: record });
     }
     catch (error) {
         console.log(error);

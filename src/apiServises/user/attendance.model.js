@@ -131,6 +131,24 @@ const AttendanceSchema = new mongoose.Schema({
             _id: false
         }],
         default: []
+    },
+
+    // Comentarios sobre el día, agregados por usuarios super desde la grilla.
+    // Cada entrada referencia a quién comentó. Compatible hacia atrás.
+    comments: {
+        type: [{
+            user: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'user'
+            },
+            message: { type: String },
+            date: {
+                type: Date,
+                default: Date.now
+            },
+            _id: false
+        }],
+        default: []
     }
 
 }, { timestamps: true });
