@@ -104,6 +104,7 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
     const notRequired = [];
     const noSchedule = [];
     const extraDays = [];
+    const permissions = [];
     let consideredEmployees = 0;
 
     for (const user of users) {
@@ -165,9 +166,24 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
             continue;
         }
 
-        // 3) Día sin asistencia requerida
-        if (NOT_REQUIRED_TYPES.includes(rule.workType)) {
-            notRequired.push({ ...base, reason: rule.workType });
+        // 3) Día sin asistencia requerida (descanso / permiso / vacaciones).
+        //    El tipo puede venir de la regla del día (override o horario base) o
+        //    del status del propio registro, que ya admite 'permiso'/'vacaciones'.
+        const statusNotRequired = NOT_REQUIRED_TYPES.includes(record?.status) ? record.status : null;
+        const notRequiredType = NOT_REQUIRED_TYPES.includes(rule.workType) ? rule.workType : statusNotRequired;
+
+        if (notRequiredType) {
+            // Nota del administrador que justifica el permiso, si la registró.
+            const notes = record?.scheduleOverride?.note;
+            const noteMessage = Array.isArray(notes) && notes.length
+                ? (notes[notes.length - 1]?.message || '')
+                : '';
+
+            const entry = { ...base, reason: notRequiredType, note: noteMessage };
+            notRequired.push(entry);
+
+            // Los permisos se listan aparte para que salgan en el reporte.
+            if (notRequiredType === 'permiso') permissions.push(entry);
             continue;
         }
 
@@ -201,6 +217,7 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
     pending.sort(byDeptName);
     presentOnTime.sort(byDeptName);
     extraDays.sort(byDeptName);
+    permissions.sort(byDeptName);
 
     const dateLabel = `${DAY_NAMES[dayNumber]}, ${now.date()} de ${MONTH_NAMES[now.month()]} de ${now.year()}`;
 
@@ -220,6 +237,7 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
             notRequired: notRequired.length,
             noSchedule: noSchedule.length,
             extraDays: extraDays.length,
+            permissions: permissions.length,
             discountUnits: lateArrivals.reduce((sum, r) => sum + (r.discountUnits || 0), 0)
         },
         lateArrivals,
@@ -228,6 +246,7 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
         presentOnTime,
         notRequired,
         noSchedule,
-        extraDays
+        extraDays,
+        permissions
     };
 }

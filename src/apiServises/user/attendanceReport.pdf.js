@@ -249,6 +249,24 @@ export function buildAttendanceReportPdf(report, cutLabel) {
             })), COLORS.absent);
         }
 
+        // ── Permisos (ausencia autorizada) ──────────────────────────────
+        // Empleados con permiso hoy: la regla del día (override/horario base) o
+        // el status del registro lo marcan como 'permiso'.
+        if ((report.permissions?.length || 0) > 0) {
+            drawSectionTitle(doc, 'Permisos', report.permissions.length, COLORS.ok);
+            drawTable(doc, [
+                { key: 'name', label: 'Empleado', width: 120 },
+                { key: 'dni', label: 'DNI', width: 70 },
+                { key: 'department', label: 'Departamento', width: 90 },
+                { key: 'shift', label: 'Turno', width: 50, align: 'center' },
+                { key: 'sourceShort', label: 'Horario', width: 55, align: 'center' },
+                { key: 'note', label: 'Observación', width: 130 }
+            ], report.permissions.map(r => ({
+                ...r,
+                sourceShort: sourceLabel(r.scheduleSource)
+            })), COLORS.ok);
+        }
+
         // ── Días extra (franco trabajado) ───────────────────────────────
         // Empleados que marcaron en un día que no les correspondía trabajar.
         if ((report.extraDays?.length || 0) > 0) {
