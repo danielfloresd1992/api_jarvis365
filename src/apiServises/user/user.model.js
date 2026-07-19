@@ -99,7 +99,8 @@ export default model('user', new Schema({
             type: String,
             // Aquí puedes listar todos los puestos posibles
             enum: [
-                'Gerente', 'Subgerente', 'Coordinador', 'Operador senior', 'Operador experto', 'Operador',
+                'Gerente', 'Subgerente', 'Coordinador', 'Supervisor', 'Operador senior', 'Operador experto', 'Operador',
+                'Verificador', 'Auditor de datos',
                 'Analista de sistemas', 'Analista de reportes', 'Analista de auditoria', 'Analista de RRHH'
             ]
         },

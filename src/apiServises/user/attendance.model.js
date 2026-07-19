@@ -4,7 +4,9 @@ import mongoose from 'mongoose';
 const AttendanceSchema = new mongoose.Schema({
     userId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
+        // El modelo está registrado como 'user' (minúscula): con 'User' cualquier
+        // populate de userId lanza MissingSchemaError y termina en un 500.
+        ref: 'user',
         required: true,
         immutable: true
     },
@@ -47,7 +49,7 @@ const AttendanceSchema = new mongoose.Schema({
     // Estado del día
     status: {
         type: String,
-        enum: ['presente', 'ausente', 'pendiente', 'franco-trabajado'],
+        enum: ['presente', 'ausente', 'pendiente', 'franco-trabajado', 'permiso', 'vacaciones'],
         default: 'pendiente'
     },
 
@@ -131,6 +133,14 @@ const AttendanceSchema = new mongoose.Schema({
             _id: false
         }],
         default: []
+    },
+
+    // Guardia del día (responsable del turno en su departamento).
+    // Regla de negocio: solo UN usuario por departamento y fecha puede
+    // tenerla en true — la valida el endpoint /user/attendance/on-duty.
+    onDuty: {
+        type: Boolean,
+        default: false
     },
 
     // Comentarios sobre el día, agregados por usuarios super desde la grilla.

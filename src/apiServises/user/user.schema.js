@@ -2,8 +2,9 @@ import * as yup from 'yup';
 
 const DEPARTMENT_ENUM = ['Operaciones', 'Sistemas y desarrollo', 'Reportes', 'Recursos Humanos', 'Audioria'];
 const POSITION_ENUM = [
-    'Gerente', 'Subgerente', 'Coordinador', 'Operador senior', 'Operador experto',
-    'Operador', 'Analista de sistemas', 'Analista de reportes', 'Analista de auditoria', 'Analista de RRHH'
+    'Gerente', 'Subgerente', 'Coordinador', 'Supervisor', 'Operador senior', 'Operador experto',
+    'Operador', 'Verificador', 'Auditor de datos',
+    'Analista de sistemas', 'Analista de reportes', 'Analista de auditoria', 'Analista de RRHH'
 ];
 
 // Sub-schema de validación para un día individual de scheduleByDay

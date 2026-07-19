@@ -1,6 +1,7 @@
 import express from 'express';
 const routerUser = express.Router();
-import { join } from 'path';
+import { join, basename } from 'path';
+import sharp from 'sharp';
 import UserModel, { UpdateByUserSchema } from './user.model.js';
 import { userUpdateSchema } from './user.schema.js'
 import addCredentials from '../../middleware/addCredential.js';
@@ -869,6 +870,12 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
                     continue;
                 }
 
+                // El permiso SIEMPRE debe llevar un comentario que lo justifique
+                if (item.workType === 'permiso' && !(typeof item.note === 'string' && item.note.trim())) {
+                    errors.push({ item, error: 'El permiso requiere un comentario obligatorio.' });
+                    continue;
+                }
+
                 // Resolver userId desde dni si es necesario
                 let userId = item.userId;
                 if (!userId && item.dni) {
@@ -893,11 +900,14 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
                     .lean();
                 const previousNotes = previousRecord?.scheduleOverride?.note || [];
 
+                // Tipos sin horario de entrada/salida
+                const isNoTimeType = ['descanso', 'permiso', 'vacaciones', 'falta'].includes(item.workType);
+
                 const scheduleOverride = {
                     workType: item.workType,
                     shift: item.shift || null,
-                    startTime: item.workType === 'descanso' ? null : (item.startTime || null),
-                    endTime: item.workType === 'descanso' ? null : (item.endTime || null),
+                    startTime: isNoTimeType ? null : (item.startTime || null),
+                    endTime: isNoTimeType ? null : (item.endTime || null),
                     note: [
                         ...previousNotes,
                         { user: adminUserId, message: item.note || 'Cambio de horario', date: new Date() }
@@ -919,7 +929,12 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
                     }));
 
                 const updateOp = {
-                    $set: { scheduleOverride },
+                    $set: {
+                        scheduleOverride,
+                        // Permiso y vacaciones también marcan el estado del día
+                        ...(item.workType === 'permiso' ? { status: 'permiso' } : {}),
+                        ...(item.workType === 'vacaciones' ? { status: 'vacaciones' } : {}),
+                    },
                     $setOnInsert: { createdBy: adminUserId }
                 };
                 if (previousRecord && changedFields.length > 0) {
@@ -958,6 +973,139 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
             message: `Procesados ${results.length} de ${updates.length} registros.`,
             data: { results, errors }
         });
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ status: 500, message: 'Error server internal', error: error.message });
+    }
+});
+
+
+
+// ══════════════════════════════════════════════════════════════════════
+// ENDPOINT: Guardia del día (onDuty) — solo usuarios super
+// ══════════════════════════════════════════════════════════════════════
+// POST .../user/attendance/on-duty
+// body: { userId | dni, date, onDuty: true|false }
+// Designa (o quita) la guardia del día. Regla: solo UN usuario por
+// departamento y fecha; departamentos habilitados: Operaciones, Reportes
+// y Sistemas y desarrollo. Quien designa sale de la sesión.
+const ONDUTY_DEPARTMENTS = ['Operaciones', 'Reportes', 'Sistemas y desarrollo'];
+
+routerUser.post(`${nameApi}/user/attendance/on-duty`, validateSessionAndUserSuper, async (req, res) => {
+    try {
+        const authorId = req.session.userId;
+        const { userId, dni, date, onDuty } = req.body || {};
+
+        if (typeof onDuty !== 'boolean') {
+            return res.status(400).json({ status: 400, error: 'Bad request', message: '"onDuty" debe ser booleano.' });
+        }
+        if (!date) {
+            return res.status(400).json({ status: 400, error: 'Bad request', message: 'La fecha (date) es obligatoria.' });
+        }
+
+        // Resolver el usuario objetivo por id o por dni
+        let userDoc = null;
+        if (userId && ObjectId.isValid(userId)) userDoc = await UserModel.findById(userId);
+        else if (dni) userDoc = await UserModel.findOne({ dni });
+        if (!userDoc) {
+            return res.status(404).json({ status: 404, error: 'Not found', message: 'Usuario no encontrado.' });
+        }
+
+        const dateObj = new Date(date);
+        dateObj.setUTCHours(0, 0, 0, 0);
+        if (!isValid(dateObj)) {
+            return res.status(400).json({ status: 400, error: 'Bad request', message: 'Formato de fecha inválido.' });
+        }
+
+        const department = userDoc.jobInformation?.department || null;
+
+        // Turno efectivo de un usuario en la fecha: override del día > regla
+        // semanal > turno global. (La guardia es única por depto + fecha + turno.)
+        const dayNumber = dateObj.getUTCDay();
+        const resolveShift = (workScheduleDoc, record) => {
+            if (record?.scheduleOverride?.shift) return record.scheduleOverride.shift;
+            const map = workScheduleDoc?.scheduleByDay;
+            const rule = map?.get?.(String(dayNumber)) || map?.[String(dayNumber)] || null;
+            return rule?.shift || workScheduleDoc?.shiftType || 'Diurno';
+        };
+
+        if (onDuty) {
+            // Solo departamentos habilitados para el rol de guardia
+            if (!ONDUTY_DEPARTMENTS.includes(department)) {
+                return res.status(400).json({
+                    status: 400,
+                    error: 'Bad request',
+                    message: `La guardia del día solo aplica a: ${ONDUTY_DEPARTMENTS.join(', ')}.`
+                });
+            }
+
+            const targetRecord = await AttendanceModel.findOne({ userId: userDoc._id, date: dateObj })
+                .select('scheduleOverride')
+                .lean();
+            const targetShift = resolveShift(userDoc.workSchedule, targetRecord);
+
+            // Exclusividad: nadie más del MISMO departamento y MISMO turno
+            // puede tener la guardia esa fecha
+            const deptUsers = await UserModel.find({ 'jobInformation.department': department })
+                .select('_id name surName workSchedule');
+            const deptUserIds = deptUsers.map(u => u._id);
+            const candidates = await AttendanceModel.find({
+                date: dateObj,
+                onDuty: true,
+                userId: { $in: deptUserIds, $ne: userDoc._id }
+            }).select('userId scheduleOverride').lean();
+
+            const deptUsersById = new Map(deptUsers.map(u => [String(u._id), u]));
+            const conflict = candidates.find(rec => {
+                const holder = deptUsersById.get(String(rec.userId));
+                return holder && resolveShift(holder.workSchedule, rec) === targetShift;
+            });
+
+            if (conflict) {
+                const holder = deptUsersById.get(String(conflict.userId));
+                const holderName = holder?.name
+                    ? `${holder.name} ${holder.surName || ''}`.trim()
+                    : 'otro usuario';
+                return res.status(409).json({
+                    status: 409,
+                    error: 'Conflict',
+                    message: `Ya hay guardia ${String(targetShift).toLowerCase()} asignada ese día en ${department}: ${holderName}.`
+                });
+            }
+        }
+
+        // Registrar el cambio en la auditoría del documento
+        const previousRecord = await AttendanceModel.findOne({ userId: userDoc._id, date: dateObj })
+            .select('onDuty')
+            .lean();
+        const prevOnDuty = Boolean(previousRecord?.onDuty);
+
+        const updateOp = {
+            $set: { onDuty },
+            $setOnInsert: { createdBy: authorId }
+        };
+        if (previousRecord && prevOnDuty !== onDuty) {
+            updateOp.$push = {
+                editedBy: { user: authorId, change: [{ field: 'onDuty', from: prevOnDuty, to: onDuty }], date: new Date() }
+            };
+        }
+
+        const record = await AttendanceModel.findOneAndUpdate(
+            { userId: userDoc._id, date: dateObj },
+            updateOp,
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        )
+            .populate('comments.user', 'name surName img')
+            .populate('createdBy', 'name surName img')
+            .populate('editedBy.user', 'name surName img');
+
+        // Refrescar la celda en tiempo real (mismo canal que los demás flujos)
+        const dateEvent = new Date(record.date);
+        dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
+        io.emit(`${dateEvent.toISOString()}-${userDoc.email}`, { finalRecord: record, user: userDoc });
+
+        return res.status(200).json({ status: 200, result: record });
     }
     catch (error) {
         console.log(error);
@@ -1392,11 +1540,28 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
 
 routerUser.get(`${nameApi}/user/multimedia/:namefile`, async (req, res) => {
     try {
-        const namefile = req.params?.namefile;
-        return res.sendFile(join(userMultimedia, namefile))
+        // basename evita path traversal (../../etc)
+        const namefile = basename(req.params?.namefile || '');
+        const filePath = join(userMultimedia, namefile);
+
+        // Miniaturas: ?w=64 redimensiona al vuelo con sharp (cuadrado, cover).
+        // El navegador cachea cada tamaño por URL, así que solo se genera una vez
+        // por sesión de caché.
+        const width = Number(req.query?.w);
+        if (Number.isInteger(width) && width > 0 && width <= 512) {
+            const buffer = await sharp(filePath)
+                .resize(width, width, { fit: 'cover' })
+                .toBuffer();
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            res.type(namefile.split('.').pop() || 'jpeg');
+            return res.send(buffer);
+        }
+
+        return res.sendFile(filePath);
     }
     catch (error) {
         console.log(error);
+        return res.status(404).json({ status: 404, error: 'Not found', message: 'Imagen no encontrada.' });
     }
 });
 
