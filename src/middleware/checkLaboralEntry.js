@@ -79,11 +79,28 @@ export default async function checkLaboralEntry(req, res, next) {
         // 4. Registro de asistencia de hoy
         const record = await AttendanceModel.findOne({ userId: user._id, date: todayMidnight });
 
-        // 4a. Marcó su entrada
+        // 4a. Marcó su entrada hoy
         if (record?.checkIn) {
             req.laboralEntry = { registered: true, reason: 'marcó entrada hoy', checkIn: record.checkIn, underControl };
             if (req.session) req.session.laboralEntry = req.laboralEntry;
             return next();
+        }
+
+        // 4a-bis. Turno NOCTURNO que cruza la medianoche: el empleado marcó su
+        // entrada AYER (p. ej. 18:00) y su jornada sigue abierta (la salida ~07:00
+        // aún no ocurre). Durante toda esa noche/madrugada se considera registrado.
+        const yesterdayMidnight = new Date(todayMidnight);
+        yesterdayMidnight.setUTCDate(yesterdayMidnight.getUTCDate() - 1);
+        const yRecord = await AttendanceModel.findOne({ userId: user._id, date: yesterdayMidnight });
+        if (yRecord?.checkIn && !yRecord?.checkOut) {
+            const yDayNumber = yesterdayMidnight.getUTCDay();
+            const yRule = scheduleMap?.get?.(String(yDayNumber)) || scheduleMap?.[String(yDayNumber)] || null;
+            const yShift = yRecord.scheduleOverride?.shift || yRule?.shift || user.workSchedule?.shiftType || 'Diurno';
+            if (yShift === 'Nocturno') {
+                req.laboralEntry = { registered: true, reason: 'turno nocturno de ayer aún abierto', checkIn: yRecord.checkIn, underControl };
+                if (req.session) req.session.laboralEntry = req.laboralEntry;
+                return next();
+            }
         }
 
         // 4b. No sujeto a control → no requiere marcar

@@ -719,6 +719,26 @@ routerUser.get(`${nameApi}/user/attendance/authenticated/:dni`, async (req, res)
             });
         }
 
+        // 2-bis) Turno NOCTURNO que cruza la medianoche: marcó su entrada AYER
+        //        (~18:00) y su jornada sigue abierta (salida ~07:00). Autenticado.
+        const yesterdayMidnight = new Date(todayMidnight);
+        yesterdayMidnight.setUTCDate(yesterdayMidnight.getUTCDate() - 1);
+        const yRecord = await AttendanceModel.findOne({ userId: user._id, date: yesterdayMidnight });
+        if (yRecord?.checkIn && !yRecord?.checkOut) {
+            const yDayNumber = yesterdayMidnight.getUTCDay();
+            const yRule = scheduleMap?.get?.(String(yDayNumber)) || scheduleMap?.[String(yDayNumber)] || null;
+            const yShift = yRecord.scheduleOverride?.shift || yRule?.shift || user.workSchedule?.shiftType || 'Diurno';
+            if (yShift === 'Nocturno') {
+                return res.status(200).json({
+                    status: 200,
+                    authenticated: true,
+                    dni,
+                    reason: 'Turno nocturno de ayer aún abierto',
+                    checkIn: yRecord.checkIn
+                });
+            }
+        }
+
         // 3) Resolver la regla efectiva de hoy: override del día → scheduleByDay
         const override = record?.scheduleOverride;
         const hasOverride = Boolean(override?.workType);
