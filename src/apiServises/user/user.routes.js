@@ -5,6 +5,7 @@ import sharp from 'sharp';
 import UserModel, { UpdateByUserSchema } from './user.model.js';
 import { userUpdateSchema } from './user.schema.js'
 import addCredentials from '../../middleware/addCredential.js';
+import checkLaboralEntry from '../../middleware/checkLaboralEntry.js';
 import controller from './user.controller.js';
 
 import nameApi from '../../libs/name_api.js';
@@ -65,7 +66,7 @@ const toUtcMidnightFromZonedParts = (parts) => {
 
 // THIS ENDPOIND IS DEPRECATED 👇
 
-routerUser.post(`/user/login`, controller.login, addCredentials);   //legace
+routerUser.post(`/user/login`, controller.login, checkLaboralEntry, addCredentials);   //legace
 routerUser.get(`/user/protected`, controller.get);
 routerUser.post(`/user/signup`, controller.signup);
 routerUser.get(`/user/logout`, controller.logout);
@@ -1569,7 +1570,7 @@ routerUser.get(`${nameApi}/user/multimedia/:namefile`, async (req, res) => {
 
 
 
-routerUser.post(`${nameApi}/user/login`, controller.login, addCredentials);
+routerUser.post(`${nameApi}/user/login`, controller.login, checkLaboralEntry, addCredentials);
 
 routerUser.get(`${nameApi}/user/protected`, controller.get);
 
