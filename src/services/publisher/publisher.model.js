@@ -17,7 +17,7 @@ const Publisher = new Schema({
     validateFor: 
             {
                 type: Schema.Types.ObjectId,
-                ref: 'User'
+                ref: 'user'
             }
     ,
     local: {

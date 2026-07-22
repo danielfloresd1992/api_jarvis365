@@ -3,8 +3,8 @@ import { model, Schema } from 'mongoose';
 
 const CommentSchema = new Schema({ 
     user: { 
-        type: Schema.Types.ObjectId, 
-        ref: 'User', // asegúrate que tu modelo se registre como 'User' 
+        type: Schema.Types.ObjectId,
+        ref: 'user', // el modelo user se registra como 'user' (minúscula); 'User' rompe populate
         required: true
     }, 
     comment: { 
