@@ -120,10 +120,13 @@ export default {
 
     getMenuById(id){
         return new Promise((resolve, reject) => {
-            Menu.find({ _id: id }).exec((err, docs) => {
-                if(err) reject(err);
-                resolve(docs);
-            });
+            // Se incluye la auditoría (select:false por defecto) populada, para
+            // poder mostrar quién editó cada campo al abrir el menú en el form.
+            Menu.find({ _id: id })
+                .select('+updateByUser')
+                .populate('updateByUser.user', 'name surName')
+                .then(docs => resolve(docs))
+                .catch(err => reject(err));
         });
     },
 
@@ -142,68 +145,34 @@ export default {
     },
 
 
-    putMenu(body){
+    // Actualización PARCIAL con auditoría: el front envía SOLO los campos que
+    // cambiaron (+ _id). Se hace $set de esos campos y $push al historial
+    // updateByUser con quién editó (userId de la sesión) y la key/value de cada
+    // cambio. Enviar el documento completo borraría campos no incluidos, por eso
+    // se persiste únicamente lo recibido.
+    putMenu(body, userId){
         return new Promise((resolve, reject) => {
-            if(body._id === null || body._id === undefined) return reject('404 not found');
+            const { _id, ...fields } = body || {};
+            if(_id === null || _id === undefined) return reject('404 not found');
 
-            // Construir el documento de actualización con todos los campos del modelo.
-            // Se excluye _id del payload para evitar error de campo inmutable.
-            let especial = null;
-            if(body.especial){
-                especial = {
-                    time: {
-                        timeInitTitle: {
-                            es: body.especial.time.timeInitTitle.es,
-                            en: body.especial.time.timeInitTitle.en
-                        },
-                        timeEndTitle: {
-                            es: body.especial.time.timeEndTitle.es,
-                            en: body.especial.time.timeEndTitle.en
-                        }
-                    }
-                };
-            }
+            // Ignorar meta-campos que no son datos editables del menú
+            delete fields.updateByUser;
+            delete fields.__v;
+
+            const change = Object.keys(fields).map(key => ({ key, value: fields[key] }));
+            if(change.length === 0) return reject('Sin cambios para guardar');
 
             const update = {
-                es:                  body.es,
-                en:                  body.en,
-                titleForDocumentReport: body.titleForDocumentReport
-                    ? { es: body.titleForDocumentReport.es || null,
-                        en: body.titleForDocumentReport.en || null }
-                    : { es: null, en: null },
-                textHeader:          body.textHeader || null,
-                time:                body.time,
-                       timeUnique:   body.timeUnique,
-                amountOfSomething:   body.amountOfSomething,
-                            table:   body.table,
-                photos:  { length: body.photos.length, caption: body.photos.caption },
-                category:            body.category,
-                especial:            especial,
-                car:                 body.car,
-                isArea:              body.isArea,
-                isDescriptionPerson: body.isDescriptionPerson,
-                managerReferenceId: body.managerReferenceId,
-                managerReferenceTitle: body.managerReferenceTitle,
-                // DEPRECATED — se preserva para registros existentes
-                rulesForBonus: {
-                    forLocal:        body.rulesForBonus?.forLocal  ?? 'Todos',
-                    worth:           body.rulesForBonus?.worth     ?? 0,
-                    amulative:       body.rulesForBonus?.amulative ?? 0
-                },
-                // Nuevo sistema de bonificación
-                bonusCalculationRules: body.bonusCalculationRules ?? undefined,
-                useOnlyForTheReportingDocument:   body.useOnlyForTheReportingDocument,
-                useOfLiveAlertForTheCustomer:     body.useOfLiveAlertForTheCustomer,
-                noSubtitleInTheReport:            body.noSubtitleInTheReport,
-                groupingInTheReport:              body.groupingInTheReport,
-                descriptionNoteForReportDocument: body.descriptionNoteForReportDocument,
-                doesItrequireVideo:               body.doesItrequireVideo
+                $set: fields,
+                $push: { updateByUser: { user: userId, change, date: new Date() } }
             };
 
-            Menu.updateOne({ _id: body._id }, update).exec((err, docs) => {
-                if(err) return reject(err);
-                return resolve(docs);
-            });
+            Menu.findByIdAndUpdate(_id, update, { new: true, runValidators: true })
+                .then(doc => {
+                    if(!doc) return reject('404 not found');
+                    return resolve(doc);
+                })
+                .catch(err => reject(err));
         });
     },
 

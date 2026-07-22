@@ -71,11 +71,14 @@ controller.getCategory = async (req, res) => {
 
 controller.putMenu = async (req, res) => {
     try {
-        const update = await menu.putMenu(req.body);
+        // El autor de la edición sale de la sesión (nunca del body)
+        const update = await menu.putMenu(req.body, req.session.userId);
         return res.json(update);
-    } 
+    }
     catch(err){
         console.log(err);
+        if (err === 'Sin cambios para guardar') return res.status(400).json({ status: 400, error: 'Bad request', message: err });
+        if (err === '404 not found') return res.status(404).json({ status: 404, error: 'Not found', message: 'Menú no encontrado' });
         return res.status(500).send(err);
     }
 };

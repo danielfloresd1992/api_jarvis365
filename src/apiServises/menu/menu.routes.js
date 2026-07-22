@@ -37,7 +37,7 @@ routerMenu.post(`${nameApi}/menu`, extendSession, validateSessionAndUserSuper, a
 
 
 
-routerMenu.post(`${nameApi}/menu/put`, extendSession, validateSessionAndUserSuper, controller.putMenu);
+routerMenu.put(`${nameApi}/menu/put`, extendSession, validateSessionAndUserSuper, controller.putMenu);
 
 routerMenu.delete(`${nameApi}/menu/id=:id`, extendSession, validateSessionAndUserSuper,controller.deleteByIdMenu);
 

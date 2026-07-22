@@ -207,6 +207,22 @@ const Menu = new Schema({
     descriptionNoteForReportDocument: {
         type: Boolean,
         default: false
+    },
+
+    // ── AUDITORÍA DE EDICIONES ────────────────────────────────────────────
+    // Cada edición registra quién la hizo (ref al usuario) y qué campos cambió
+    // con su nuevo valor. Oculto por defecto (select:false) para no inflar el
+    // listado; se pide explícito con .select('+updateByUser') al leer un menú.
+    // OJO: el modelo user se registra como 'user' (minúscula) — 'User' rompe populate.
+    updateByUser: {
+        type: [{
+            user:   { type: Schema.Types.ObjectId, ref: 'user' },
+            change: { type: [{ key: String, value: Schema.Types.Mixed, _id: false }], default: [] },
+            date:   { type: Date, default: Date.now },
+            _id: false
+        }],
+        default: [],
+        select: false
     }
 
 });
