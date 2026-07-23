@@ -21,13 +21,51 @@ controller.setMenu = async ( req, res ) => {
 
 controller.getAllMenu = async (req, res) => {
     try{
-        const { compact, alertLive, alertDocument } = req.query;
-        const seletedPropiety = {};
+        const { compact, alertLive, alertDocument, withAudit } = req.query;
         const query = {};
-        if(compact === 'true') seletedPropiety.remove = '_id es';
         if(alertLive !== undefined)  query.useOfLiveAlertForTheCustomer = Boolean(alertLive);
         if(alertDocument !== undefined) query.useOnlyForTheReportingDocument = Boolean(alertDocument);
-        const menuAll = await menuModel.find(query).select(seletedPropiety.remove);
+
+        // Versión ligera para selects/autocompletes
+        if(compact === 'true'){
+            const menuAll = await menuModel.find(query).select('_id es');
+            return res.json(menuAll);
+        }
+
+        // Listado enriquecido para la gestión: creador + últimos 3 editores.
+        // Opt-in explícito (withAudit=true) para no inflar otros consumidores
+        // como el listado de alertas en vivo de jarvis-express (alertLive=true).
+        if(withAudit === 'true'){
+            const docs = await menuModel.find(query)
+                .select('+updateByUser')
+                .populate('createdBy', 'name surName img')
+                .populate('updateByUser.user', 'name surName img')
+                .lean();
+
+            const result = docs.map(doc => {
+                // Últimas 3 ediciones (evento más reciente primero): quién editó
+                // (con su foto) y qué campos cambió. Sin exponer los valores.
+                const editors = Array.isArray(doc.updateByUser) ? doc.updateByUser : [];
+                const lastEditors = [...editors]
+                    .filter(e => e && e.user)
+                    .sort((a, b) => new Date(b.date) - new Date(a.date))
+                    .slice(0, 3)
+                    .map(e => ({
+                        _id:           e.user._id,
+                        name:          e.user.name,
+                        surName:       e.user.surName,
+                        img:           e.user.img ?? null,
+                        date:          e.date,
+                        changedFields: Array.isArray(e.change) ? e.change.map(c => c.key) : []
+                    }));
+
+                const { updateByUser, ...rest } = doc; // no exponer la auditoría completa
+                return { ...rest, lastEditors };
+            });
+            return res.json(result);
+        }
+
+        const menuAll = await menuModel.find(query);
         return res.json(menuAll);
     }
     catch(err){

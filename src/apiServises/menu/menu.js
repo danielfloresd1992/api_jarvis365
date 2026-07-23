@@ -124,7 +124,8 @@ export default {
             // poder mostrar quién editó cada campo al abrir el menú en el form.
             Menu.find({ _id: id })
                 .select('+updateByUser')
-                .populate('updateByUser.user', 'name surName')
+                .populate('createdBy', 'name surName img')
+                .populate('updateByUser.user', 'name surName img')
                 .then(docs => resolve(docs))
                 .catch(err => reject(err));
         });
@@ -158,6 +159,7 @@ export default {
             // Ignorar meta-campos que no son datos editables del menú
             delete fields.updateByUser;
             delete fields.__v;
+            delete fields.createdBy;   // el autor de la creación es inmutable
 
             const change = Object.keys(fields).map(key => ({ key, value: fields[key] }));
             if(change.length === 0) return reject('Sin cambios para guardar');

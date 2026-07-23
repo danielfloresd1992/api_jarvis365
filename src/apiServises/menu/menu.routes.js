@@ -2,7 +2,7 @@ import controller from './menu.controller.js';
 import express from 'express';
 import menuSchema from './menu.schema.js'
 import MenuModel from './menu.model.js';
-import { extendSession, validateSession, validateSessionAndUserSuper } from '../../middleware/validateSessionAndUser.js';
+import { extendSession, validateSession, validateSessionAndUserSuper, validateSuperUser } from '../../middleware/validateSessionAndUser.js';
 import nameApi from '../../libs/name_api.js';
 const routerMenu = express.Router();
 
@@ -17,13 +17,15 @@ routerMenu.get(`${nameApi}/menu/id=:id`, extendSession, validateSession, control
 
 
 
-routerMenu.post(`${nameApi}/menu`, extendSession, validateSessionAndUserSuper, async ( req, res ) => {
+routerMenu.post(`${nameApi}/menu`, extendSession, validateSuperUser, async ( req, res ) => {
     try{
         const body = req.body;
         const menuValiate = await menuSchema.validate(body);
-       
-        const menu = new MenuModel(menuValiate);
-        await menu.save()
+
+        // El autor sale de la sesión (nunca del body). Docs antiguos sin createdBy.
+        const menu = new MenuModel({ ...menuValiate, createdBy: req.session.userId });
+        await menu.save();
+        await menu.populate('createdBy', 'name surName img');
 
         return res.json(menu);
     }
@@ -37,7 +39,7 @@ routerMenu.post(`${nameApi}/menu`, extendSession, validateSessionAndUserSuper, a
 
 
 
-routerMenu.put(`${nameApi}/menu/put`, extendSession, validateSessionAndUserSuper, controller.putMenu);
+routerMenu.put(`${nameApi}/menu/put`, extendSession, validateSuperUser, controller.putMenu);
 
 routerMenu.delete(`${nameApi}/menu/id=:id`, extendSession, validateSessionAndUserSuper,controller.deleteByIdMenu);
 

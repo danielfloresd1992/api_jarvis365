@@ -209,6 +209,17 @@ const Menu = new Schema({
         default: false
     },
 
+    // ── AUTOR DE LA CREACIÓN ──────────────────────────────────────────────
+    // Quién creó la alerta/menú. Se setea en el POST desde req.session.userId.
+    // Los documentos antiguos no lo tienen (queda null). Se popula al listar con
+    // withAudit=true. OJO: el modelo user se registra como 'user' (minúscula).
+    createdBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'user',
+        default: null,
+        immutable: true   // una edición nunca reescribe al creador original
+    },
+
     // ── AUDITORÍA DE EDICIONES ────────────────────────────────────────────
     // Cada edición registra quién la hizo (ref al usuario) y qué campos cambió
     // con su nuevo valor. Oculto por defecto (select:false) para no inflar el

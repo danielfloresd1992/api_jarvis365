@@ -98,4 +98,33 @@ function extendSession(req, res, next){
 
 
 
-export { validateSession, validateSessionAndUserSuper, extendSession };
+// Requiere que el usuario tenga 'super' === true. La propiedad se evalúa desde
+// req.session.super, que addCredential.js setea en el login (req.session.super =
+// user.super). Devuelve 401 si no hay sesión y 403 (con {status, error, message})
+// si el usuario NO es super. A diferencia de validateSessionAndUserSuper, aquí
+// NO se exige 'admin': la condición es únicamente 'super'.
+function validateSuperUser(req, res, next) {
+    const userAgent = req.get('User-Agent');
+    const ip = req.ip;
+    const port = req.socket.remotePort;
+
+    // Bypass servidor-a-servidor (mismo patrón que los otros middlewares)
+    if (userAgent === 'node' && (`${ip}:${port}` === process.env.SERVER_JARVIS365DEV || `${ip}:${port}` === process.env.SERVER_JARVIS365PROD)) {
+        return next();
+    }
+
+    if (!req.session.name) {
+        return res.status(401).json({ status: 401, error: 'Unauthorized', message: 'No autenticado: debe iniciar sesión' });
+    }
+
+    if (req.session.super !== true) {
+        if (SHOW_CONSOLE) console.log(colors.bgRed(`El usuario ${req.session.name} intentó una acción de super sin permiso\nrouter: ${req.originalUrl}\norigen: ${req.ip}\ndate: ${new Date()}\n`.white));
+        return res.status(403).json({ status: 403, error: 'Forbidden', message: 'Se requiere permiso de super usuario para esta acción' });
+    }
+
+    next();
+}
+
+
+
+export { validateSession, validateSessionAndUserSuper, extendSession, validateSuperUser };
