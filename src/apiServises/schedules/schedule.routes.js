@@ -9,6 +9,10 @@ routerSchedule.get(`${nameApi}/schedule/all`, validateSession, controller.getDat
 
 routerSchedule.get(`${nameApi}/schedule/idLocal=:idLocal`,extendSession, validateSession, controller.getDateByIdLocal);
 
+routerSchedule.get(`${nameApi}/schedule/active/idLocal=:idLocal`, extendSession, validateSession, controller.getActiveByIdLocal);
+
+routerSchedule.get(`${nameApi}/schedule/today/idLocal=:idLocal`, extendSession, validateSession, controller.getTodayByIdLocal);
+
 routerSchedule.post(`${nameApi}/schedule`, extendSession, validateSessionAndUserSuper, controller.setDateLocal);
 
 routerSchedule.put(`${nameApi}/schedule/idLocal=:idLocal`, extendSession, validateSessionAndUserSuper, controller.putDate);

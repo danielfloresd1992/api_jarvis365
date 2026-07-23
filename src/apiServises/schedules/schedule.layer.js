@@ -41,12 +41,12 @@ export default {
         return new Promise((resolve, reject) => {
             Schedules.find({ idLocal: id})
                 .exec((err, docs) => {
-                    if(err) return reject(err)
-                    if( docs.length === 0 ) resolve(docs);
+                    if(err) return reject(err);
+                    if( docs.length === 0 ) return resolve(docs);   // el controller responde 404
 
-                    Schedules.findByIdAndUpdate({ _id: docs[0]._id }, body)
+                    Schedules.findByIdAndUpdate(docs[0]._id, body, { new: true, runValidators: true })
                         .exec((err, result) => {
-                            if(err) reject(err);
+                            if(err) return reject(err);
                             resolve(result);
                         });
                 });

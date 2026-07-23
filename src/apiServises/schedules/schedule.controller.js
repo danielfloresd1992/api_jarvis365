@@ -1,6 +1,9 @@
 const controller = {};
+import colors from 'colors';
 import scheduleLayer from './schedule.layer.js';
 import Schedules from './schedule.model.js';
+import { validateRanges, getActiveMonitoringNow, pickSchedule } from './schedule.logic.js';
+import { IsDaylightSavingTimeBoolean } from '../time/time.model.js';
 
 controller.getDateAll = async (req, res) => {
     try {
@@ -25,6 +28,53 @@ controller.getDateByIdLocal = async ( req, res ) => {
 
     } 
     catch (err) {
+        console.log(err);
+        res.status(500).send('Error server internal');
+    }
+};
+
+
+
+// Horario de HOY del establecimiento (rangos del día actual del servidor),
+// ya resuelto normal/invierno. 404 si el local no tiene horario configurado.
+controller.getTodayByIdLocal = async ( req, res ) => {
+    try {
+        const idLocal = req.params.idLocal;
+        const docs = await scheduleLayer.getDateByIdLocal(idLocal);
+        if(docs.length === 0) return res.status(404).send('Document not found');
+
+        const timeDoc = await IsDaylightSavingTimeBoolean.findOne();
+        const isWinter = Boolean(timeDoc?.usWinterActive);
+
+        const { ranges, usingWinter } = pickSchedule(docs[0], isWinter);
+        const today = new Date().getDay();   // día local del servidor (0=Dom … 6=Sáb)
+        const todayRanges = ranges.filter(r => Number(r.dayMonitoring) === today);
+
+        return res.json({ day: today, usingWinter, ranges: todayRanges });
+    }
+    catch(err){
+        console.log(err);
+        res.status(500).send('Error server internal');
+    }
+};
+
+
+
+// ¿Este establecimiento se monitorea AHORA y de qué tipo?
+// Toma la hora local del servidor y el interruptor global de invierno USA.
+controller.getActiveByIdLocal = async ( req, res ) => {
+    try {
+        const idLocal = req.params.idLocal;
+        const docs = await scheduleLayer.getDateByIdLocal(idLocal);
+        if(docs.length === 0) return res.status(404).send('Document not found');
+
+        const timeDoc = await IsDaylightSavingTimeBoolean.findOne();
+        const isWinter = Boolean(timeDoc?.usWinterActive);
+
+        const status = getActiveMonitoringNow(docs[0], isWinter);
+        return res.json(status);   // { active, types, ranges, usingWinter }
+    }
+    catch(err){
         console.log(err);
         res.status(500).send('Error server internal');
     }
@@ -63,6 +113,16 @@ controller.putDate = async ( req, res ) => {
         }
         if(isEmpty(req.body)){
             return res.status(400).send('Bad request. Object is empty');
+        }
+
+        // Valida el horario normal y, si viene, el alternativo de invierno.
+        if(req.body.dayMonitoring !== undefined){
+            const check = validateRanges(req.body.dayMonitoring);
+            if(!check.ok) return res.status(400).json({ error: check.error });
+        }
+        if(req.body.dayMonitoringWinter !== undefined){
+            const check = validateRanges(req.body.dayMonitoringWinter);
+            if(!check.ok) return res.status(400).json({ error: check.error });
         }
 
         const idLocal = req.params.idLocal;

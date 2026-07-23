@@ -7,6 +7,7 @@ const routesTimer = express.Router();
 
 routesTimer.get(`${nameApi}/time`, controller.IsDaylightSavingTime);
 routesTimer.put(`${nameApi}/time`, controller.putDaylightSavingTime);
+routesTimer.put(`${nameApi}/time/usWinter`, controller.putUsWinterActive);
 
 
 
