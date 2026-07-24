@@ -1,0 +1,221 @@
+import moment from 'moment-timezone';
+import mongoose from 'mongoose';
+import Noveltie from '../../apiServises/noveltie/noveltie.model.js';
+import LocalModel from '../../apiServises/local/local.model.js';
+import Schedules from '../../apiServises/schedules/schedule.model.js';
+import AttendanceModel from '../../apiServises/user/attendance.model.js';
+import UserModel from '../../apiServises/user/user.model.js';
+import { IsDaylightSavingTimeBoolean } from '../../apiServises/time/time.model.js';
+import { pickSchedule } from '../../apiServises/schedules/schedule.logic.js';
+
+// ══════════════════════════════════════════════════════════════════════
+// SERVICIO: Conteo de novedades del DÍA OPERATIVO (08:00 → 07:00 del día
+// siguiente), agrupado por franquicia → establecimiento.
+// ══════════════════════════════════════════════════════════════════════
+// Buckets por local (fuente: modelo Noveltie):
+//   total      todas las novedades del período
+//   positivas  validationResult.isApproved === true
+//   negativas  validationResult.isApproved === false
+//   ignoradas  validationResult.isApproved ausente/null (nadie las validó)
+//   enviadas   sharedByAmazonActive === true (enviada al grupo; givenToTheGroup
+//              está DEPRECATED en el modelo)
+//   diurno / nocturno  según shift ('day' | 'night'; null no suma a ninguno)
+//
+// Solo cuentan los establecimientos "que se ven hoy": isActive:true Y con
+// rangos de monitoreo para el día operativo en su horario vigente (normal o
+// de invierno, según usesUsTimezone + el flag global usWinterActive).
+// La fecha se ancla con el mismo criterio de zona fija del monitoreo.
+
+const REPORT_TZ = process.env.MONITORING_TZ || 'America/Caracas';
+
+const WEEKDAYS_ES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+/**
+ * Ventana del día operativo que contiene (o termina en) `now`.
+ * Empieza a las 08:00 y termina a las 07:00 del día siguiente (hora REPORT_TZ).
+ */
+function getOperationalDay(now = moment.tz(REPORT_TZ)) {
+    const start = now.clone().startOf('day').hour(8);
+    if (now.isBefore(start)) start.subtract(1, 'day');   // antes de las 08:00 → empezó ayer
+    const end = start.clone().add(23, 'hours');          // 07:00 del día siguiente
+    return { start, end };
+}
+
+/** Fecha civil (medianoche UTC) del inicio del día operativo — la que usa attendance. */
+function civilDateOf(startMoment) {
+    return new Date(Date.UTC(startMoment.year(), startMoment.month(), startMoment.date()));
+}
+
+/**
+ * Establecimientos "en el horario" del día operativo: activos y con al menos
+ * un rango de monitoreo para ese día de la semana en su horario vigente.
+ * @returns [{ _id, name, franchiseName }]
+ */
+async function getLocalsInTodaySchedule(startMoment) {
+    const [timeDoc, schedules, activeLocals] = await Promise.all([
+        IsDaylightSavingTimeBoolean.findOne(),
+        Schedules.find(),
+        LocalModel.find({ isActive: true }).select('_id name franchiseReference franchise').lean(),
+    ]);
+
+    const isWinter = Boolean(timeDoc?.usWinterActive);
+    const weekday = startMoment.day();   // 0=Dom … 6=Sáb (día en que ABRE la ventana)
+
+    const scheduledIds = new Set();
+    for (const doc of schedules) {
+        const { ranges } = pickSchedule(doc, isWinter);
+        if (ranges.some(r => Number(r.dayMonitoring) === weekday)) {
+            scheduledIds.add(String(doc.idLocal));
+        }
+    }
+
+    return activeLocals
+        .filter(l => scheduledIds.has(String(l._id)))
+        .map(l => ({
+            _id: l._id,
+            name: l.name,
+            // Mismo criterio de agrupación que el front (groupByFranchiseComprehensive)
+            franchiseName: l.franchiseReference?.name_franchise || l.franchise || 'Sin franquicia',
+        }));
+}
+
+/**
+ * Encargados de turno (guardia del día, attendance.onDuty) para la fecha civil
+ * del día operativo. Prioriza el departamento de Operaciones; el turno efectivo
+ * se resuelve igual que el endpoint que designa la guardia:
+ * override del día > regla semanal > turno global.
+ * @returns { diurno: string|null, nocturno: string|null }
+ */
+async function getOnDutyByShift(startMoment) {
+    const civilDate = civilDateOf(startMoment);
+    const records = await AttendanceModel.find({ date: civilDate, onDuty: true })
+        .select('userId scheduleOverride')
+        .lean();
+    if (records.length === 0) return { diurno: null, nocturno: null };
+
+    const users = await UserModel.find({ _id: { $in: records.map(r => r.userId) } })
+        .select('name surName jobInformation workSchedule')
+        .lean();
+    const usersById = new Map(users.map(u => [String(u._id), u]));
+
+    const dayNumber = civilDate.getUTCDay();
+    const resolveShift = (workSchedule, record) => {
+        if (record?.scheduleOverride?.shift) return record.scheduleOverride.shift;
+        const map = workSchedule?.scheduleByDay;
+        const rule = map?.get?.(String(dayNumber)) || map?.[String(dayNumber)] || null;
+        return rule?.shift || workSchedule?.shiftType || 'Diurno';
+    };
+
+    const result = { diurno: null, nocturno: null };
+    // Orden estable: Operaciones primero (es el departamento del monitoreo)
+    const sorted = [...records].sort((a, b) => {
+        const da = usersById.get(String(a.userId))?.jobInformation?.department === 'Operaciones' ? 0 : 1;
+        const db = usersById.get(String(b.userId))?.jobInformation?.department === 'Operaciones' ? 0 : 1;
+        return da - db;
+    });
+    for (const record of sorted) {
+        const user = usersById.get(String(record.userId));
+        if (!user) continue;
+        const fullName = `${user.name} ${user.surName ?? ''}`.trim();
+        const shift = resolveShift(user.workSchedule, record);
+        if (shift === 'Nocturno') { if (!result.nocturno) result.nocturno = fullName; }
+        else { if (!result.diurno) result.diurno = fullName; }
+    }
+    return result;
+}
+
+const emptyCounts = () => ({ total: 0, positivas: 0, negativas: 0, ignoradas: 0, enviadas: 0, diurno: 0, nocturno: 0 });
+
+const addCounts = (target, source) => {
+    for (const key of Object.keys(target)) target[key] += source[key] ?? 0;
+    return target;
+};
+
+/**
+ * Construye el reporte de conteo de novedades.
+ * @param {object} [options]
+ * @param {boolean} [options.isFinal]  true → reporte final del día operativo COMPLETO
+ *                                     (08:00→07:00); false → corte parcial hasta ahora.
+ * @param {Date|moment} [options.at]   instante de referencia (default: ahora).
+ */
+export async function buildNoveltyCountReport({ isFinal = false, at } = {}) {
+    const now = at ? moment.tz(at, REPORT_TZ) : moment.tz(REPORT_TZ);
+    const { start, end } = getOperationalDay(now);
+    const rangeEnd = isFinal ? end : moment.min(now, end);
+
+    const locals = await getLocalsInTodaySchedule(start);
+    const localIds = locals.map(l => new mongoose.Types.ObjectId(String(l._id)));
+
+    // Conteo por establecimiento en una sola agregación.
+    // Compatibilidad con documentos históricos:
+    //  - se filtra por `date` (todas las consultas del repo usan ese campo; se
+    //    setea en cada creación aunque el esquema lo marque deprecated),
+    //  - el local puede venir en `establishment` (vigente) o solo en
+    //    `local.idLocal` (docs viejos),
+    //  - "enviada" puede estar solo en `givenToTheGroup` (flag previo a
+    //    `sharedByAmazonActive`).
+    const rows = localIds.length === 0 ? [] : await Noveltie.aggregate([
+        {
+            $match: {
+                date: { $gte: start.toDate(), $lt: rangeEnd.toDate() },
+                $or: [
+                    { establishment: { $in: localIds } },
+                    { 'local.idLocal': { $in: localIds } },
+                ],
+            },
+        },
+        {
+            $group: {
+                _id: { $ifNull: ['$establishment', '$local.idLocal'] },
+                total:     { $sum: 1 },
+                positivas: { $sum: { $cond: [{ $eq: ['$validationResult.isApproved', true] }, 1, 0] } },
+                negativas: { $sum: { $cond: [{ $eq: ['$validationResult.isApproved', false] }, 1, 0] } },
+                // Ignoradas: isApproved no es booleano (ausente o null) → nadie la validó
+                ignoradas: { $sum: { $cond: [{ $ne: [{ $type: '$validationResult.isApproved' }, 'bool'] }, 1, 0] } },
+                enviadas:  { $sum: { $cond: [{ $or: [
+                    { $eq: ['$sharedByAmazonActive', true] },
+                    { $eq: ['$givenToTheGroup', true] },
+                ] }, 1, 0] } },
+                diurno:    { $sum: { $cond: [{ $eq: ['$shift', 'day'] }, 1, 0] } },
+                nocturno:  { $sum: { $cond: [{ $eq: ['$shift', 'night'] }, 1, 0] } },
+            },
+        },
+    ]);
+    const countsByLocal = new Map(rows.map(r => [String(r._id), r]));
+
+    // Franquicia → locales (incluye locales en horario aunque lleven 0)
+    const franchisesMap = new Map();
+    for (const local of locals) {
+        const counts = { ...emptyCounts(), ...(countsByLocal.get(String(local._id)) ?? {}) };
+        delete counts._id;
+        if (!franchisesMap.has(local.franchiseName)) {
+            franchisesMap.set(local.franchiseName, { name: local.franchiseName, totals: emptyCounts(), locals: [] });
+        }
+        const group = franchisesMap.get(local.franchiseName);
+        group.locals.push({ idLocal: String(local._id), name: local.name, ...counts });
+        addCounts(group.totals, counts);
+    }
+
+    const franchises = [...franchisesMap.values()]
+        .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+    franchises.forEach(f => f.locals.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })));
+
+    const totals = franchises.reduce((acc, f) => addCounts(acc, f.totals), emptyCounts());
+    const onDuty = await getOnDutyByShift(start);
+
+    return {
+        isFinal,
+        dateLabel: start.format('DD/MM/YYYY'),
+        weekdayLabel: WEEKDAYS_ES[start.day()],
+        windowLabel: `${start.format('DD/MM HH:mm')} → ${end.format('DD/MM HH:mm')}`,
+        cutoffLabel: rangeEnd.format('DD/MM HH:mm'),
+        generatedAtLabel: now.format('DD/MM/YYYY HH:mm'),
+        operationalDayKey: start.format('YYYY-MM-DD'),
+        onDuty,
+        totals,
+        localsInSchedule: locals.length,
+        franchises,
+    };
+}
+
+export { getOperationalDay, REPORT_TZ };

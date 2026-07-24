@@ -111,6 +111,8 @@ import { routerMenu } from './apiServises/menu/menu.routes.js';
 import { routerAlert } from './apiServises/alert/alert.routes.js';
 import { routerNoveltie } from './apiServises/noveltie/novelties.routes.ts';
 import { routerSchedule } from './apiServises/schedules/schedule.routes.js';
+import { routerNoveltyReport } from './services/noveltyReport/noveltyReport.routes.js';
+import { routerMonitoring } from './services/monitoring/monitoring.routes.js';
 import { routesTimer } from './apiServises/time/time.routes.js'
 import { routesFailed } from './apiServises/failed/failed.routes.js';
 import { routesDishes } from './apiServises/dishes/dishes.router.js';
@@ -151,6 +153,8 @@ app
     .use(routerNoveltie)
     .use(routerAlert)
     .use(routerSchedule)
+    .use(routerNoveltyReport)
+    .use(routerMonitoring)
     .use(routesTimer)
     .use(routesFailed)
     .use(routesDishes)

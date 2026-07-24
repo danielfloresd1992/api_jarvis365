@@ -4,6 +4,8 @@ import LocalModel from '../../apiServises/local/local.model.js';
 import { IsDaylightSavingTimeBoolean } from '../../apiServises/time/time.model.js';
 import { getActiveMonitoringNow } from '../../apiServises/schedules/schedule.logic.js';
 import MonitoringStateModel from './monitoringState.model.js';
+import { maybeSendNoveltyReport } from '../noveltyReport/noveltyReport.job.js';
+import { maybeSendSilenceReport } from '../noveltyReport/noveltySilence.job.js';
 import { io } from '../socket/io.js';
 
 // ══════════════════════════════════════════════════════════════════════
@@ -155,6 +157,15 @@ async function tick() {
             // (quedó vacía); evita re-siembras y mantiene el espejo con Mongo.
             previousTypes.set(id, now);
         }
+
+        // Reporte de conteo de novedades: aprovecha este mismo bucle para los
+        // cortes cada 2 horas y el cierre de las 07:00. Es idempotente vía
+        // Mongo (slotKey único), así que llamarlo en cada tick es seguro.
+        await maybeSendNoveltyReport();
+
+        // Detector de silencio (cada 30 min): locales en ventana activa cuyo
+        // acumulado de validadas-y-enviadas no crece → aviso de texto al grupo.
+        await maybeSendSilenceReport();
     }
     catch (error) {
         // El bucle nunca tumba el proceso: se loguea y se reintenta al siguiente tick

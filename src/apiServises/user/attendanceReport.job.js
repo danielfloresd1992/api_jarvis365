@@ -53,6 +53,11 @@ const postJsonToBot = (url, payload) => new Promise((resolve, reject) => {
         response.on('end', () => resolve({ status: response.statusCode, body: data }));
     });
     request.on('error', reject);
+    // Sin timeout, un bot colgado deja la promesa pendiente PARA SIEMPRE: el
+    // scheduler nunca re-agenda su corte y el llamador HTTP reintenta a ciegas.
+    request.setTimeout(60_000, () => {
+        request.destroy(new Error('Timeout esperando al bot de WhatsApp (60s)'));
+    });
     request.write(body);
     request.end();
 });
@@ -71,17 +76,62 @@ export async function sendReportToWhatsapp({ pdfBuffer, caption, filename, numbe
         'filename': filename
     };
 
+    // Cada destinatario se aísla: un fallo en el 2º ya no aborta el bucle (antes
+    // un reintento posterior reenviaba al 1º, que YA había recibido el PDF).
     const recipients = [];
+    const failed = [];
     for (const chatId of chatIds) {
-        const url = `${BOT_URL}/bot/imgV2/number=${encodeURIComponent(chatId)}`;
-        const response = await postJsonToBot(url, payload);
-        if (response.status < 200 || response.status >= 300) {
-            throw new Error(`WhatsApp bot respondió ${response.status} para ${chatId}: ${response.body}`);
+        try {
+            const url = `${BOT_URL}/bot/imgV2/number=${encodeURIComponent(chatId)}`;
+            const response = await postJsonToBot(url, payload);
+            if (response.status < 200 || response.status >= 300) {
+                throw new Error(`WhatsApp bot respondió ${response.status}: ${response.body}`);
+            }
+            recipients.push(chatId);
         }
-        recipients.push(chatId);
+        catch (error) {
+            failed.push({ chatId, error: error?.message ?? String(error) });
+            console.log(`[whatsapp-report] fallo el envío a ${chatId}: ${error?.message ?? error}`);
+        }
     }
 
-    return { chatId: chatIds[0] || null, recipients, count: recipients.length };
+    // Solo se considera fallo total si NADIE recibió el reporte
+    if (recipients.length === 0) {
+        throw new Error(`Ningún destinatario recibió el reporte: ${failed.map(f => `${f.chatId} (${f.error})`).join(' | ')}`);
+    }
+
+    return { chatId: recipients[0] || null, recipients, count: recipients.length, failed };
+}
+
+
+// Envía SOLO TEXTO (sin adjunto) por la misma vía del bot. Reutilizado por el
+// detector de silencio del reporte de novedades.
+export async function sendTextToWhatsapp({ text, number = REPORT_NUMBER, listNumber = [] }) {
+    const chatIds = [...new Set([number, ...listNumber].filter(Boolean).map(toChatId))];
+    const payload = { 'my-text': text };
+
+    const recipients = [];
+    const failed = [];
+    for (const chatId of chatIds) {
+        try {
+            const url = `${BOT_URL}/bot/imgV2/number=${encodeURIComponent(chatId)}`;
+            const response = await postJsonToBot(url, payload);
+            if (response.status < 200 || response.status >= 300) {
+                throw new Error(`WhatsApp bot respondió ${response.status}: ${response.body}`);
+            }
+            recipients.push(chatId);
+        }
+        catch (error) {
+            failed.push({ chatId, error: error?.message ?? String(error) });
+            console.log(`[whatsapp-report] fallo el envío de texto a ${chatId}: ${error?.message ?? error}`);
+        }
+    }
+
+    if (recipients.length === 0) {
+        throw new Error(`Ningún destinatario recibió el mensaje: ${failed.map(f => `${f.chatId} (${f.error})`).join(' | ')}`);
+    }
+
+    return { chatId: recipients[0] || null, recipients, count: recipients.length, failed };
 }
 
 
@@ -163,6 +213,10 @@ const msUntilNext = (hhmm) => {
 // enviar el mismo corte dos veces el mismo día si el timer se dispara de más.
 const sentToday = {};
 
+// Guard de arranque: una segunda llamada (doble import, hot-reload) duplicaría
+// TODOS los timers y con ellos los envíos de cada corte.
+let schedulerStarted = false;
+
 const scheduleAt = (cut) => {
     const delay = msUntilNext(cut.time);
     setTimeout(async () => {
@@ -202,6 +256,12 @@ const scheduleAt = (cut) => {
  * desactiva también en producción.
  */
 export function startAttendanceReportScheduler() {
+    if (schedulerStarted) {
+        console.log('[attendance-report] Scheduler ya iniciado; se ignora la segunda llamada (evita timers y envíos duplicados).');
+        return;
+    }
+    schedulerStarted = true;
+
     const flag = process.env.ATTENDANCE_REPORT_ENABLED;
     const enabled = flag !== undefined
         ? flag === 'true'
