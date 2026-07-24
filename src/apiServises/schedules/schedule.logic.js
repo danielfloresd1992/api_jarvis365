@@ -97,11 +97,42 @@ function getActiveMonitoring(scheduleDoc, dayOfWeek, minute, isWinter = false) {
 }
 
 /**
- * Día de la semana (0..6) y minuto del día (0..1439) según la hora LOCAL del
- * servidor donde corre jarvis_api. Es la misma fuente de tiempo que usa el
- * resto de la app (new Date()), no una zona horaria calculada aparte.
+ * Zona horaria de referencia del monitoreo. FIJA e independiente del sistema
+ * operativo: el mismo instante produce el mismo día/minuto tanto en el Linux
+ * de desarrollo como en el Windows Server de producción, sin importar cómo
+ * esté configurado el reloj/zona de cada máquina. Sobreescribible con la
+ * variable de entorno MONITORING_TZ (IANA, p. ej. 'America/Havana').
+ */
+const MONITORING_TZ = process.env.MONITORING_TZ || 'America/Caracas';
+
+const WEEKDAY_TO_NUM = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+/**
+ * Día de la semana (0..6) y minuto del día (0..1439) del instante dado, en la
+ * zona horaria de referencia (MONITORING_TZ). Usa Intl, disponible por igual
+ * en Node sobre Linux y Windows. Si la zona configurada fuera inválida, cae a
+ * la hora local del sistema (comportamiento anterior).
  */
 function getServerNow(date = new Date()) {
+    try {
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: MONITORING_TZ,
+            weekday: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+            hourCycle: 'h23',
+        }).formatToParts(date);
+
+        const get = type => parts.find(p => p.type === type)?.value;
+        const dayOfWeek = WEEKDAY_TO_NUM[get('weekday')];
+        const minute = Number(get('hour')) * 60 + Number(get('minute'));
+
+        if (Number.isInteger(dayOfWeek) && Number.isFinite(minute)) {
+            return { dayOfWeek, minute };
+        }
+    }
+    catch { /* zona inválida → fallback a hora del sistema */ }
+
     return { dayOfWeek: date.getDay(), minute: date.getHours() * 60 + date.getMinutes() };
 }
 

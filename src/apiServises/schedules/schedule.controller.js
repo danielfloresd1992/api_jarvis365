@@ -2,7 +2,7 @@ const controller = {};
 import colors from 'colors';
 import scheduleLayer from './schedule.layer.js';
 import Schedules from './schedule.model.js';
-import { validateRanges, getActiveMonitoringNow, pickSchedule } from './schedule.logic.js';
+import { validateRanges, getActiveMonitoringNow, pickSchedule, getServerNow } from './schedule.logic.js';
 import { IsDaylightSavingTimeBoolean } from '../time/time.model.js';
 
 controller.getDateAll = async (req, res) => {
@@ -47,7 +47,7 @@ controller.getTodayByIdLocal = async ( req, res ) => {
         const isWinter = Boolean(timeDoc?.usWinterActive);
 
         const { ranges, usingWinter } = pickSchedule(docs[0], isWinter);
-        const today = new Date().getDay();   // día local del servidor (0=Dom … 6=Sáb)
+        const today = getServerNow().dayOfWeek;   // día en la zona de referencia (0=Dom … 6=Sáb)
         const todayRanges = ranges.filter(r => Number(r.dayMonitoring) === today);
 
         return res.json({ day: today, usingWinter, ranges: todayRanges });
