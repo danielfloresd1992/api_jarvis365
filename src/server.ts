@@ -8,6 +8,7 @@ import { io } from './services/socket/io.ts'
 import { config as dotenvConfig } from 'dotenv';
 import { logBanner, logServerStart, logHttpStart, logSocketStart } from './util/logger.js';
 import { startAttendanceReportScheduler } from './apiServises/user/attendanceReport.job.js';
+import { startMonitoringWatcher } from './services/monitoring/monitoringWatcher.js';
 import { join } from 'path';
 import * as url from 'url';
 import appConfig from './config/index.js';
@@ -117,6 +118,7 @@ server.listen(httpPort, () => {
     io.init(server);
     logSocketStart();
     startAttendanceReportScheduler();
+    startMonitoringWatcher();
     const httpPortDev: number = 8080;
     app_dev.listen(httpPortDev, () => {
         logHttpStart(httpPortDev);
