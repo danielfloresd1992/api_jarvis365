@@ -163,8 +163,9 @@ async function tick() {
         // Mongo (slotKey único), así que llamarlo en cada tick es seguro.
         await maybeSendNoveltyReport();
 
-        // Detector de silencio (cada 30 min): locales en ventana activa cuyo
-        // acumulado de validadas-y-enviadas no crece → aviso de texto al grupo.
+        // Detector de silencio (cada hora, desde las 09:00): locales con
+        // monitoreo ANALÍTICO en ventana cuyo acumulado de validadas-y-enviadas
+        // no crece → aviso de texto al grupo.
         await maybeSendSilenceReport();
     }
     catch (error) {

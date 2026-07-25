@@ -15,9 +15,12 @@ import { io } from '../socket/io.js';
 // ══════════════════════════════════════════════════════════════════════
 // JOB: Detector de silencio — establecimientos sin reportar al grupo
 // ══════════════════════════════════════════════════════════════════════
-// Corre desde el bucle del monitoringWatcher. CADA MEDIA HORA (:00 y :30)
-// evalúa los establecimientos que están DENTRO de su ventana de monitoreo en
-// ese momento (horario vigente, invierno incluido):
+// Corre desde el bucle del monitoringWatcher. CADA HORA EN PUNTO (el primer
+// corte del día operativo es a las 09:00; a las 08:00 la ventana recién abre)
+// evalúa los establecimientos con monitoreo ANALÍTICO dentro de su ventana en
+// ese momento — día y hora del horario vigente, invierno incluido. El
+// perimetral NO cuenta para este reporte; un local fuera de su horario
+// tampoco:
 //
 //   1. Cuenta sus novedades del día operativo (desde las 08:00) que estén
 //      VALIDADAS (validationResult.isApproved === true) Y ENVIADAS AL GRUPO
@@ -31,7 +34,7 @@ import { io } from '../socket/io.js';
 // Idempotencia por slot persistida en noveltyreportlogs (slotKey único);
 // el baseline se actualiza aunque no haya envío.
 
-const SLOT_GRACE_MIN = 5;   // el corte se dispara dentro de los 5 min de :00 / :30
+const SLOT_GRACE_MIN = 5;   // el corte se dispara dentro de los 5 min de cada hora en punto
 
 const SILENCE_GROUP = process.env.NOVELTY_SILENCE_GROUP
     || process.env.NOVELTY_REPORT_GROUP
@@ -42,12 +45,13 @@ const SILENCE_ENABLED = process.env.NOVELTY_SILENCE_ENABLED !== undefined
         ? process.env.NOVELTY_REPORT_ENABLED === 'true'
         : process.env.NODE_ENV === 'production');
 
-/** Corte de media hora vigente, o null si no estamos en su ventana de gracia. */
-function dueSilenceSlot(now) {
-    const minute = now.minute();
-    if ((minute % 30) >= SLOT_GRACE_MIN) return null;
+/** Corte horario vigente, o null si no estamos en su ventana de gracia. */
+export function dueSilenceSlot(now) {
+    if (now.minute() >= SLOT_GRACE_MIN) return null;
+    // A las 08:00 la ventana del día recién abre: el primer corte es el de las 09:00
+    if (now.hour() === 8) return null;
 
-    const slotLabel = `${now.format('HH')}:${minute < 30 ? '00' : '30'}`;
+    const slotLabel = `${now.format('HH')}:00`;
     const { start } = getOperationalDay(now);
     return {
         slotLabel,
@@ -58,7 +62,7 @@ function dueSilenceSlot(now) {
 const buildSilenceMessage = (flagged, slotLabel, now) => [
     '🚨 *ESTABLECIMIENTOS SIN REPORTAR AL GRUPO*',
     `🕐 Corte ${slotLabel} — ${now.format('dddd DD/MM/YYYY')}`,
-    '🔎 En monitoreo activo, sin novedades nuevas ✓ validadas y 📤 enviadas en la última media hora:',
+    '🔎 En monitoreo analítico activo, sin novedades nuevas ✓ validadas y 📤 enviadas en la última hora:',
     '',
     ...flagged.map(f => f.count === 0
         ? `🔴 ${f.name} · 0 en el día`
@@ -100,11 +104,15 @@ export async function maybeSendSilenceReport() {
         const isWinter = Boolean(timeDoc?.usWinterActive);
         const nameById = new Map(activeLocals.map(l => [String(l._id), l.name]));
 
+        // Solo cuentan los locales cuyo monitoreo ANALÍTICO está en ventana en
+        // este momento (día y hora). Un local solo-perimetral, o fuera de su
+        // horario, queda fuera de este reporte.
         const inWindowIds = [];
         for (const doc of schedules) {
             const id = String(doc.idLocal);
             if (!nameById.has(id)) continue;
-            if (getActiveMonitoringNow(doc, isWinter).active) inWindowIds.push(id);
+            const status = getActiveMonitoringNow(doc, isWinter);
+            if (status.active && status.types.includes('analytical')) inWindowIds.push(id);
         }
 
         if (inWindowIds.length === 0) {
