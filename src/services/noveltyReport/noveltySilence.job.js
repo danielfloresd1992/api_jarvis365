@@ -20,7 +20,12 @@ import { io } from '../socket/io.js';
 // evalúa los establecimientos con monitoreo ANALÍTICO dentro de su ventana en
 // ese momento — día y hora del horario vigente, invierno incluido. El
 // perimetral NO cuenta para este reporte; un local fuera de su horario
-// tampoco:
+// tampoco, ni uno cuyo rango no declare el tipo explícitamente (legado sin
+// `type`). Y solo se EVALÚA al que ya estaba en ventana HACE UNA HORA (el
+// corte mide "la última hora"): un local que apenas abre —p. ej. a las 13:00
+// para el corte de las 13:00— aún no tuvo tiempo de reportar y saldría como
+// falso positivo; a ese solo se le siembra el baseline y entra al corte
+// siguiente:
 //
 //   1. Cuenta sus novedades del día operativo (desde las 08:00) que estén
 //      VALIDADAS (validationResult.isApproved === true) Y ENVIADAS AL GRUPO
@@ -35,6 +40,11 @@ import { io } from '../socket/io.js';
 // el baseline se actualiza aunque no haya envío.
 
 const SLOT_GRACE_MIN = 5;   // el corte se dispara dentro de los 5 min de cada hora en punto
+
+// Analítico EXPLÍCITO: un rango legado sin `type` cuenta como analítico en el
+// resto del monitoreo (default histórico de schedule.logic), pero NO aquí —
+// a este reporte solo entra quien tiene el tipo declarado en su horario.
+const analyticalExplicit = st => st.active && st.ranges.some(r => r.type === 'analytical');
 
 const SILENCE_GROUP = process.env.NOVELTY_SILENCE_GROUP
     || process.env.NOVELTY_REPORT_GROUP
@@ -106,17 +116,31 @@ export async function maybeSendSilenceReport() {
 
         // Solo cuentan los locales cuyo monitoreo ANALÍTICO está en ventana en
         // este momento (día y hora). Un local solo-perimetral, o fuera de su
-        // horario, queda fuera de este reporte.
-        const inWindowIds = [];
+        // horario, queda fuera de este reporte. Y solo se evalúa al que TAMBIÉN
+        // estaba en ventana hace una hora: al recién abierto se le siembra el
+        // baseline en este corte y se le juzga a partir del siguiente.
+        const oneHourAgo = now.clone().subtract(1, 'hour').toDate();
+        const inWindowIds = [];   // en ventana ahora → reciben baseline
+        const evaluableIds = [];  // en ventana ahora Y hace una hora → se evalúan
         for (const doc of schedules) {
             const id = String(doc.idLocal);
             if (!nameById.has(id)) continue;
             const status = getActiveMonitoringNow(doc, isWinter);
-            if (status.active && status.types.includes('analytical')) inWindowIds.push(id);
+            if (!analyticalExplicit(status)) continue;
+            inWindowIds.push(id);
+            const before = getActiveMonitoringNow(doc, isWinter, oneHourAgo);
+            if (analyticalExplicit(before)) evaluableIds.push(id);
         }
 
         if (inWindowIds.length === 0) {
-            // Nadie en ventana → nada que evaluar ni enviar
+            // Nadie en ventana → nada que evaluar ni enviar, pero los avisos
+            // que hayan quedado de cortes anteriores se apagan (durable y en
+            // el front): sin monitoreo en curso no debe parpadear ningún local.
+            await MonitoringStateModel.updateMany(
+                { 'noveltyCheck.flagged': true },
+                { $set: { 'noveltyCheck.flagged': false } },
+            );
+            io.emit('monitoring-silence', { slotLabel: slot.slotLabel, at: now.toISOString(), flagged: [] });
             await NoveltyReportLog.updateOne({ _id: log._id }, { $set: { status: 'sent', sentAt: new Date() } });
             return;
         }
@@ -148,7 +172,8 @@ export async function maybeSendSilenceReport() {
         }));
 
         // Sin reportar: sigue en cero, o el acumulado no superó el corte anterior
-        const flagged = inWindowIds
+        // (solo los evaluables; el recién abierto no se juzga en este corte)
+        const flagged = evaluableIds
             .map(id => ({ id, name: nameById.get(id) ?? id, count: countById.get(id) ?? 0, baseline: baselineById.get(id) ?? 0 }))
             .filter(l => l.count === 0 || l.count <= l.baseline)
             .sort((a, b) => a.count - b.count || a.name.localeCompare(b.name, 'es'));
@@ -184,6 +209,15 @@ export async function maybeSendSilenceReport() {
                 upsert: true,
             },
         })));
+
+        // Espejo exacto del corte: cualquier flag que haya quedado de cortes
+        // anteriores (un local que salió de ventana o que ya no se evalúa,
+        // p. ej. por rango sin tipo) se apaga si no está en la lista de ESTE
+        // corte. Así la siembra del front nunca revive avisos viejos.
+        await MonitoringStateModel.updateMany(
+            { 'noveltyCheck.flagged': true, idLocal: { $nin: [...flaggedIds] } },
+            { $set: { 'noveltyCheck.flagged': false } },
+        );
 
         await NoveltyReportLog.updateOne({ _id: log._id }, { $set: { status: 'sent', sentAt: new Date() } });
     }
