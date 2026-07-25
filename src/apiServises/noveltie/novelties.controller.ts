@@ -16,6 +16,7 @@ import nameApi from '../../libs/name_api.js';
 import { Request, Response } from 'express';
 
 import { io } from '../../services/socket/io.js';
+import MonitoringStateModel from '../../services/monitoring/monitoringState.model.js';
 
 //call servises publisher
 
@@ -468,6 +469,33 @@ export default class ControllerNovelty {
                     'document_updated',
                     { doc: updateDocument, user: { idUser: req.session.userId, nameUser: `${req.session.name}` } }
                 );
+            }
+
+            // Si con este update la novedad quedó VALIDADA + ENVIADA AL GRUPO
+            // (el mismo criterio que usa el corte de silencio) y antes no lo
+            // estaba, el aviso rojo del local se limpia AL INSTANTE: se apaga
+            // el flag durable y se avisa al front. Nunca rompe la respuesta.
+            try {
+                const wasCounted = Boolean(findNovelty.validationResult?.isApproved)
+                    && Boolean(findNovelty.sharedByAmazonActive || findNovelty.givenToTheGroup);
+                const isCounted = Boolean(updateDocument?.validationResult?.isApproved)
+                    && Boolean(updateDocument?.sharedByAmazonActive || updateDocument?.givenToTheGroup);
+
+                if (!wasCounted && isCounted) {
+                    const idLocal = String(updateDocument?.establishment?._id ?? updateDocument?.local?.idLocal ?? '');
+                    if (idLocal) {
+                        const cleared = await MonitoringStateModel.findOneAndUpdate(
+                            { idLocal, 'noveltyCheck.flagged': true },
+                            { $set: { 'noveltyCheck.flagged': false } },
+                        );
+                        if (cleared && io) {
+                            io.emit('monitoring-silence-clear', { idLocal, name: cleared.name, at: new Date().toISOString() });
+                        }
+                    }
+                }
+            }
+            catch (silenceError: any) {
+                console.log(colors.yellow(`[novelty-silence] no se pudo limpiar el aviso del local: ${silenceError?.message ?? silenceError}`));
             }
 
 
