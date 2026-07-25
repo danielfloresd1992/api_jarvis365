@@ -1,5 +1,7 @@
 import colors from 'colors';
 import { config } from 'dotenv';
+import AttendanceModel from '../apiServises/user/attendance.model.js';
+import { getOperationalDay } from '../services/noveltyReport/noveltyReport.service.js';
 config();
 
 
@@ -155,4 +157,52 @@ function validateAdminUser(req, res, next) {
 
 
 
-export { validateSession, validateSessionAndUserSuper, extendSession, validateSuperUser, validateAdminUser };
+// Requiere que el usuario tenga un ROL DEL DÍA en la asistencia del día
+// operativo ACTUAL (08:00 → 07:00, zona del monitoreo): encargado de turno
+// (onDuty) o auxiliar (auxiliary). Se usa el día operativo y no el civil para
+// que el turno nocturno siga autorizado después de medianoche con la
+// designación de ayer. 401 sin sesión; 403 con {status, error, message} si el
+// usuario no tiene ninguno de los dos roles hoy. Mismo bypass
+// servidor-a-servidor que el resto de los middlewares.
+async function validateDayRoleUser(req, res, next) {
+    try {
+        const userAgent = req.get('User-Agent');
+        const ip = req.ip;
+        const port = req.socket.remotePort;
+
+        // Bypass servidor-a-servidor (mismo patrón que los otros middlewares)
+        if (userAgent === 'node' && (`${ip}:${port}` === process.env.SERVER_JARVIS365DEV || `${ip}:${port}` === process.env.SERVER_JARVIS365PROD)) {
+            return next();
+        }
+
+        if (!req.session.name) {
+            return res.status(401).json({ status: 401, error: 'Unauthorized', message: 'No autenticado: debe iniciar sesión' });
+        }
+
+        // Fecha civil (medianoche UTC) del inicio del día operativo — el mismo
+        // formato con el que attendance guarda `date`.
+        const { start } = getOperationalDay();
+        const civilDate = new Date(Date.UTC(start.year(), start.month(), start.date()));
+
+        const record = await AttendanceModel.findOne({ userId: req.session.userId, date: civilDate })
+            .select('onDuty auxiliary')
+            .lean();
+
+        if (record?.onDuty === true || record?.auxiliary === true) return next();
+
+        if (SHOW_CONSOLE) console.log(colors.bgRed(`El usuario ${req.session.name} intentó una acción reservada al rol del día sin designación\nrouter: ${req.originalUrl}\norigen: ${req.ip}\ndate: ${new Date()}\n`.white));
+        return res.status(403).json({
+            status: 403,
+            error: 'Forbidden',
+            message: 'Acción reservada al encargado de turno o al auxiliar del día. Pide que te designen en el horario de hoy.'
+        });
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ status: 500, error: 'Error server internal', message: 'No se pudo verificar el rol del día.' });
+    }
+}
+
+
+
+export { validateSession, validateSessionAndUserSuper, extendSession, validateSuperUser, validateAdminUser, validateDayRoleUser };

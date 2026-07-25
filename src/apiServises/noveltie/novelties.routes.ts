@@ -9,7 +9,7 @@ import mongoose from 'mongoose'; // ./time.model.js
 import multer from 'multer';
 import { ObjectId } from 'mongodb';
 import { join } from 'path';
-import { extendSession, validateSession } from '../../middleware/validateSessionAndUser';
+import { extendSession, validateSession, validateDayRoleUser } from '../../middleware/validateSessionAndUser';
 import nameApi from '../../libs/name_api';
 import AbbreviateNumber from '../../script/abbreviate_number'
 
@@ -163,7 +163,9 @@ routerNoveltie.post(`${nameApi}/novelties`, extendSession, validateSession, cont
 routerNoveltie.post(`${nameApi}/novelty/video`, extendSession, validateSession, uploadNoveltie.fields([{ name: 'video', maxCount: 1 }, { name: 'img', maxCount: 1 }, { name: 'imageUrl', maxCount: 4 }]), controller.saveNovelty);
 
 
-routerNoveltie.put(`${nameApi}/novelties/id=:id`, extendSession, validateSession, controller.updateNovelties);
+// Actualizar una novedad (validar, menú, envío al grupo) exige además el ROL
+// DEL DÍA: encargado de turno o auxiliar designado en la asistencia de hoy.
+routerNoveltie.put(`${nameApi}/novelties/id=:id`, extendSession, validateSession, validateDayRoleUser, controller.updateNovelties);
 
 
 
