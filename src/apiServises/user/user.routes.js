@@ -1004,22 +1004,26 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, validateAdminUser, asy
 
 
 // ══════════════════════════════════════════════════════════════════════
-// ENDPOINT: Guardia del día (onDuty) — solo usuarios super
+// ENDPOINTS: Roles del día — guardia (onDuty) y auxiliar (auxiliary)
 // ══════════════════════════════════════════════════════════════════════
-// POST .../user/attendance/on-duty
-// body: { userId | dni, date, onDuty: true|false }
-// Designa (o quita) la guardia del día. Regla: solo UN usuario por
-// departamento y fecha; departamentos habilitados: Operaciones, Reportes
-// y Sistemas y desarrollo. Quien designa sale de la sesión.
-const ONDUTY_DEPARTMENTS = ['Operaciones', 'Reportes', 'Sistemas y desarrollo'];
+// POST .../user/attendance/on-duty    body: { userId | dni, date, onDuty: bool }
+// POST .../user/attendance/auxiliary  body: { userId | dni, date, auxiliary: bool }
+// Designa (o quita) el rol del día. Misma regla para ambos roles (entre sí
+// son independientes): solo UN usuario por departamento, fecha y turno puede
+// tenerlo en true; departamentos habilitados: Operaciones, Reportes y
+// Sistemas y desarrollo. Quien designa sale de la sesión.
+const DAY_ROLE_DEPARTMENTS = ['Operaciones', 'Reportes', 'Sistemas y desarrollo'];
 
-routerUser.post(`${nameApi}/user/attendance/on-duty`, validateAdminUser, async (req, res) => {
+// subject: sujeto de los mensajes ("La guardia" / "El auxiliar");
+// label + taken: texto del conflicto ("guardia ... asignada" / "auxiliar ... asignado").
+const makeDayRoleHandler = ({ field, subject, label, taken }) => async (req, res) => {
     try {
         const authorId = req.session.userId;
-        const { userId, dni, date, onDuty } = req.body || {};
+        const { userId, dni, date } = req.body || {};
+        const value = req.body ? req.body[field] : undefined;
 
-        if (typeof onDuty !== 'boolean') {
-            return res.status(400).json({ status: 400, error: 'Bad request', message: '"onDuty" debe ser booleano.' });
+        if (typeof value !== 'boolean') {
+            return res.status(400).json({ status: 400, error: 'Bad request', message: `"${field}" debe ser booleano.` });
         }
         if (!date) {
             return res.status(400).json({ status: 400, error: 'Bad request', message: 'La fecha (date) es obligatoria.' });
@@ -1042,7 +1046,7 @@ routerUser.post(`${nameApi}/user/attendance/on-duty`, validateAdminUser, async (
         const department = userDoc.jobInformation?.department || null;
 
         // Turno efectivo de un usuario en la fecha: override del día > regla
-        // semanal > turno global. (La guardia es única por depto + fecha + turno.)
+        // semanal > turno global. (El rol es único por depto + fecha + turno.)
         const dayNumber = dateObj.getUTCDay();
         const resolveShift = (workScheduleDoc, record) => {
             if (record?.scheduleOverride?.shift) return record.scheduleOverride.shift;
@@ -1051,13 +1055,13 @@ routerUser.post(`${nameApi}/user/attendance/on-duty`, validateAdminUser, async (
             return rule?.shift || workScheduleDoc?.shiftType || 'Diurno';
         };
 
-        if (onDuty) {
-            // Solo departamentos habilitados para el rol de guardia
-            if (!ONDUTY_DEPARTMENTS.includes(department)) {
+        if (value) {
+            // Solo departamentos habilitados para los roles del día
+            if (!DAY_ROLE_DEPARTMENTS.includes(department)) {
                 return res.status(400).json({
                     status: 400,
                     error: 'Bad request',
-                    message: `La guardia del día solo aplica a: ${ONDUTY_DEPARTMENTS.join(', ')}.`
+                    message: `${subject} del día solo aplica a: ${DAY_ROLE_DEPARTMENTS.join(', ')}.`
                 });
             }
 
@@ -1067,13 +1071,13 @@ routerUser.post(`${nameApi}/user/attendance/on-duty`, validateAdminUser, async (
             const targetShift = resolveShift(userDoc.workSchedule, targetRecord);
 
             // Exclusividad: nadie más del MISMO departamento y MISMO turno
-            // puede tener la guardia esa fecha
+            // puede tener el rol esa fecha
             const deptUsers = await UserModel.find({ 'jobInformation.department': department })
                 .select('_id name surName workSchedule');
             const deptUserIds = deptUsers.map(u => u._id);
             const candidates = await AttendanceModel.find({
                 date: dateObj,
-                onDuty: true,
+                [field]: true,
                 userId: { $in: deptUserIds, $ne: userDoc._id }
             }).select('userId scheduleOverride').lean();
 
@@ -1091,24 +1095,24 @@ routerUser.post(`${nameApi}/user/attendance/on-duty`, validateAdminUser, async (
                 return res.status(409).json({
                     status: 409,
                     error: 'Conflict',
-                    message: `Ya hay guardia ${String(targetShift).toLowerCase()} asignada ese día en ${department}: ${holderName}.`
+                    message: `Ya hay ${label} ${String(targetShift).toLowerCase()} ${taken} ese día en ${department}: ${holderName}.`
                 });
             }
         }
 
         // Registrar el cambio en la auditoría del documento
         const previousRecord = await AttendanceModel.findOne({ userId: userDoc._id, date: dateObj })
-            .select('onDuty')
+            .select(field)
             .lean();
-        const prevOnDuty = Boolean(previousRecord?.onDuty);
+        const prevValue = Boolean(previousRecord?.[field]);
 
         const updateOp = {
-            $set: { onDuty },
+            $set: { [field]: value },
             $setOnInsert: { createdBy: authorId }
         };
-        if (previousRecord && prevOnDuty !== onDuty) {
+        if (previousRecord && prevValue !== value) {
             updateOp.$push = {
-                editedBy: { user: authorId, change: [{ field: 'onDuty', from: prevOnDuty, to: onDuty }], date: new Date() }
+                editedBy: { user: authorId, change: [{ field, from: prevValue, to: value }], date: new Date() }
             };
         }
 
@@ -1132,7 +1136,13 @@ routerUser.post(`${nameApi}/user/attendance/on-duty`, validateAdminUser, async (
         console.log(error);
         return res.status(500).json({ status: 500, message: 'Error server internal', error: error.message });
     }
-});
+};
+
+routerUser.post(`${nameApi}/user/attendance/on-duty`, validateAdminUser,
+    makeDayRoleHandler({ field: 'onDuty', subject: 'La guardia', label: 'guardia', taken: 'asignada' }));
+
+routerUser.post(`${nameApi}/user/attendance/auxiliary`, validateAdminUser,
+    makeDayRoleHandler({ field: 'auxiliary', subject: 'El auxiliar', label: 'auxiliar', taken: 'asignado' }));
 
 
 

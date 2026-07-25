@@ -143,6 +143,14 @@ const AttendanceSchema = new mongoose.Schema({
         default: false
     },
 
+    // Auxiliar del día (apoyo del encargado de turno en su departamento).
+    // Misma regla que onDuty: solo UN usuario por departamento, fecha y
+    // turno — la valida el endpoint /user/attendance/auxiliary.
+    auxiliary: {
+        type: Boolean,
+        default: false
+    },
+
     // Comentarios sobre el día, agregados por usuarios super desde la grilla.
     // Cada entrada referencia a quién comentó. Compatible hacia atrás.
     comments: {
