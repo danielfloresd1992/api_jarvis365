@@ -10,7 +10,7 @@ import controller from './user.controller.js';
 
 import nameApi from '../../libs/name_api.js';
 import { ObjectId } from 'mongodb';  //   validateSessionAndUser.js
-import { validateSessionAndUserSuper } from '../../middleware/validateSessionAndUser.js';
+import { validateSessionAndUserSuper, validateSuperUser, validateAdminUser } from '../../middleware/validateSessionAndUser.js';
 import { userMultimedia } from '../../util/multer.js'
 
 import AttendanceModel from './attendance.model.js';
@@ -166,7 +166,7 @@ routerUser.get(`${nameApi}/user`, async (req, res) => {
 
 
 
-routerUser.put(`${nameApi}/user/:id`, validateSessionAndUserSuper, async (req, res) => {
+routerUser.put(`${nameApi}/user/:id`, validateAdminUser, async (req, res) => {
     try {
         const { id } = req.params;
         const idUserQuiery = req.session.userId;
@@ -853,7 +853,7 @@ routerUser.get(`${nameApi}/user/attendance/:dni`, async (req, res) => {
 // Recibe un array de { userId, dni, date, workType, startTime, endTime, isRestDay }
 // y crea o actualiza documentos AttendanceModel con scheduleOverride.
 // NO toca checkIn ni checkOut — solo escribe la regla especial del día.
-routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
+routerUser.post(`${nameApi}/user/schedule/dynamic/group`, validateAdminUser, async (req, res) => {
     try {
         const { updates, adminUserId } = req.body;
 
@@ -1013,7 +1013,7 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, async (req, res) => {
 // y Sistemas y desarrollo. Quien designa sale de la sesión.
 const ONDUTY_DEPARTMENTS = ['Operaciones', 'Reportes', 'Sistemas y desarrollo'];
 
-routerUser.post(`${nameApi}/user/attendance/on-duty`, validateSessionAndUserSuper, async (req, res) => {
+routerUser.post(`${nameApi}/user/attendance/on-duty`, validateAdminUser, async (req, res) => {
     try {
         const authorId = req.session.userId;
         const { userId, dni, date, onDuty } = req.body || {};
@@ -1143,7 +1143,7 @@ routerUser.post(`${nameApi}/user/attendance/on-duty`, validateSessionAndUserSupe
 // body: { userId | dni, date, message }
 // Agrega un comentario al documento Attendance del día (lo crea si no
 // existe). El autor sale de la sesión (req.session.userId), nunca del body.
-routerUser.post(`${nameApi}/user/attendance/comment`, validateSessionAndUserSuper, async (req, res) => {
+routerUser.post(`${nameApi}/user/attendance/comment`, validateSuperUser, async (req, res) => {
     try {
         const authorId = req.session.userId;
         const { userId, dni, date, message } = req.body || {};

@@ -127,4 +127,32 @@ function validateSuperUser(req, res, next) {
 
 
 
-export { validateSession, validateSessionAndUserSuper, extendSession, validateSuperUser };
+// Requiere que el usuario tenga 'admin' === true (req.session.admin, seteado en
+// el login por addCredential). 401 sin sesión; 403 con {status, error, message}
+// si no es admin. A diferencia de validateSessionAndUserSuper, NO exige 'super':
+// la política es admin → modifica propiedades, super → deja comentarios.
+function validateAdminUser(req, res, next) {
+    const userAgent = req.get('User-Agent');
+    const ip = req.ip;
+    const port = req.socket.remotePort;
+
+    // Bypass servidor-a-servidor (mismo patrón que los otros middlewares)
+    if (userAgent === 'node' && (`${ip}:${port}` === process.env.SERVER_JARVIS365DEV || `${ip}:${port}` === process.env.SERVER_JARVIS365PROD)) {
+        return next();
+    }
+
+    if (!req.session.name) {
+        return res.status(401).json({ status: 401, error: 'Unauthorized', message: 'No autenticado: debe iniciar sesión' });
+    }
+
+    if (req.session.admin !== true) {
+        if (SHOW_CONSOLE) console.log(colors.bgRed(`El usuario ${req.session.name} intentó una acción de admin sin permiso\nrouter: ${req.originalUrl}\norigen: ${req.ip}\ndate: ${new Date()}\n`.white));
+        return res.status(403).json({ status: 403, error: 'Forbidden', message: 'Se requiere permiso de administrador para esta acción' });
+    }
+
+    next();
+}
+
+
+
+export { validateSession, validateSessionAndUserSuper, extendSession, validateSuperUser, validateAdminUser };
