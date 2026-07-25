@@ -24,7 +24,8 @@ const origins = process.env.NODE_ENV === 'development' ?
         'https://jarvis365report.netlify.app',
         'https://jarvis365reporte.netlify.app',
         'https://jarvis365.netlify.app',
-        'https://jarvis-express.netlify.app'
+        'https://jarvis-express.netlify.app',
+        'https://client365.vercel.app'
     ];
 
 
