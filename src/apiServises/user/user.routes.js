@@ -11,7 +11,7 @@ import controller from './user.controller.js';
 import nameApi from '../../libs/name_api.js';
 import { ObjectId } from 'mongodb';  //   validateSessionAndUser.js
 import { validateSession, validateSessionAndUserSuper, validateSuperUser, validateAdminUser } from '../../middleware/validateSessionAndUser.js';
-import { buildTodayRoster } from './dayRoster.service.js';
+import { buildTodayRoster, getUserDayRole } from './dayRoster.service.js';
 import { userMultimedia } from '../../util/multer.js'
 
 import AttendanceModel from './attendance.model.js';
@@ -1157,6 +1157,21 @@ routerUser.get(`${nameApi}/user/roster/today`, validateSession, async (req, res)
     try {
         const data = await buildTodayRoster();
         return res.status(200).json(data);
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ status: 500, message: 'Error server internal', error: error.message });
+    }
+});
+
+
+// GET .../user/day-role/today — rol del día SOLO del usuario en sesión
+// (encargado de turno / auxiliar). Liviano: una lectura de su asistencia de
+// hoy, sin traer todo el roster. Lo usa dayRoleContext en el front.
+routerUser.get(`${nameApi}/user/day-role/today`, validateSession, async (req, res) => {
+    try {
+        const role = await getUserDayRole(req.session.userId);
+        return res.status(200).json(role);
     }
     catch (error) {
         console.log(error);

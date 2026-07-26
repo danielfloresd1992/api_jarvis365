@@ -22,6 +22,23 @@ const ROSTER_TZ = process.env.MONITORING_TZ || 'America/Caracas';
 // Tipos de jornada con los que el empleado NO viene hoy
 const NO_WORK_TYPES = ['descanso', 'vacaciones', 'permiso', 'falta'];
 
+// Fecha civil de HOY (medianoche UTC), zona de referencia del monitoreo — el
+// formato con el que attendance guarda `date`.
+function todayCivilDate() {
+    const now = moment.tz(ROSTER_TZ);
+    return new Date(Date.UTC(now.year(), now.month(), now.date()));
+}
+
+// Rol del día de UN usuario (encargado de turno / auxiliar). Barato: una sola
+// lectura de su documento de asistencia de hoy — sin traer todo el roster.
+export async function getUserDayRole(userId) {
+    const att = await AttendanceModel
+        .findOne({ userId, date: todayCivilDate() })
+        .select('onDuty auxiliary')
+        .lean();
+    return { onDuty: Boolean(att?.onDuty), auxiliary: Boolean(att?.auxiliary) };
+}
+
 export async function buildTodayRoster() {
     const now = moment.tz(ROSTER_TZ);
     // Fecha civil de hoy a medianoche UTC — el formato con el que attendance guarda `date`

@@ -1,5 +1,5 @@
 import express from 'express';
-import { extendSession, validateSession, validateSessionAndUserSuper } from '../../middleware/validateSessionAndUser.js';
+import { extendSession, validateSession, validateSessionAndUserSuper, validateAdminUser } from '../../middleware/validateSessionAndUser.js';
 import controller from './schedule.controller.js';
 import nameApi from '../../libs/name_api.js';
 
@@ -13,9 +13,9 @@ routerSchedule.get(`${nameApi}/schedule/active/idLocal=:idLocal`, extendSession,
 
 routerSchedule.get(`${nameApi}/schedule/today/idLocal=:idLocal`, extendSession, validateSession, controller.getTodayByIdLocal);
 
-routerSchedule.post(`${nameApi}/schedule`, extendSession, validateSessionAndUserSuper, controller.setDateLocal);
+routerSchedule.post(`${nameApi}/schedule`, extendSession, validateAdminUser, controller.setDateLocal);
 
-routerSchedule.put(`${nameApi}/schedule/idLocal=:idLocal`, extendSession, validateSessionAndUserSuper, controller.putDate);
+routerSchedule.put(`${nameApi}/schedule/idLocal=:idLocal`, extendSession, validateAdminUser, controller.putDate);
 
 
 export { routerSchedule };

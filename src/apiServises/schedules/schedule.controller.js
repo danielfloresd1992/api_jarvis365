@@ -5,10 +5,10 @@ import Schedules from './schedule.model.js';
 import { validateRanges, getActiveMonitoringNow, pickSchedule, getServerNow } from './schedule.logic.js';
 import { IsDaylightSavingTimeBoolean } from '../time/time.model.js';
 
+
+
 controller.getDateAll = async (req, res) => {
     try {
-        if(!req.session.name) return res.status(401).json({ error: 'Debe loguearse para realizar esta operación' });
-        if(!req.session.super) return res.status(403).json({ error : 'No cuentas con los permisos suficientes para esta operación' });
         const result = await Schedules.find();
         return res.status(200).json(result);
     } 
