@@ -10,7 +10,8 @@ import controller from './user.controller.js';
 
 import nameApi from '../../libs/name_api.js';
 import { ObjectId } from 'mongodb';  //   validateSessionAndUser.js
-import { validateSessionAndUserSuper, validateSuperUser, validateAdminUser } from '../../middleware/validateSessionAndUser.js';
+import { validateSession, validateSessionAndUserSuper, validateSuperUser, validateAdminUser } from '../../middleware/validateSessionAndUser.js';
+import { buildTodayRoster } from './dayRoster.service.js';
 import { userMultimedia } from '../../util/multer.js'
 
 import AttendanceModel from './attendance.model.js';
@@ -1143,6 +1144,25 @@ routerUser.post(`${nameApi}/user/attendance/on-duty`, validateAdminUser,
 
 routerUser.post(`${nameApi}/user/attendance/auxiliary`, validateAdminUser,
     makeDayRoleHandler({ field: 'auxiliary', subject: 'El auxiliar', label: 'auxiliar', taken: 'asignado' }));
+
+
+
+// ══════════════════════════════════════════════════════════════════════
+// ENDPOINT: Ficha del personal de HOY (roster con jornada efectiva)
+// ══════════════════════════════════════════════════════════════════════
+// GET .../user/roster/today — para el panel analítico: jornada efectiva de
+// cada usuario (override por fecha > regla semanal > defecto), marcaje de
+// entrada/salida y roles del día (encargado/auxiliar). Solo requiere sesión.
+routerUser.get(`${nameApi}/user/roster/today`, validateSession, async (req, res) => {
+    try {
+        const data = await buildTodayRoster();
+        return res.status(200).json(data);
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ status: 500, message: 'Error server internal', error: error.message });
+    }
+});
 
 
 
