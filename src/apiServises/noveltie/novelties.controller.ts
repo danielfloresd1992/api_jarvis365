@@ -202,7 +202,17 @@ export default class ControllerNovelty {
             const page: any = req.params.page;
             const numberItems: any = req.params.items;
 
-            const noveltiesPaginate = await NoveltieModel.find({}).sort({ $natural: -1 }).skip(page * numberItems).limit(numberItems)
+            // Filtro por estado de validación (opcional; sin él trae todas):
+            //   validadas   → validationResult.isApproved === true
+            //   invalidadas → validationResult.isApproved === false
+            //   ignoradas   → isApproved ausente/null (nadie la validó aún)
+            const state: any = req.query.state;
+            let filter: any = {};
+            if (state === 'validadas') filter = { 'validationResult.isApproved': true };
+            else if (state === 'invalidadas') filter = { 'validationResult.isApproved': false };
+            else if (state === 'ignoradas') filter = { $or: [{ 'validationResult.isApproved': null }, { 'validationResult.isApproved': { $exists: false } }] };
+
+            const noveltiesPaginate = await NoveltieModel.find(filter).sort({ $natural: -1 }).skip(page * numberItems).limit(numberItems)
             return res.json(noveltiesPaginate);
         }
         catch (err) {
