@@ -292,10 +292,10 @@ async function runSilenceCut(ctx, statuses) {
         const objectIds = inWindowIds.map(id => new mongoose.Types.ObjectId(id));
 
         // Novedades VALIDADAS y ENVIADAS AL GRUPO (givenToTheGroup) de estos
-        // locales, agrupadas por local, con el filtro de fecha que se le pase.
+        // locales, por local: CUÁNTAS y CUÁNDO fue la última (max updatedAt).
         // `givenToTheGroup` es el flag que marca "enviado al grupo" (el mismo que
         // pinta el chip en Client365); es lo que cuenta como "reportar al grupo".
-        const countSentToGroup = async (dateMatch) => {
+        const sentToGroupBy = async (dateMatch) => {
             const rows = await Noveltie.aggregate([
                 {
                     $match: {
@@ -305,9 +305,9 @@ async function runSilenceCut(ctx, statuses) {
                         $or: [{ establishment: { $in: objectIds } }, { 'local.idLocal': { $in: objectIds } }],
                     },
                 },
-                { $group: { _id: { $ifNull: ['$establishment', '$local.idLocal'] }, count: { $sum: 1 } } },
+                { $group: { _id: { $ifNull: ['$establishment', '$local.idLocal'] }, count: { $sum: 1 }, lastAt: { $max: '$updatedAt' } } },
             ]);
-            return new Map(rows.map(r => [String(r._id), r.count]));
+            return new Map(rows.map(r => [String(r._id), { count: r.count, lastAt: r.lastAt }]));
         };
 
         // CRITERIO DIRECTO (sin baseline persistido): un local está callado si NO
@@ -315,22 +315,32 @@ async function runSilenceCut(ctx, statuses) {
         // (la acción de compartir actualiza el documento). Al no arrastrar un
         // baseline entre cortes, el resultado es correcto aunque el proceso se
         // haya caído y perdido cortes anteriores.
-        const sentLastHour = await countSentToGroup({ updatedAt: { $gte: oneHourAgo, $lt: ctx.now.toDate() } });
-        // Enviadas al grupo en todo el día operativo → solo para el texto del aviso.
-        const sentToday = await countSentToGroup({ date: { $gte: start.toDate(), $lt: ctx.now.toDate() } });
+        const lastHour = await sentToGroupBy({ updatedAt: { $gte: oneHourAgo, $lt: ctx.now.toDate() } });
+        // Del día operativo: para el conteo y el ÚLTIMO envío (→ "sin alertas hace X").
+        const today = await sentToGroupBy({ date: { $gte: start.toDate(), $lt: ctx.now.toDate() } });
 
-        // Señalado: evaluable (abierto ≥1h) que envió 0 al grupo en la última hora
+        // Señalado: evaluable (abierto ≥1h) que envió 0 al grupo en la última hora.
+        // lastSentAt = último envío al grupo del día (o null si no envió nada hoy).
         const flagged = evaluableIds
-            .filter(id => (sentLastHour.get(id) ?? 0) === 0)
-            .map(id => ({ id, name: ctx.nameById.get(id) ?? id, today: sentToday.get(id) ?? 0 }))
-            .sort((a, b) => a.today - b.today || a.name.localeCompare(b.name, 'es'));
+            .filter(id => (lastHour.get(id)?.count ?? 0) === 0)
+            .map(id => {
+                const t = today.get(id);
+                return { id, name: ctx.nameById.get(id) ?? id, todayCount: t?.count ?? 0, lastSentAt: t?.lastAt ?? null };
+            })
+            .sort((a, b) => a.todayCount - b.todayCount || a.name.localeCompare(b.name, 'es'));
 
         // El front (AlertInputLive / AlertsChart / LocalsOverview) resalta a los
         // señalados. Se emite SIEMPRE para que también limpie el corte anterior.
+        // lastSentAt viaja para mostrar "sin actualización hace X".
         io.emit('monitoring-silence', {
             slotLabel: slot.slotLabel,
             at: ctx.now.toISOString(),
-            flagged: flagged.map(f => ({ idLocal: f.id, name: f.name, count: f.today })),
+            flagged: flagged.map(f => ({
+                idLocal: f.id,
+                name: f.name,
+                count: f.todayCount,
+                lastSentAt: f.lastSentAt ? new Date(f.lastSentAt).toISOString() : null,
+            })),
         });
 
         if (flagged.length > 0) {
@@ -341,14 +351,15 @@ async function runSilenceCut(ctx, statuses) {
             console.log(colors.yellow(`[monitoreo] corte ${slot.slotLabel}: ${flagged.length} local(es) sin reportar → aviso enviado`));
         }
 
-        // Persiste el flag por local para sembrar el front al montar (ya no se
-        // guarda baseline: el criterio de última hora se calcula solo cada corte).
+        // Persiste flag + último envío por local para sembrar el front al montar
+        // (ya no se guarda baseline: el criterio de última hora se calcula solo).
         const flaggedIds = new Set(flagged.map(f => f.id));
         await MonitoringStateModel.bulkWrite(inWindowIds.map(id => ({
             updateOne: {
                 filter: { idLocal: id },
                 update: { $set: {
                     'noveltyCheck.at': ctx.now.toDate(),
+                    'noveltyCheck.lastSentAt': today.get(id)?.lastAt ?? null,
                     'noveltyCheck.flagged': flaggedIds.has(id),
                 } },
                 upsert: true,
@@ -379,14 +390,24 @@ function dueSilenceSlot(now) {
     return { slotLabel, slotKey: `silencio_${start.format('YYYY-MM-DD')}_${slotLabel.replace(':', '')}` };
 }
 
+// Texto "hace X" a partir de una fecha y el ahora (moment): "hace 45 min",
+// "hace 3 h", "hace 3 h 20 min".
+const humanSince = (date, nowMoment) => {
+    const mins = Math.max(0, Math.floor(moment.duration(nowMoment.diff(moment(date))).asMinutes()));
+    if (mins < 60) return `hace ${mins} min`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m > 0 ? `hace ${h} h ${m} min` : `hace ${h} h`;
+};
+
 const buildSilenceMessage = (flagged, slotLabel, now) => [
     '🚨 *ESTABLECIMIENTOS SIN REPORTAR AL GRUPO*',
     `🕐 Corte ${slotLabel} — ${now.format('dddd DD/MM/YYYY')}`,
     '🔎 En monitoreo analítico activo, SIN novedades ✓ validadas y 📤 enviadas al grupo en la última hora:',
     '',
-    ...flagged.map(f => f.today === 0
-        ? `🔴 ${f.name} · sin reportes hoy`
-        : `🟠 ${f.name} · ${f.today} en el día, pero 0 en la última hora`),
+    ...flagged.map(f => f.lastSentAt
+        ? `🟠 ${f.name} · sin alertas ${humanSince(f.lastSentAt, now)} (${f.todayCount} en el día)`
+        : `🔴 ${f.name} · sin reportes hoy`),
     '',
     '_Generado automáticamente por Jarvis365_',
 ].join('\n');

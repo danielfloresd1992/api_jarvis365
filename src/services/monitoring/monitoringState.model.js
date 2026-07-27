@@ -49,15 +49,18 @@ const MonitoringState = new Schema({
     lastStartAt: { type: Date, default: null },
     lastEndAt:   { type: Date, default: null },
 
-    // Corte de silencio (cada 30 min): último conteo ACUMULADO del día de
-    // novedades validadas-y-enviadas del local, y cuándo se midió. Si en el
-    // siguiente corte el conteo no supera este valor, el local se lista como
-    // "sin reportar al grupo". Un `at` de un día operativo anterior se ignora
-    // (el acumulado se reinicia con cada día).
+    // Corte de silencio (cada hora): resultado del último corte para el local.
+    // Un local en monitoreo analítico que NO envió ninguna novedad validada al
+    // grupo (givenToTheGroup) en la última hora se lista como "sin reportar".
+    //   · at         → cuándo se corrió el último corte para el local
+    //   · lastSentAt → último envío al grupo del día (para "sin actualización
+    //                  hace X" en el front). null si no envió nada hoy.
+    //   · flagged    → true si el último corte lo listó como "sin reportar"
+    // (count queda por compatibilidad; el criterio ya no usa baseline.)
     noveltyCheck: {
         count: { type: Number, default: 0 },
         at:    { type: Date, default: null },
-        // true → el último corte de silencio lo listó como "sin reportar al grupo"
+        lastSentAt: { type: Date, default: null },
         flagged: { type: Boolean, default: false }
     }
 }, { timestamps: true });
