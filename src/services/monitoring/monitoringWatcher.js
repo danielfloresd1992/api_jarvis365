@@ -241,10 +241,13 @@ function emitTransition(event, label, { id, name, type, winter, at }) {
 // ─────────────────────── Paso 3: corte de silencio ───────────────────────────
 
 // CADA HORA EN PUNTO (primer corte 09:00; a las 08:00 la ventana recién abre):
-// de los locales en monitoreo ANALÍTICO ahora, señala a los que NO tienen
-// novedades nuevas validadas y enviadas al grupo en la última hora. Emite el
-// evento SIEMPRE (aun con lista vacía, para limpiar avisos viejos del front);
-// si hay señalados, además manda un texto al grupo de WhatsApp.
+// de los locales en monitoreo ANALÍTICO ahora (y abiertos ≥1h), señala a los
+// que NO enviaron NINGUNA novedad validada al grupo (givenToTheGroup) en la
+// última hora. Es una CONSULTA DIRECTA por `updatedAt` (≈ momento del envío),
+// sin baseline persistido: por eso el resultado es correcto aunque el proceso
+// se haya caído y perdido cortes anteriores. Emite el evento SIEMPRE (aun con
+// lista vacía, para limpiar avisos viejos del front); si hay señalados, además
+// manda un texto al grupo de WhatsApp.
 async function runSilenceCut(ctx, statuses) {
     if (!SILENCE_ENABLED) return;
 
@@ -288,43 +291,46 @@ async function runSilenceCut(ctx, statuses) {
 
         const objectIds = inWindowIds.map(id => new mongoose.Types.ObjectId(id));
 
-        // Conteo ACUMULADO del día por local: novedades VALIDADAS y ENVIADAS al grupo
-        const rows = await Noveltie.aggregate([
-            {
-                $match: {
-                    date: { $gte: start.toDate(), $lt: ctx.now.toDate() },
-                    'validationResult.isApproved': true,
-                    $and: [
-                        { $or: [{ establishment: { $in: objectIds } }, { 'local.idLocal': { $in: objectIds } }] },
-                        { $or: [{ sharedByAmazonActive: true }, { givenToTheGroup: true }] },
-                    ],
+        // Novedades VALIDADAS y ENVIADAS AL GRUPO (givenToTheGroup) de estos
+        // locales, agrupadas por local, con el filtro de fecha que se le pase.
+        // `givenToTheGroup` es el flag que marca "enviado al grupo" (el mismo que
+        // pinta el chip en Client365); es lo que cuenta como "reportar al grupo".
+        const countSentToGroup = async (dateMatch) => {
+            const rows = await Noveltie.aggregate([
+                {
+                    $match: {
+                        ...dateMatch,
+                        'validationResult.isApproved': true,
+                        givenToTheGroup: true,
+                        $or: [{ establishment: { $in: objectIds } }, { 'local.idLocal': { $in: objectIds } }],
+                    },
                 },
-            },
-            { $group: { _id: { $ifNull: ['$establishment', '$local.idLocal'] }, count: { $sum: 1 } } },
-        ]);
-        const countById = new Map(rows.map(r => [String(r._id), r.count]));
+                { $group: { _id: { $ifNull: ['$establishment', '$local.idLocal'] }, count: { $sum: 1 } } },
+            ]);
+            return new Map(rows.map(r => [String(r._id), r.count]));
+        };
 
-        // Baseline del corte anterior (uno de otro día operativo se ignora)
-        const states = await MonitoringStateModel.find({ idLocal: { $in: inWindowIds } })
-            .select('idLocal noveltyCheck').lean();
-        const baselineById = new Map(states.map(st => {
-            const fresh = st.noveltyCheck?.at && new Date(st.noveltyCheck.at) >= start.toDate();
-            return [st.idLocal, fresh ? (st.noveltyCheck.count ?? 0) : 0];
-        }));
+        // CRITERIO DIRECTO (sin baseline persistido): un local está callado si NO
+        // envió NADA al grupo en la última hora. `updatedAt` ≈ momento del envío
+        // (la acción de compartir actualiza el documento). Al no arrastrar un
+        // baseline entre cortes, el resultado es correcto aunque el proceso se
+        // haya caído y perdido cortes anteriores.
+        const sentLastHour = await countSentToGroup({ updatedAt: { $gte: oneHourAgo, $lt: ctx.now.toDate() } });
+        // Enviadas al grupo en todo el día operativo → solo para el texto del aviso.
+        const sentToday = await countSentToGroup({ date: { $gte: start.toDate(), $lt: ctx.now.toDate() } });
 
-        // Señalado: sigue en cero, o el acumulado no superó el corte anterior
-        // (solo los evaluables; el recién abierto no se juzga en este corte)
+        // Señalado: evaluable (abierto ≥1h) que envió 0 al grupo en la última hora
         const flagged = evaluableIds
-            .map(id => ({ id, name: ctx.nameById.get(id) ?? id, count: countById.get(id) ?? 0, baseline: baselineById.get(id) ?? 0 }))
-            .filter(l => l.count === 0 || l.count <= l.baseline)
-            .sort((a, b) => a.count - b.count || a.name.localeCompare(b.name, 'es'));
+            .filter(id => (sentLastHour.get(id) ?? 0) === 0)
+            .map(id => ({ id, name: ctx.nameById.get(id) ?? id, today: sentToday.get(id) ?? 0 }))
+            .sort((a, b) => a.today - b.today || a.name.localeCompare(b.name, 'es'));
 
         // El front (AlertInputLive / AlertsChart / LocalsOverview) resalta a los
         // señalados. Se emite SIEMPRE para que también limpie el corte anterior.
         io.emit('monitoring-silence', {
             slotLabel: slot.slotLabel,
             at: ctx.now.toISOString(),
-            flagged: flagged.map(f => ({ idLocal: f.id, name: f.name, count: f.count })),
+            flagged: flagged.map(f => ({ idLocal: f.id, name: f.name, count: f.today })),
         });
 
         if (flagged.length > 0) {
@@ -335,14 +341,13 @@ async function runSilenceCut(ctx, statuses) {
             console.log(colors.yellow(`[monitoreo] corte ${slot.slotLabel}: ${flagged.length} local(es) sin reportar → aviso enviado`));
         }
 
-        // El baseline SIEMPRE avanza para todos los en-ventana (haya o no aviso)
-        // y el flag queda persistido para sembrar el front al montar.
+        // Persiste el flag por local para sembrar el front al montar (ya no se
+        // guarda baseline: el criterio de última hora se calcula solo cada corte).
         const flaggedIds = new Set(flagged.map(f => f.id));
         await MonitoringStateModel.bulkWrite(inWindowIds.map(id => ({
             updateOne: {
                 filter: { idLocal: id },
                 update: { $set: {
-                    'noveltyCheck.count': countById.get(id) ?? 0,
                     'noveltyCheck.at': ctx.now.toDate(),
                     'noveltyCheck.flagged': flaggedIds.has(id),
                 } },
@@ -377,11 +382,11 @@ function dueSilenceSlot(now) {
 const buildSilenceMessage = (flagged, slotLabel, now) => [
     '🚨 *ESTABLECIMIENTOS SIN REPORTAR AL GRUPO*',
     `🕐 Corte ${slotLabel} — ${now.format('dddd DD/MM/YYYY')}`,
-    '🔎 En monitoreo analítico activo, sin novedades nuevas ✓ validadas y 📤 enviadas en la última hora:',
+    '🔎 En monitoreo analítico activo, SIN novedades ✓ validadas y 📤 enviadas al grupo en la última hora:',
     '',
-    ...flagged.map(f => f.count === 0
-        ? `🔴 ${f.name} · 0 en el día`
-        : `🟠 ${f.name} · ${f.count} en el día (sin aumento)`),
+    ...flagged.map(f => f.today === 0
+        ? `🔴 ${f.name} · sin reportes hoy`
+        : `🟠 ${f.name} · ${f.today} en el día, pero 0 en la última hora`),
     '',
     '_Generado automáticamente por Jarvis365_',
 ].join('\n');
