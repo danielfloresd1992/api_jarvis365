@@ -18,6 +18,23 @@ import appConfig from './config/index.js';
 dotenvConfig();
 
 
+// ── Red de seguridad de PROCESO ────────────────────────────────────────────
+// En Node moderno, una promesa rechazada sin `.catch` en CUALQUIER parte tumba
+// el proceso entero (y con él el watcher de monitoreo y los reportes). Estos
+// handlers registran la causa con hora exacta y mantienen el proceso VIVO ante
+// un rechazo perdido, en vez de morir en silencio. Deben declararse lo antes
+// posible, antes de levantar el servidor.
+process.on('unhandledRejection', (reason: unknown) => {
+    console.error(`[FATAL] unhandledRejection @ ${new Date().toISOString()}:`, reason);
+    // No se sale: el proceso sobrevive al rechazo y deja rastro para diagnosticar.
+});
+process.on('uncaughtException', (error: Error) => {
+    console.error(`[FATAL] uncaughtException @ ${new Date().toISOString()}:`, error);
+    // No se sale: un supervisor (NSSM/pm2) puede reiniciar si se prefiere; aquí
+    // priorizamos que el watcher no muera por una excepción aislada de otra ruta.
+});
+
+
 declare global {
     namespace NodeJS {
         interface ProcessEnv {
