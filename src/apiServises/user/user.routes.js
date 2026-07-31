@@ -167,6 +167,66 @@ routerUser.get(`${nameApi}/user`, async (req, res) => {
 
 
 
+// ══════════════════════════════════════════════════════════════════════
+// ENDPOINT: Directorio de usuarios — lista paginada + buscador (SIN password)
+// ══════════════════════════════════════════════════════════════════════
+// GET .../user/list?page=1&limit=12&search=juan perez
+//   · Devuelve usuarios paginados. Se proyectan SOLO campos de presentación
+//     (password ya es select:false y nunca viaja).
+//   · Si viene `search`, filtra por name/surName (case-insensitive). Con varias
+//     palabras, CADA término debe aparecer en name O surName, así "juan perez"
+//     coincide con name~juan y surName~perez en cualquier orden.
+//   · IMPORTANTE: se declara ANTES de /user/:dni para que "list" no se capture
+//     como un dni.
+routerUser.get(`${nameApi}/user/list`, validateSession, async (req, res) => {
+    try {
+        const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+        const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 12));
+        const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+
+        // Filtro de búsqueda: cada palabra debe aparecer en name O surName.
+        const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const terms = search ? search.split(/\s+/).filter(Boolean) : [];
+        const filter = terms.length
+            ? { $and: terms.map(t => {
+                const rx = new RegExp(escapeRegex(t), 'i');
+                return { $or: [{ name: rx }, { surName: rx }] };
+            }) }
+            : {};
+
+        // Solo un admin ve (y por ende puede editar) las banderas admin/super.
+        const isAdmin = req.session.admin === true;
+        const fields = 'name surName dni email img jobInformation inabilited createdOn'
+            + (isAdmin ? ' admin super' : '');
+
+        const skip = (page - 1) * limit;
+        const [users, totalUsers] = await Promise.all([
+            UserModel.find(filter)
+                .select(fields)
+                .sort({ surName: 1, name: 1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            UserModel.countDocuments(filter),
+        ]);
+
+        return res.status(200).json({
+            status: 200,
+            page,
+            limit,
+            search,
+            totalUsers,
+            totalPages: Math.max(1, Math.ceil(totalUsers / limit)),
+            users,
+        });
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ status: 500, error: 'Error server internal', message: error.message });
+    }
+});
+
+
 routerUser.put(`${nameApi}/user/:id`, validateAdminUser, async (req, res) => {
     try {
         const { id } = req.params;
