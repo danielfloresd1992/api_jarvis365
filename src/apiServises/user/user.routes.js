@@ -23,6 +23,7 @@ import { parseISO, format, getDay, startOfDay, isValid } from 'date-fns';
 
 
 import { io } from '../../services/socket/io.js'
+import { emitCloseSessionForUser } from '../../services/socket/sessionEvents.js';
 
 const ATTENDANCE_TIMEZONE = 'America/Caracas';
 
@@ -1389,6 +1390,9 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                     dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
                     io.emit(`${dateEvent.toISOString()}-${user.email}`, { finalRecord, user });
 
+                    // Fin de jornada: los frontends cierran la sesión del usuario
+                    emitCloseSessionForUser(user._id);
+
                     return res.status(200).json({
                         finalRecord,
                         user,
@@ -1604,6 +1608,10 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                 const dateEvent = new Date(finalRecord.date);
                 dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
                 io.emit(`${dateEvent.toISOString()}-${user.email}`, { finalRecord, user });
+
+                // Fin de jornada: los frontends cierran la sesión del usuario
+                emitCloseSessionForUser(user._id);
+
                 return res.status(200).json({ finalRecord, user, message: '¡Fin de la jornada diaria!🥳🥳🥳' });
             }
 
