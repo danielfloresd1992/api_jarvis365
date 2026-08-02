@@ -9,6 +9,9 @@ export function runDailyAttendanceReport(options?: {
     shiftFocus: 'Diurno' | 'Nocturno' | null;
     date: string;
     totals: Record<string, number>;
+    faultsRegistered: number;
+    faultsSkipped: number;
+    faultsFailed: number;
     sentTo: string | null;
     recipients: number;
     filename: string;

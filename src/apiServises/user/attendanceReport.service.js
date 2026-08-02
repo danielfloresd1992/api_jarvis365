@@ -17,6 +17,12 @@ import AttendanceModel from './attendance.model.js';
 //      pendiente (su turno aún no inicia), no requerido (descanso/permiso/
 //      vacaciones) o sin horario configurado.
 //
+// REGLA DE NEGOCIO: la falta registrada (manual o automática del corte)
+// PREVALECE sobre el marcaje — pasada la hora de corte del turno
+// (FAULT_CUT_TIMES: 15:00 diurno / 21:00 nocturno), marcar entrada ya no
+// quita la falta; el reporte lo muestra como ausente indicando la hora en
+// que marcó.
+//
 // La fecha del día se calcula en la zona horaria de Venezuela, igual que el
 // marcado (date = medianoche UTC de la fecha civil de Caracas).
 
@@ -29,7 +35,9 @@ const LATE_GRACE_MINUTES = 8; // misma tolerancia que el endpoint de marcado
 //   hasta 09:08 → 0 · 09:09–09:20 → 1 · 09:21–09:40 → 2 · 09:41–10:00 → 3 …
 const DISCOUNT_BLOCK_MINUTES = 20;
 
-const computeDiscountUnits = (minutesLate) => {
+// Exportada: el endpoint de marcado (user.routes.js) la usa para persistir
+// el valor en Attendance.discountUnits al registrar una entrada con retardo.
+export const computeDiscountUnits = (minutesLate) => {
     if (minutesLate === null || minutesLate <= LATE_GRACE_MINUTES) return 0;
     return Math.ceil(minutesLate / DISCOUNT_BLOCK_MINUTES);
 };
@@ -131,8 +139,26 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
             endTime: rule.endTime
         };
 
-        // 1) Si marcó entrada hoy, es presente (a tiempo o con retardo),
-        //    sin importar la regla del día (cubre franco-trabajado).
+        // 1) Falta registrada (manual del admin o automática del corte):
+        //    PREVALECE incluso si marcó entrada después — pasada la hora del
+        //    corte la falta queda firme. Se informa la hora en que marcó.
+        if (rule.workType === 'falta') {
+            const lateCheckIn = record?.checkIn
+                ? formatTime12(moment.tz(record.checkIn, ATTENDANCE_TIMEZONE))
+                : null;
+            absents.push({
+                ...base,
+                checkIn: lateCheckIn,
+                reason: lateCheckIn
+                    ? `Falta registrada (marcó ${lateCheckIn}, después del corte)`
+                    : 'Falta pre-registrada por administración'
+            });
+            continue;
+        }
+
+        // 2) Si marcó entrada hoy (y no tiene falta firme), es presente — a
+        //    tiempo o con retardo, sin importar la regla del día (cubre
+        //    franco-trabajado).
         if (record?.checkIn) {
             const checkInMoment = moment.tz(record.checkIn, ATTENDANCE_TIMEZONE);
             const checkInMinutes = (checkInMoment.hours() * 60) + checkInMoment.minutes();
@@ -157,12 +183,6 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
 
             if (record.isLate) lateArrivals.push(entry);
             else presentOnTime.push(entry);
-            continue;
-        }
-
-        // 2) Falta pre-registrada por el administrador (override manual)
-        if (rule.workType === 'falta') {
-            absents.push({ ...base, reason: 'Falta pre-registrada por administración' });
             continue;
         }
 
@@ -206,8 +226,11 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
             continue;
         }
 
-        // 7) Debía presentarse, ya pasó su hora de entrada y no marcó → ausente
-        absents.push({ ...base, reason: 'No ha marcado entrada' });
+        // 7) Debía presentarse, ya pasó su hora de entrada y no marcó → ausente.
+        //    autoFaultCandidate: solo ESTA rama es candidata al registro
+        //    automático de falta (las faltas pre-registradas y los marcados
+        //    'ausente' ya tienen su documento; ver registerAbsencesAsFaults).
+        absents.push({ ...base, reason: 'No ha marcado entrada', autoFaultCandidate: true });
     }
 
     // Orden legible: retardos por minutos desc, ausencias por departamento/nombre
@@ -248,5 +271,121 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
         noSchedule,
         extraDays,
         permissions
+    };
+}
+
+
+// ══════════════════════════════════════════════════════════════════════
+// REGISTRO AUTOMÁTICO DE FALTAS
+// ══════════════════════════════════════════════════════════════════════
+// Usuario del sistema que firma las faltas automáticas (Jarvis Vision, ya
+// existe en la base de datos). Para que en el futuro las firme otro usuario
+// basta cambiar este _id acá, o definir ATTENDANCE_SYSTEM_USER_ID en el .env.
+const SYSTEM_USER_ID = process.env.ATTENDANCE_SYSTEM_USER_ID || '697657323dc213f05486e03a';
+
+const AUTO_FAULT_NOTE = 'Falta registrada automáticamente: no marcó entrada al corte de asistencia.';
+
+// Hora de corte por turno (hora Venezuela): pasada esta hora, quien no marcó
+// entrada queda con falta FIRME. Es la única fuente de verdad — el scheduler
+// del job (REPORT_CUTS) arma sus cortes desde acá.
+export const FAULT_CUT_TIMES = {
+    Diurno: '15:00',
+    Nocturno: '21:00'
+};
+
+/**
+ * Registra como falta en Attendance a los ausentes del reporte que debían
+ * presentarse y no marcaron entrada (autoFaultCandidate). Crea el documento
+ * si no existe o escribe el scheduleOverride sobre el existente, replicando
+ * la MISMA forma que el endpoint manual de "Editar grupo" (user.routes.js):
+ * notas preservadas + nota nueva, createdBy solo al insertar, y editedBy
+ * con los campos que realmente cambiaron.
+ *
+ * @param {object} report - Salida de buildDailyAttendanceReport().
+ * @returns {Promise<object>} { attempted, registered, skipped, failed }
+ */
+export async function registerAbsencesAsFaults(report) {
+    const candidates = (report?.absents || []).filter(a => a.autoFaultCandidate);
+    const registered = [];
+    const skipped = [];
+    const failed = [];
+
+    // La falta solo se escribe DESPUÉS de la hora de corte del turno: un
+    // reporte manual a media mañana no debe dejar faltas firmes de gente
+    // que todavía puede llegar (con retardo, pero llega).
+    const nowMoment = moment.tz(ATTENDANCE_TIMEZONE);
+    const nowMinutes = (nowMoment.hours() * 60) + nowMoment.minutes();
+
+    for (const absent of candidates) {
+        try {
+            const cutMinutes = toMinutes(FAULT_CUT_TIMES[absent.shift]);
+            if (cutMinutes === null || nowMinutes < cutMinutes) {
+                skipped.push({ userId: absent.userId, name: absent.name, reason: `antes del corte de ${FAULT_CUT_TIMES[absent.shift] || 'turno desconocido'}` });
+                continue;
+            }
+
+            const previousRecord = await AttendanceModel.findOne({ userId: absent.userId, date: report.date })
+                .select('scheduleOverride')
+                .lean();
+
+            // Idempotencia: si la falta ya estaba registrada no se toca (evita
+            // duplicar la nota si el corte corre dos veces). Un checkIn tardío
+            // NO la evita: pasada la hora de corte, la falta queda firme.
+            if (previousRecord?.scheduleOverride?.workType === 'falta') {
+                skipped.push({ userId: absent.userId, name: absent.name, reason: 'falta ya registrada' });
+                continue;
+            }
+
+            const prevOverride = previousRecord?.scheduleOverride || {};
+            const previousNotes = prevOverride?.note || [];
+
+            const scheduleOverride = {
+                workType: 'falta',
+                shift: absent.shift || null,
+                startTime: null, // la falta no lleva horario (mismo criterio del endpoint manual)
+                endTime: null,
+                note: [
+                    ...previousNotes,
+                    { user: SYSTEM_USER_ID, message: AUTO_FAULT_NOTE, date: new Date() }
+                ]
+            };
+
+            const changedFields = ['workType', 'shift', 'startTime', 'endTime']
+                .filter(field => (prevOverride?.[field] ?? null) !== (scheduleOverride[field] ?? null))
+                .map(field => ({
+                    field,
+                    from: prevOverride?.[field] ?? null,
+                    to: scheduleOverride[field] ?? null
+                }));
+
+            const updateOp = {
+                $set: { scheduleOverride },
+                $setOnInsert: { createdBy: SYSTEM_USER_ID }
+            };
+            if (previousRecord && changedFields.length > 0) {
+                updateOp.$push = {
+                    editedBy: { user: SYSTEM_USER_ID, change: changedFields, date: new Date() }
+                };
+            }
+
+            await AttendanceModel.findOneAndUpdate(
+                { userId: absent.userId, date: report.date },
+                updateOp,
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
+
+            registered.push({ userId: absent.userId, name: absent.name });
+        }
+        catch (error) {
+            failed.push({ userId: absent.userId, name: absent.name, error: error?.message ?? String(error) });
+        }
+    }
+
+    return {
+        attempted: candidates.length,
+        registered: registered.length,
+        registeredNames: registered.map(r => r.name),
+        skipped,
+        failed
     };
 }

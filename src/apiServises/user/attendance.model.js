@@ -36,6 +36,15 @@ const AttendanceSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    // Unidades a descontar por el retardo, calculadas AL MARCAR la entrada
+    // con computeDiscountUnits (attendanceReport.service.js): pasada la
+    // tolerancia de 8 min, 1 unidad por cada bloque de 20 min de retardo
+    // total. Solo se escribe cuando isLate es true; 0 en caso contrario.
+    // Documentos anteriores no la tienen (default 0): compatible hacia atrás.
+    discountUnits: {
+        type: Number,
+        default: 0
+    },
 
     // Gestión de días libres trabajados (Extras)
     isExtraDay: {

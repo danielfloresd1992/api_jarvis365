@@ -1,18 +1,27 @@
 import https from 'https';
 import moment from 'moment-timezone';
-import { buildDailyAttendanceReport } from './attendanceReport.service.js';
+import { buildDailyAttendanceReport, registerAbsencesAsFaults, FAULT_CUT_TIMES } from './attendanceReport.service.js';
 import { buildAttendanceReportPdf } from './attendanceReport.pdf.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // JOB: Corte de asistencia 2 veces al día → PDF → API de WhatsApp (ava bot)
 // ══════════════════════════════════════════════════════════════════════
 // Variables de entorno (todas opcionales, con estos defaults):
-//   WHATSAPP_BOT_URL           https://amazona365.ddns.net:4000
-//   ATTENDANCE_REPORT_NUMBER   584143041220  (acepta también un id @g.us)
-//   ATTENDANCE_REPORT_ENABLED  true|false    (default: solo en producción)
+//   WHATSAPP_BOT_URL             https://amazona365.ddns.net:4000
+//   ATTENDANCE_REPORT_NUMBER     584143041220  (acepta también un id @g.us)
+//   ATTENDANCE_REPORT_ENABLED    true|false    (default: solo en producción)
+//   ATTENDANCE_SYSTEM_USER_ID    _id del usuario que firma las faltas
+//                                automáticas (ver SYSTEM_USER_ID en el service)
 //
-// Cortes fijos (ver REPORT_CUTS): 13:10 enfocado en personal Diurno y
-// 19:30 enfocado en personal Nocturno (horas Venezuela).
+// Cortes fijos (ver REPORT_CUTS): 15:00 enfocado en personal Diurno y
+// 21:00 enfocado en personal Nocturno (horas Venezuela). Las horas salen de
+// FAULT_CUT_TIMES en el service — única fuente de verdad.
+//
+// Además de enviar el PDF, cada corte registra como FALTA en Attendance a
+// los empleados que debían presentarse y no marcaron entrada (ver
+// registerAbsencesAsFaults). REGLA: pasada la hora del corte la falta es
+// FIRME — marcar entrada después no la quita; el reporte muestra al
+// empleado como ausente con la hora en que marcó.
 //
 // El bot expone POST /bot/imgV2/number=:number y recibe JSON:
 //   { "my-file": <base64>, "type": <mime>, "my-text": <caption>, "filename": <nombre> }
@@ -22,11 +31,12 @@ const ATTENDANCE_TIMEZONE = 'America/Caracas';
 const BOT_URL = process.env.WHATSAPP_BOT_URL || 'https://amazona365.ddns.net:4000';
 const REPORT_NUMBER = process.env.ATTENDANCE_REPORT_NUMBER || '584143041220';
 const List_Number = ['584166268380', '584120242884'];
-// Cortes programados: cada uno se enfoca en un tipo de turno.
-//   15:00 → personal Diurno   ·   21:00 → personal Nocturno
+// Cortes programados: cada uno se enfoca en un tipo de turno. Las horas
+// vienen de FAULT_CUT_TIMES (service): la misma hora que dispara el envío
+// es la que hace firme la falta.
 const REPORT_CUTS = [
-    { time: '15:00', shift: 'Diurno', label: 'Corte diurno · Tarde' },
-    { time: '21:00', shift: 'Nocturno', label: 'Corte nocturno · Cierre' }
+    { time: FAULT_CUT_TIMES.Diurno, shift: 'Diurno', label: 'Corte diurno · Tarde' },
+    { time: FAULT_CUT_TIMES.Nocturno, shift: 'Nocturno', label: 'Corte nocturno · Cierre' }
 ];
 
 
@@ -169,6 +179,23 @@ const cutLabelForNow = (shiftFocus) => {
 export async function runDailyAttendanceReport({ cutLabel, number, shiftFocus } = {}) {
     const label = cutLabel || cutLabelForNow(shiftFocus);
     const report = await buildDailyAttendanceReport(new Date(), shiftFocus);
+
+    // Registrar como falta a quienes debían presentarse y no marcaron entrada.
+    // Un fallo acá NO aborta el envío del reporte: se informa y se sigue.
+    let faults = { attempted: 0, registered: 0, registeredNames: [], skipped: [], failed: [] };
+    try {
+        faults = await registerAbsencesAsFaults(report);
+        if (faults.registered > 0) {
+            console.log(`[attendance-report] Faltas registradas automáticamente (${faults.registered}): ${faults.registeredNames.join(', ')}`);
+        }
+        if (faults.failed.length > 0) {
+            console.log(`[attendance-report] Faltas que NO se pudieron registrar: ${faults.failed.map(f => `${f.name} (${f.error})`).join(' | ')}`);
+        }
+    }
+    catch (error) {
+        console.log('[attendance-report] Error registrando faltas automáticas:', error?.message || error);
+    }
+
     const pdfBuffer = await buildAttendanceReportPdf(report, label);
 
     const shiftTag = shiftFocus ? `${shiftFocus}_` : '';
@@ -188,6 +215,9 @@ export async function runDailyAttendanceReport({ cutLabel, number, shiftFocus } 
         shiftFocus: shiftFocus || null,
         date: report.dateLabel,
         totals: report.totals,
+        faultsRegistered: faults.registered,
+        faultsSkipped: faults.skipped.length,
+        faultsFailed: faults.failed.length,
         sentTo: sent.chatId,
         recipients: sent.count,
         filename,
@@ -233,7 +263,7 @@ const scheduleAt = (cut) => {
         try {
             sentToday[cutKey] = today; // marca ANTES de enviar (evita reentradas concurrentes)
             const result = await runDailyAttendanceReport({ cutLabel: cut.label, shiftFocus: cut.shift });
-            console.log(`[attendance-report] Corte ${cut.time} (${cut.shift}) enviado a ${result.recipients} dest. · retardos: ${result.totals.late} · ausencias: ${result.totals.absent}`);
+            console.log(`[attendance-report] Corte ${cut.time} (${cut.shift}) enviado a ${result.recipients} dest. · retardos: ${result.totals.late} · ausencias: ${result.totals.absent} · faltas registradas: ${result.faultsRegistered}`);
         }
         catch (error) {
             sentToday[cutKey] = null; // falló el envío: permitir reintento

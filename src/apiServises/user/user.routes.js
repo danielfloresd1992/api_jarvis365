@@ -16,7 +16,7 @@ import { userMultimedia } from '../../util/multer.js'
 
 import AttendanceModel from './attendance.model.js';
 import { attendanceMachineValidationSchema } from './attendance.squema.js';
-import { buildDailyAttendanceReport } from './attendanceReport.service.js';
+import { buildDailyAttendanceReport, computeDiscountUnits } from './attendanceReport.service.js';
 import { buildAttendanceReportPdf } from './attendanceReport.pdf.js';
 import { runDailyAttendanceReport } from './attendanceReport.job.js';
 import { parseISO, format, getDay, startOfDay, isValid } from 'date-fns';
@@ -1488,6 +1488,17 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
             ? nowMinutes > (startMinutes + LATE_GRACE_MINUTES)
             : false;
 
+        // Unidades a descontar por el retardo (1 por bloque de 20 min pasada
+        // la tolerancia), persistidas en el documento al marcar la entrada.
+        const minutesLate = Math.max(0, nowMinutes - startMinutes);
+        const discountUnits = realIsLate ? computeDiscountUnits(minutesLate) : 0;
+
+        // Detalle del retardo que viaja en la respuesta para que el cliente de
+        // marcado (bioJarvis) se lo muestre al empleado en el momento.
+        const lateInfo = realIsLate
+            ? { minutesLate, discountUnits, graceMinutes: LATE_GRACE_MINUTES, startTime: effectiveStartTime }
+            : null;
+
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // PASO 3 — ENTRADA de turno nocturno de hoy
         // (la salida ya fue manejada en el PASO 1)
@@ -1529,6 +1540,7 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                         $set: {
                             checkIn: now,
                             isLate: realIsLate,
+                            discountUnits,
                             isExtraDay: isExtraDayResolved,
                             status: isExtraDayResolved ? 'franco-trabajado' : 'presente',
                             updatedAt: now
@@ -1543,6 +1555,7 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                     date: todayMidnight,
                     checkIn: now,
                     isLate: realIsLate,
+                    discountUnits,
                     isExtraDay: isExtraDayResolved,
                     status: isExtraDayResolved ? 'franco-trabajado' : 'presente',
                     imageReference: [body.imageReference],
@@ -1559,6 +1572,7 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
             return res.json({
                 finalRecord,
                 user,
+                lateInfo,
                 message: realIsLate ? 'Entrada nocturna con retardo😥' : 'Entrada nocturna registrada🌙'
             });
         }
@@ -1600,6 +1614,7 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                     $set: {
                         checkIn: now,
                         isLate: realIsLate,
+                        discountUnits,
                         isExtraDay: isExtraDayResolved,
                         status: isExtraDayResolved ? 'franco-trabajado' : 'presente',
                         updatedAt: now
@@ -1615,6 +1630,7 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
             return res.json({
                 finalRecord,
                 user,
+                lateInfo,
                 message: realIsLate ? 'Registro exitoso con retardo😥' : 'Registro exitoso🕗'
             });
         }
@@ -1625,6 +1641,7 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
             date: todayMidnight,
             checkIn: now,
             isLate: realIsLate,
+            discountUnits,
             isExtraDay: isExtraDayResolved,
             status: isExtraDayResolved ? 'franco-trabajado' : 'presente',
             imageReference: [body.imageReference],
@@ -1639,6 +1656,7 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
         return res.json({
             finalRecord,
             user,
+            lateInfo,
             message: realIsLate ? 'Registro exitoso con retardo😥' : 'Registro exitoso🕗'
         });
 
