@@ -209,6 +209,16 @@ const Menu = new Schema({
         default: false
     },
 
+    // ── BLOQUEO ADMINISTRATIVO ────────────────────────────────────────────
+    // true → el documento queda protegido: el PUT de edición y el DELETE lo
+    // rechazan con 423 (Locked). Solo un administrador (admin === true) puede
+    // poner o quitar el bloqueo, por su endpoint dedicado PATCH /menu/lock —
+    // el PUT normal ignora este campo aunque venga en el body.
+    isLocked: {
+        type: Boolean,
+        default: false
+    },
+
     // ── AUTOR DE LA CREACIÓN ──────────────────────────────────────────────
     // Quién creó la alerta/menú. Se setea en el POST desde req.session.userId.
     // Los documentos antiguos no lo tienen (queda null). Se popula al listar con

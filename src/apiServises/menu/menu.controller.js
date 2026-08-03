@@ -117,6 +117,7 @@ controller.putMenu = async (req, res) => {
         console.log(err);
         if (err === 'Sin cambios para guardar') return res.status(400).json({ status: 400, error: 'Bad request', message: err });
         if (err === '404 not found') return res.status(404).json({ status: 404, error: 'Not found', message: 'Menú no encontrado' });
+        if (err === '423 locked') return res.status(423).json({ status: 423, error: 'Locked', message: 'Alerta bloqueada por administración: no se puede editar. Un administrador debe desbloquearla primero.' });
         return res.status(500).send(err);
     }
 };
@@ -125,10 +126,10 @@ controller.putMenu = async (req, res) => {
 
 controller.deleteByIdMenu = async (req, res) => {
     try{
-        
+
         const id = req.params.id;
         const resultMenu = await menu.getDeleteMenu(id)
-       
+
         if(resultMenu.deletedCount > 0) {
             return res.status(200).json(resultMenu);
         }
@@ -138,6 +139,8 @@ controller.deleteByIdMenu = async (req, res) => {
     }
     catch(err){
         console.log(err);
+        if (err === '404 not found') return res.status(404).json({ status: 404, error: 'Not found', message: 'Menú no encontrado' });
+        if (err === '423 locked') return res.status(423).json({ status: 423, error: 'Locked', message: 'Alerta bloqueada por administración: no se puede eliminar. Un administrador debe desbloquearla primero.' });
         return res.status(500).send(err);
     }
 };

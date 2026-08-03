@@ -160,6 +160,9 @@ export default {
             delete fields.updateByUser;
             delete fields.__v;
             delete fields.createdBy;   // el autor de la creación es inmutable
+            // El bloqueo administrativo SOLO se cambia por su endpoint dedicado
+            // (PATCH /menu/lock): el PUT normal no puede ponerlo ni quitarlo.
+            delete fields.isLocked;
 
             const change = Object.keys(fields).map(key => ({ key, value: fields[key] }));
             if(change.length === 0) return reject('Sin cambios para guardar');
@@ -169,10 +172,17 @@ export default {
                 $push: { updateByUser: { user: userId, change, date: new Date() } }
             };
 
-            Menu.findByIdAndUpdate(_id, update, { new: true, runValidators: true })
-                .then(doc => {
-                    if(!doc) return reject('404 not found');
-                    return resolve(doc);
+            // Documento bloqueado por administración → no se edita (423)
+            Menu.findById(_id).select('isLocked')
+                .then(current => {
+                    if(!current) return reject('404 not found');
+                    if(current.isLocked === true) return reject('423 locked');
+
+                    return Menu.findByIdAndUpdate(_id, update, { new: true, runValidators: true })
+                        .then(doc => {
+                            if(!doc) return reject('404 not found');
+                            return resolve(doc);
+                        });
                 })
                 .catch(err => reject(err));
         });
@@ -181,11 +191,19 @@ export default {
 
     getDeleteMenu(id){
         return new Promise(( resolve, reject ) => {
-            Menu.deleteOne({ _id: id }).exec((err, result) => {
-                if(err) return reject(err);
+            // Documento bloqueado por administración → no se borra (423)
+            Menu.findById(id).select('isLocked')
+                .then(current => {
+                    if(!current) return reject('404 not found');
+                    if(current.isLocked === true) return reject('423 locked');
 
-                resolve(result);
-            });
+                    Menu.deleteOne({ _id: id }).exec((err, result) => {
+                        if(err) return reject(err);
+
+                        resolve(result);
+                    });
+                })
+                .catch(err => reject(err));
         });
     }
 
