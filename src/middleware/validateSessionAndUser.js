@@ -181,6 +181,9 @@ async function validateDayRoleUser(req, res, next) {
 
         // Fecha civil (medianoche UTC) del inicio del día operativo — el mismo
         // formato con el que attendance guarda `date`.
+        // REGLA OFICIAL: los roles del día valen hasta las 07:59:59 — a las
+        // 08:00 arranca el día operativo siguiente y la designación anterior
+        // deja de aplicar. El nocturno conserva su rol toda la madrugada.
         const { start } = getOperationalDay();
         const civilDate = new Date(Date.UTC(start.year(), start.month(), start.date()));
 

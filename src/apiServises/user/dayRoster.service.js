@@ -1,9 +1,9 @@
-import moment from 'moment-timezone';
 import UserModel from './user.model.js';
 import AttendanceModel from './attendance.model.js';
+import { getOperationalDay } from '../../services/noveltyReport/noveltyReport.service.js';
 
 // ══════════════════════════════════════════════════════════════════════
-// SERVICIO: Ficha del personal del día (roster de HOY)
+// SERVICIO: Ficha del personal del día (roster del día OPERATIVO)
 // ══════════════════════════════════════════════════════════════════════
 // Resuelve, para CADA usuario habilitado, su jornada EFECTIVA de hoy con la
 // misma cadena de prioridad que usa la grilla de /user:
@@ -14,36 +14,71 @@ import AttendanceModel from './attendance.model.js';
 //
 // Además adjunta lo que ya pasó hoy: marcaje de entrada/salida y los roles
 // del día (encargado de turno / auxiliar). El front decide cómo agrupar.
-// "Hoy" es el día CIVIL en la zona de referencia del monitoreo, para que el
-// servidor responda lo mismo sin importar el reloj del SO.
-
-const ROSTER_TZ = process.env.MONITORING_TZ || 'America/Caracas';
+//
+// "Hoy" es el día OPERATIVO (getOperationalDay: 08:00 → 07:00 del día
+// siguiente), el MISMO criterio del middleware validateDayRoleUser. Antes se
+// usaba el día civil (frontera a las 00:00) y a medianoche el personal
+// nocturno "perdía" el rol en el front a mitad de turno, aunque la API aún
+// lo aceptara: los dos lados quedaban en desacuerdo.
+//
+// REGLA OFICIAL: los roles del día (onDuty / auxiliary) valen hasta las
+// 07:59:59 — a las 08:00 en punto arranca el día operativo siguiente y la
+// designación anterior deja de aplicar.
 
 // Tipos de jornada con los que el empleado NO viene hoy
 const NO_WORK_TYPES = ['descanso', 'vacaciones', 'permiso', 'falta'];
 
-// Fecha civil de HOY (medianoche UTC), zona de referencia del monitoreo — el
-// formato con el que attendance guarda `date`.
-function todayCivilDate() {
-    const now = moment.tz(ROSTER_TZ);
-    return new Date(Date.UTC(now.year(), now.month(), now.date()));
+// Horas estándar de cada turno: se usan como respaldo visual cuando la
+// jornada efectiva no tiene horas propias configuradas.
+const SHIFT_DEFAULT_TIMES = {
+    Diurno: { startTime: '08:00', endTime: '18:00' },
+    Nocturno: { startTime: '18:00', endTime: '07:00' }
+};
+
+// Fecha civil (medianoche UTC) y día de semana del día OPERATIVO en curso —
+// el formato con el que attendance guarda `date`. A las 02:00 de la
+// madrugada el día operativo sigue siendo el de ayer.
+function operationalToday() {
+    const { start } = getOperationalDay();
+    return {
+        civilDate: new Date(Date.UTC(start.year(), start.month(), start.date())),
+        dayNumber: start.day()
+    };
 }
 
-// Rol del día de UN usuario (encargado de turno / auxiliar). Barato: una sola
-// lectura de su documento de asistencia de hoy — sin traer todo el roster.
+// Rol del día de UN usuario (encargado de turno / auxiliar) con su jornada
+// efectiva (turno + horas) para que el front pueda mostrar la ventana del
+// rol. Dos lecturas puntuales: su asistencia del día operativo y su horario.
 export async function getUserDayRole(userId) {
-    const att = await AttendanceModel
-        .findOne({ userId, date: todayCivilDate() })
-        .select('onDuty auxiliary')
-        .lean();
-    return { onDuty: Boolean(att?.onDuty), auxiliary: Boolean(att?.auxiliary) };
+    const { civilDate, dayNumber } = operationalToday();
+
+    const [att, user] = await Promise.all([
+        AttendanceModel.findOne({ userId, date: civilDate })
+            .select('onDuty auxiliary scheduleOverride')
+            .lean(),
+        UserModel.findById(userId).select('workSchedule').lean()
+    ]);
+
+    const map = user?.workSchedule?.scheduleByDay;
+    const rule = map?.get?.(String(dayNumber)) ?? map?.[String(dayNumber)] ?? null;
+    const override = att?.scheduleOverride?.workType ? att.scheduleOverride : null;
+
+    const shift = override?.shift || rule?.shift || user?.workSchedule?.shiftType || 'Diurno';
+    const defaults = SHIFT_DEFAULT_TIMES[shift] || SHIFT_DEFAULT_TIMES.Diurno;
+
+    return {
+        onDuty: Boolean(att?.onDuty),
+        auxiliary: Boolean(att?.auxiliary),
+        shift,
+        startTime: override?.startTime ?? rule?.startTime ?? defaults.startTime,
+        endTime: override?.endTime ?? rule?.endTime ?? defaults.endTime
+    };
 }
 
 export async function buildTodayRoster() {
-    const now = moment.tz(ROSTER_TZ);
-    // Fecha civil de hoy a medianoche UTC — el formato con el que attendance guarda `date`
-    const civilDate = new Date(Date.UTC(now.year(), now.month(), now.date()));
-    const dayNumber = now.day();
+    // Día OPERATIVO en curso (08:00 → 07:00): a las 02:00 el roster sigue
+    // siendo el de ayer, con el personal nocturno todavía en su jornada.
+    const { civilDate, dayNumber } = operationalToday();
 
     const [users, attendances] = await Promise.all([
         // Los outForkSchedule están FUERA del horario (igual que la grilla de
