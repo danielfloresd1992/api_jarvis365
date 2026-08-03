@@ -383,9 +383,11 @@ routerUser.get(`${nameApi}/user/attendance/global-report`, async (req, res) => {
                         },
                         // Proyectar solo los campos necesarios para calcular
                         // los totales; reducimos el payload dentro del $lookup.
-                        // - scheduleOverride.workType → detecta faltas pre-registradas ('falta')
-                        // - status                    → detecta ausencias orgánicas ('ausente')
-                        { $project: { date: 1, isLate: 1, isExtraDay: 1, checkIn: 1, status: 1, 'scheduleOverride.workType': 1, _id: 0 } }
+                        // - scheduleOverride.workType → faltas/permisos/vacaciones pre-registrados
+                        // - status                    → ausencias/permisos/vacaciones orgánicos
+                        // - discountUnits             → unidades a descontar por retardo
+                        // - onDuty / auxiliary        → roles de guardia del día
+                        { $project: { date: 1, isLate: 1, isExtraDay: 1, checkIn: 1, status: 1, 'scheduleOverride.workType': 1, discountUnits: 1, onDuty: 1, auxiliary: 1, _id: 0 } }
                     ],
                     as: 'attendanceRecords'
                 }
@@ -471,7 +473,55 @@ routerUser.get(`${nameApi}/user/attendance/global-report`, async (req, res) => {
                                 }
                             }
                         }
-                    }
+                    },
+                    // Unidades a descontar por retardo acumuladas en el período
+                    // ($sum ignora los documentos sin la propiedad — anteriores
+                    // a su incorporación al modelo).
+                    discountUnits: { $sum: '$attendanceRecords.discountUnits' },
+                    // Días con rol de guardia: encargado de turno y auxiliar
+                    onDutyDays: {
+                        $size: {
+                            $filter: { input: '$attendanceRecords', as: 'r', cond: { $eq: ['$$r.onDuty', true] } }
+                        }
+                    },
+                    auxiliaryDays: {
+                        $size: {
+                            $filter: { input: '$attendanceRecords', as: 'r', cond: { $eq: ['$$r.auxiliary', true] } }
+                        }
+                    },
+                    // Permisos y vacaciones: por regla del día (override) o por
+                    // status del registro — mismo criterio doble que faltaCount.
+                    permisoCount: {
+                        $size: {
+                            $filter: {
+                                input: '$attendanceRecords',
+                                as: 'r',
+                                cond: {
+                                    $or: [
+                                        { $eq: ['$$r.scheduleOverride.workType', 'permiso'] },
+                                        { $eq: ['$$r.status', 'permiso'] }
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    vacacionesCount: {
+                        $size: {
+                            $filter: {
+                                input: '$attendanceRecords',
+                                as: 'r',
+                                cond: {
+                                    $or: [
+                                        { $eq: ['$$r.scheduleOverride.workType', 'vacaciones'] },
+                                        { $eq: ['$$r.status', 'vacaciones'] }
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    // Turno del empleado (workSchedule se elimina en el $project
+                    // final; el turno se conserva como campo plano).
+                    shiftType: '$workSchedule.shiftType'
                 }
             },
 
@@ -513,6 +563,11 @@ routerUser.get(`${nameApi}/user/attendance/global-report`, async (req, res) => {
             totalExtraDays: result.reduce((a, r) => a + r.extraDays, 0),
             totalPresent: result.reduce((a, r) => a + r.totalPresent, 0),
             totalFalta: result.reduce((a, r) => a + r.faltaCount, 0),
+            totalDiscountUnits: result.reduce((a, r) => a + (r.discountUnits || 0), 0),
+            totalPermiso: result.reduce((a, r) => a + (r.permisoCount || 0), 0),
+            totalVacaciones: result.reduce((a, r) => a + (r.vacacionesCount || 0), 0),
+            totalOnDuty: result.reduce((a, r) => a + (r.onDutyDays || 0), 0),
+            totalAuxiliary: result.reduce((a, r) => a + (r.auxiliaryDays || 0), 0),
         };
 
         return res.status(200).json({
