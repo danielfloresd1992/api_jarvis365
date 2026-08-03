@@ -285,6 +285,11 @@ const SYSTEM_USER_ID = process.env.ATTENDANCE_SYSTEM_USER_ID || '697657323dc213f
 
 const AUTO_FAULT_NOTE = 'Falta registrada automáticamente: no marcó entrada al corte de asistencia.';
 
+// Comentario que queda en attendance.comments al registrar la falta: visible
+// en el popover de la grilla (con la muesca dorada en la celda), firmado por
+// el usuario del sistema.
+const AUTO_FAULT_COMMENT = 'Falta automática con Jarvis Vision';
+
 // Hora de corte por turno (hora Venezuela): pasada esta hora, quien no marcó
 // entrada queda con falta FIRME. Es la única fuente de verdad — el scheduler
 // del job (REPORT_CUTS) arma sus cortes desde acá.
@@ -360,12 +365,16 @@ export async function registerAbsencesAsFaults(report) {
 
             const updateOp = {
                 $set: { scheduleOverride },
-                $setOnInsert: { createdBy: SYSTEM_USER_ID }
+                $setOnInsert: { createdBy: SYSTEM_USER_ID },
+                // Comentario en el documento (attendance.comments): deja
+                // constancia visible de la falta automática. El guard de
+                // "falta ya registrada" evita duplicarlo si el corte repite.
+                $push: {
+                    comments: { user: SYSTEM_USER_ID, message: AUTO_FAULT_COMMENT, date: new Date() }
+                }
             };
             if (previousRecord && changedFields.length > 0) {
-                updateOp.$push = {
-                    editedBy: { user: SYSTEM_USER_ID, change: changedFields, date: new Date() }
-                };
+                updateOp.$push.editedBy = { user: SYSTEM_USER_ID, change: changedFields, date: new Date() };
             }
 
             await AttendanceModel.findOneAndUpdate(
