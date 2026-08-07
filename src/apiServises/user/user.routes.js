@@ -33,11 +33,15 @@ import { overtimeOfDay, accumulateOvertime } from './overtime.lib.js';
 // Se escribe SIEMPRE, aunque ese día no haya excedente: los minutos se
 // derivan después, y overtimeOfDay informa 'none' cuando no hay nada que
 // aprobar, así que un 'pending' sin excedente no ensucia ninguna vista.
+// Se limpia `approvedMinutes`: un marcaje de salida REEMPLAZA la jornada, y con
+// ella el excedente. Si quedara la cantidad de una decisión anterior, volver a
+// marcar la salida de alguien con aprobación automática dejaría el día aprobado
+// por esos minutos viejos en vez de por el excedente nuevo.
 const overtimeOnCheckout = (userDoc) => {
     const auto = userDoc?.workSchedule?.autoApproveOvertime === true;
     return auto
-        ? { 'overtime.status': 'approved', 'overtime.auto': true, 'overtime.decidedAt': new Date() }
-        : { 'overtime.status': 'pending', 'overtime.auto': false };
+        ? { 'overtime.status': 'approved', 'overtime.auto': true, 'overtime.decidedAt': new Date(), 'overtime.approvedMinutes': null }
+        : { 'overtime.status': 'pending', 'overtime.auto': false, 'overtime.approvedMinutes': null };
 };
 
 const ATTENDANCE_TIMEZONE = 'America/Caracas';
@@ -405,7 +409,7 @@ routerUser.get(`${nameApi}/user/attendance/global-report`, async (req, res) => {
                         // - checkOut                  → necesario para derivar horas extras
                         // - scheduleOverride.shift    → turno puntual del día (gana al semanal)
                         // - overtime.status           → decisión persistida de la hora extra
-                        { $project: { date: 1, isLate: 1, isExtraDay: 1, checkIn: 1, checkOut: 1, status: 1, 'scheduleOverride.workType': 1, 'scheduleOverride.shift': 1, 'overtime.status': 1, discountUnits: 1, onDuty: 1, auxiliary: 1, _id: 0 } }
+                        { $project: { date: 1, isLate: 1, isExtraDay: 1, checkIn: 1, checkOut: 1, status: 1, 'scheduleOverride.workType': 1, 'scheduleOverride.shift': 1, 'overtime.status': 1, 'overtime.approvedMinutes': 1, discountUnits: 1, onDuty: 1, auxiliary: 1, _id: 0 } }
                     ],
                     as: 'attendanceRecords'
                 }
@@ -556,7 +560,8 @@ routerUser.get(`${nameApi}/user/attendance/global-report`, async (req, res) => {
                                 checkOut: '$$r.checkOut',
                                 // Turno puntual del día, si el admin lo cambió
                                 shift: '$$r.scheduleOverride.shift',
-                                overtime: { status: '$$r.overtime.status' }
+                                // approvedMinutes: aprobación parcial (null = todo)
+                                overtime: { status: '$$r.overtime.status', approvedMinutes: '$$r.overtime.approvedMinutes' }
                             }
                         }
                     },
@@ -1345,6 +1350,11 @@ routerUser.post(`${nameApi}/user/attendance/auxiliary`, validateAdminUser,
 // ENDPOINT: Aprobar o rechazar las horas extras de un día
 // ══════════════════════════════════════════════════════════════════════
 // POST .../user/attendance/overtime
+// body: { userId | dni, date, status, note?, approvedMinutes? }
+//
+// approvedMinutes permite APROBAR SOLO UNA PARTE del excedente (de 3 h generadas,
+// autorizar 1 h). Se omite para aprobar el total. El servidor deriva los minutos
+// del día y rechaza cualquier cantidad mayor.
 // body: { userId | dni, date, status: 'approved' | 'rejected', note? }
 //
 // Solo administradores. Los minutos NO se envían ni se guardan: se derivan
@@ -1352,7 +1362,7 @@ routerUser.post(`${nameApi}/user/attendance/auxiliary`, validateAdminUser,
 routerUser.post(`${nameApi}/user/attendance/overtime`, validateAdminUser, async (req, res) => {
     try {
         const authorId = req.session.userId;
-        const { userId, dni, date, status, note } = req.body || {};
+        const { userId, dni, date, status, note, approvedMinutes } = req.body || {};
 
         if (!['approved', 'rejected'].includes(status)) {
             return res.status(400).json({ status: 400, error: 'Bad request', message: 'El estado debe ser "approved" o "rejected".' });
@@ -1389,6 +1399,30 @@ routerUser.post(`${nameApi}/user/attendance/overtime`, validateAdminUser, async 
             return res.status(400).json({ status: 400, error: 'Bad request', message: 'Ese día no generó horas extras.' });
         }
 
+        // ── Aprobación PARCIAL ──────────────────────────────────────────
+        // El administrador puede autorizar solo una parte del excedente: si el
+        // día generó 3 h puede aprobar 1 h. La cantidad se valida CONTRA los
+        // minutos derivados acá, no contra lo que diga el cliente, para que no
+        // se pueda aprobar más de lo que el día realmente generó.
+        //   sin enviar approvedMinutes → null = todo el excedente
+        let minutesToApprove = null;
+        if (status === 'approved' && approvedMinutes !== undefined && approvedMinutes !== null) {
+            const parsed = Number(approvedMinutes);
+            if (!Number.isInteger(parsed) || parsed <= 0) {
+                return res.status(400).json({ status: 400, error: 'Bad request', message: 'Los minutos a aprobar deben ser un entero mayor que cero.' });
+            }
+            if (parsed > minutes) {
+                return res.status(400).json({
+                    status: 400, error: 'Bad request',
+                    message: `No se pueden aprobar ${parsed} minutos: ese día solo generó ${minutes}.`
+                });
+            }
+            // Aprobar el total se guarda como null, no como el número: así el
+            // registro no queda atado a un excedente que puede recalcularse si
+            // luego se corrige el marcaje.
+            minutesToApprove = parsed === minutes ? null : parsed;
+        }
+
         const record = await AttendanceModel.findOneAndUpdate(
             { userId: userDoc._id, date: dateObj },
             {
@@ -1397,12 +1431,17 @@ routerUser.post(`${nameApi}/user/attendance/overtime`, validateAdminUser, async 
                     'overtime.decidedBy': authorId,
                     'overtime.decidedAt': new Date(),
                     'overtime.auto': false,
-                    'overtime.note': typeof note === 'string' ? note.trim() : ''
+                    'overtime.note': typeof note === 'string' ? note.trim() : '',
+                    // Al rechazar se limpia: un día rechazado no aprueba nada.
+                    'overtime.approvedMinutes': status === 'approved' ? minutesToApprove : null
                 },
                 $push: {
                     editedBy: {
                         user: authorId,
-                        change: [{ field: 'overtime.status', from: previousRecord.overtime?.status ?? null, to: status }],
+                        change: [
+                            { field: 'overtime.status', from: previousRecord.overtime?.status ?? null, to: status },
+                            { field: 'overtime.approvedMinutes', from: previousRecord.overtime?.approvedMinutes ?? null, to: status === 'approved' ? minutesToApprove : null }
+                        ],
                         date: new Date()
                     }
                 }
@@ -1419,7 +1458,13 @@ routerUser.post(`${nameApi}/user/attendance/overtime`, validateAdminUser, async 
         dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
         io.emit(`${dateEvent.toISOString()}-${userDoc.email}`, { finalRecord: record, user: userDoc });
 
-        return res.status(200).json({ status: 200, result: record, minutes });
+        return res.status(200).json({
+            status: 200,
+            result: record,
+            minutes,
+            // Cuánto quedó autorizado (null = todo el excedente)
+            approvedMinutes: status === 'approved' ? (minutesToApprove ?? minutes) : 0
+        });
     }
     catch (error) {
         console.log(error);

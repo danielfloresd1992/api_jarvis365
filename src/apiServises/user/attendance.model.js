@@ -76,7 +76,15 @@ const AttendanceSchema = new mongoose.Schema({
         },
         decidedAt: { type: Date, default: null },
         note: { type: String, default: '' },
-        auto: { type: Boolean, default: false }
+        auto: { type: Boolean, default: false },
+        // APROBACIÓN PARCIAL: cuántos minutos del excedente autorizó el
+        // administrador. Si el día generó 3 h puede aprobar solo 1 h.
+        //   null → la decisión cubre TODO el excedente derivado
+        //   n    → se aprobaron exactamente n minutos
+        // El default es null a propósito: los registros ya aprobados y las
+        // aprobaciones automáticas del checkout siguen significando "todo el
+        // excedente" sin necesidad de migrar nada.
+        approvedMinutes: { type: Number, default: null }
     },
     adminNotes: {
         type: String
