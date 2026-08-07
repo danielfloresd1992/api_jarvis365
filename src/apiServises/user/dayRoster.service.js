@@ -99,12 +99,25 @@ export async function buildTodayRoster() {
         const rule = map?.get?.(String(dayNumber)) ?? map?.[String(dayNumber)] ?? null;
         const override = att?.scheduleOverride?.workType ? att.scheduleOverride : null;
 
-        // Solo está en el horario de HOY quien tiene la regla semanal del día
-        // configurada O un documento de asistencia de hoy (override, marcaje o
-        // rol del día). Un usuario sin nada configurado NO aparece en el roster.
-        if (!rule?.workType && !att) return null;
+        // ¿Tiene horario semanal cargado? Con .lean() scheduleByDay es un
+        // objeto plano; se tolera Map por si la consulta deja de ser lean.
+        const weeklyRules = !map ? 0 : (typeof map.size === 'number' ? map.size : Object.keys(map).length);
+
+        // Está en el horario de HOY quien tenga:
+        //   · la regla semanal de este día configurada, O
+        //   · un documento de asistencia de hoy (override, marcaje o rol), O
+        //   · ningún horario semanal cargado — trabaja por el turno de su
+        //     perfil, y antes desaparecía del roster sin que nadie lo notara.
+        // Queda fuera quien SÍ tiene horario semanal pero no este día: ese día
+        // no le toca venir.
+        if (!rule?.workType && !att && weeklyRules > 0) return null;
 
         const workType = override?.workType || rule?.workType || 'laboral';
+        const shift = override?.shift || rule?.shift || u.workSchedule?.shiftType || 'Diurno';
+        // Horas estándar del turno como último respaldo, igual que en
+        // getUserDayRole y en el corte de asistencia.
+        const defaults = SHIFT_DEFAULT_TIMES[shift] || SHIFT_DEFAULT_TIMES.Diurno;
+        const worksToday = !NO_WORK_TYPES.includes(workType);
         return {
             userId: u._id,
             name: u.name ?? '',
@@ -117,11 +130,11 @@ export async function buildTodayRoster() {
             group: u.jobInformation?.detail?.trim() || null,
 
             workType,
-            shift: override?.shift || rule?.shift || u.workSchedule?.shiftType || 'Diurno',
-            startTime: override?.startTime ?? rule?.startTime ?? null,
-            endTime: override?.endTime ?? rule?.endTime ?? null,
+            shift,
+            startTime: override?.startTime ?? rule?.startTime ?? (worksToday ? defaults.startTime : null),
+            endTime: override?.endTime ?? rule?.endTime ?? (worksToday ? defaults.endTime : null),
             source: override ? 'override' : (rule?.workType ? 'regla' : 'default'),
-            comes: !NO_WORK_TYPES.includes(workType),
+            comes: worksToday,
 
             onDuty: Boolean(att?.onDuty),
             auxiliary: Boolean(att?.auxiliary),

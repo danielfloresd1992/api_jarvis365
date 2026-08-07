@@ -50,6 +50,31 @@ const MONTH_NAMES = [
 
 const NOT_REQUIRED_TYPES = ['descanso', 'permiso', 'vacaciones'];
 
+// Horas estándar de cada turno (las mismas de dayRoster.service.js). Son el
+// ÚLTIMO eslabón de la cadena de horario: si la regla del día no trae horas
+// propias, se usan estas.
+//
+// Sin este respaldo, un empleado sin documento de asistencia y sin horas en su
+// horario semanal se quedaba con startTime = null, caía en "sin horario
+// configurado" y NUNCA llegaba a la rama que registra la falta. Por eso el
+// corte dejó de marcar inasistencias en cuanto se acabaron los días que tenían
+// documento pre-creado.
+const SHIFT_DEFAULT_TIMES = {
+    Diurno: { startTime: '08:00', endTime: '18:00' },
+    Nocturno: { startTime: '18:00', endTime: '07:00' }
+};
+
+// Tipos de jornada en los que SÍ se espera que el empleado venga a trabajar.
+const WORKING_TYPES = ['laboral', 'extra'];
+
+// Cuántos días tiene configurados el horario semanal. Con documentos de
+// mongoose `scheduleByDay` es un Map (tiene .size); con .lean() es un objeto.
+const weeklyRuleCount = (map) => {
+    if (!map) return 0;
+    if (typeof map.size === 'number') return map.size;
+    return Object.keys(map).length;
+};
+
 
 const formatTime12 = (m) => m.format('hh:mm A');
 
@@ -61,8 +86,14 @@ const toMinutes = (hhmm) => {
 };
 
 
-// Resuelve la regla efectiva del día para un usuario:
-// prioridad scheduleOverride (manual) → scheduleByDay (por defecto en user).
+// Resuelve la regla efectiva del día para un usuario. Cadena completa:
+//   scheduleOverride del documento del día (cambio manual)
+//     > workSchedule.scheduleByDay[díaSemana] (horario semanal del user)
+//       > workSchedule.shiftType + horas estándar del turno (respaldo)
+//
+// El último eslabón es el que faltaba: sin él, no tener documento de asistencia
+// ni horas en la regla semanal equivalía a no tener horario, y el corte no
+// podía evaluar si la persona faltó.
 const resolveEffectiveRule = (user, record, dayNumber) => {
     const override = record?.scheduleOverride;
     const hasOverride = Boolean(override?.workType);
@@ -72,15 +103,32 @@ const resolveEffectiveRule = (user, record, dayNumber) => {
         || scheduleByDayMap?.[String(dayNumber)]
         || null;
 
+    const workType = (hasOverride && override.workType) || dayRule?.workType || 'laboral';
+    const shift = (hasOverride && override.shift)
+        || dayRule?.shift
+        || user?.workSchedule?.shiftType
+        || 'Diurno';
+
+    const defaults = SHIFT_DEFAULT_TIMES[shift] || SHIFT_DEFAULT_TIMES.Diurno;
+    // Las horas de respaldo solo tienen sentido en un día de trabajo: en un
+    // descanso o unas vacaciones el horario debe seguir vacío.
+    const usesDefaultTimes = WORKING_TYPES.includes(workType);
+
+    const startTime = (hasOverride && override.startTime) || dayRule?.startTime
+        || (usesDefaultTimes ? defaults.startTime : null);
+    const endTime = (hasOverride && override.endTime) || dayRule?.endTime
+        || (usesDefaultTimes ? defaults.endTime : null);
+
     return {
-        source: hasOverride ? 'manual' : (dayRule ? 'por defecto' : 'sin regla'),
-        workType: (hasOverride && override.workType) || dayRule?.workType || 'laboral',
-        shift: (hasOverride && override.shift)
-            || dayRule?.shift
-            || user?.workSchedule?.shiftType
-            || 'Diurno',
-        startTime: (hasOverride && override.startTime) || dayRule?.startTime || null,
-        endTime: (hasOverride && override.endTime) || dayRule?.endTime || null
+        source: hasOverride ? 'manual' : (dayRule ? 'por defecto' : 'turno del perfil'),
+        workType,
+        shift,
+        startTime,
+        endTime,
+        // Señales para clasificar más abajo sin volver a leer el horario
+        hasDayRule: Boolean(dayRule),
+        hasWeeklySchedule: weeklyRuleCount(scheduleByDayMap) > 0,
+        usedDefaultTimes: usesDefaultTimes && !((hasOverride && override.startTime) || dayRule?.startTime)
     };
 };
 
@@ -213,20 +261,31 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
             continue;
         }
 
-        // 5) Día laboral/extra sin hora de entrada configurada → no evaluable
+        // 5) El empleado tiene horario semanal, pero ESTE día de la semana no
+        //    está configurado → ese día no le toca venir. No es una ausencia:
+        //    marcarla convertiría en falta el día libre de quien tiene el
+        //    horario cargado de lunes a viernes. Solo aplica sin override.
+        if (!rule.hasDayRule && rule.hasWeeklySchedule && !record?.scheduleOverride?.workType) {
+            notRequired.push({ ...base, reason: 'descanso', note: 'Día no configurado en su horario semanal' });
+            continue;
+        }
+
+        // 6) Día laboral/extra sin hora de entrada configurada → no evaluable.
+        //    Con el respaldo del turno esto ya casi no ocurre; queda como red
+        //    de seguridad para un turno desconocido.
         if (startMinutes === null) {
             noSchedule.push({ ...base, reason: 'Sin hora de entrada configurada para hoy' });
             continue;
         }
 
-        // 6) Su turno aún no comienza al momento del corte (ej. turno nocturno
+        // 7) Su turno aún no comienza al momento del corte (ej. turno nocturno
         //    en el corte del mediodía) → pendiente, NO se cuenta como ausencia.
         if (nowMinutes <= (startMinutes + LATE_GRACE_MINUTES)) {
             pending.push({ ...base, reason: 'Turno aún no inicia al momento del corte' });
             continue;
         }
 
-        // 7) Debía presentarse, ya pasó su hora de entrada y no marcó → ausente.
+        // 8) Debía presentarse, ya pasó su hora de entrada y no marcó → ausente.
         //    autoFaultCandidate: solo ESTA rama es candidata al registro
         //    automático de falta (las faltas pre-registradas y los marcados
         //    'ausente' ya tienen su documento; ver registerAbsencesAsFaults).
@@ -298,6 +357,13 @@ export const FAULT_CUT_TIMES = {
     Nocturno: '21:00'
 };
 
+// Margen para no perder un corte por unos segundos. setTimeout puede disparar
+// una fracción antes de la hora exacta: sin este margen, un corte que arranca a
+// las 20:59:59 encontraba nowMinutes = 1259 < 1260 y saltaba a TODO el personal
+// nocturno, y como el corte ya quedaba marcado como enviado no se reintentaba
+// hasta el día siguiente.
+const FAULT_CUT_TOLERANCE_MINUTES = 2;
+
 /**
  * Registra como falta en Attendance a los ausentes del reporte que debían
  * presentarse y no marcaron entrada (autoFaultCandidate). Crea el documento
@@ -324,7 +390,7 @@ export async function registerAbsencesAsFaults(report) {
     for (const absent of candidates) {
         try {
             const cutMinutes = toMinutes(FAULT_CUT_TIMES[absent.shift]);
-            if (cutMinutes === null || nowMinutes < cutMinutes) {
+            if (cutMinutes === null || nowMinutes < (cutMinutes - FAULT_CUT_TOLERANCE_MINUTES)) {
                 skipped.push({ userId: absent.userId, name: absent.name, reason: `antes del corte de ${FAULT_CUT_TIMES[absent.shift] || 'turno desconocido'}` });
                 continue;
             }

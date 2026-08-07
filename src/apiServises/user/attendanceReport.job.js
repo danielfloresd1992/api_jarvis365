@@ -226,6 +226,45 @@ export async function runDailyAttendanceReport({ cutLabel, number, shiftFocus } 
 }
 
 
+/**
+ * Registra las faltas de los cortes que YA pasaron hoy.
+ *
+ * El scheduler solo agenda la PRÓXIMA ocurrencia de cada corte: si el proceso
+ * arranca a las 16:00, el corte de las 15:00 queda agendado para mañana y las
+ * faltas de hoy no las registra nadie. Un reinicio o un despliegue por la tarde
+ * bastaba para perder el día completo.
+ *
+ * Solo registra faltas: NO reenvía el PDF, porque el corte pudo haberse enviado
+ * antes del reinicio. Es idempotente — `registerAbsencesAsFaults` omite a quien
+ * ya tiene la falta puesta.
+ */
+export async function catchUpMissedFaults() {
+    const now = moment.tz(ATTENDANCE_TIMEZONE);
+    const nowMinutes = (now.hours() * 60) + now.minutes();
+    const results = [];
+
+    for (const cut of REPORT_CUTS) {
+        const [h, m] = cut.time.split(':').map(Number);
+        if (nowMinutes < (h * 60) + m) continue;   // ese corte aún no toca hoy
+
+        try {
+            const report = await buildDailyAttendanceReport(new Date(), cut.shift);
+            const faults = await registerAbsencesAsFaults(report);
+            results.push({ cut: cut.time, shift: cut.shift, registered: faults.registered });
+
+            if (faults.registered > 0) {
+                console.log(`[attendance-report] Recuperación del corte ${cut.time} (${cut.shift}): ${faults.registered} falta(s) registrada(s) · ${faults.registeredNames.join(', ')}`);
+            }
+        }
+        catch (error) {
+            console.log(`[attendance-report] Error recuperando el corte ${cut.time} (${cut.shift}):`, error?.message || error);
+        }
+    }
+
+    return results;
+}
+
+
 // ── Scheduler ──────────────────────────────────────────────────────────
 // Sin dependencias: para cada hora configurada calcula los ms que faltan
 // hasta su próxima ocurrencia (hora Venezuela), dispara el job y se
@@ -309,4 +348,10 @@ export function startAttendanceReportScheduler() {
     const resumen = REPORT_CUTS.map(c => `${c.time} (${c.shift})`).join(', ');
     console.log(`[attendance-report] Scheduler activo · cortes: ${resumen} · destino: ${toChatId(REPORT_NUMBER)} · bot: ${BOT_URL}`);
     REPORT_CUTS.forEach(scheduleAt);
+
+    // Recupera las faltas de los cortes que ya pasaron hoy (arranque tardío o
+    // reinicio). No bloquea el arranque ni reenvía el PDF.
+    catchUpMissedFaults().catch(error => {
+        console.log('[attendance-report] Error en la recuperación de faltas al arranque:', error?.message || error);
+    });
 }
