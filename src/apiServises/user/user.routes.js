@@ -24,7 +24,7 @@ import { parseISO, format, getDay, startOfDay, isValid } from 'date-fns';
 
 import { io } from '../../services/socket/io.js'
 import { emitCloseSessionForUser } from '../../services/socket/sessionEvents.js';
-import { overtimeOfDay } from './overtime.lib.js';
+import { overtimeOfDay, accumulateOvertime } from './overtime.lib.js';
 
 
 // Estado con el que nace la hora extra al cerrar la jornada. Si el usuario
@@ -402,7 +402,10 @@ routerUser.get(`${nameApi}/user/attendance/global-report`, async (req, res) => {
                         // - status                    → ausencias/permisos/vacaciones orgánicos
                         // - discountUnits             → unidades a descontar por retardo
                         // - onDuty / auxiliary        → roles de guardia del día
-                        { $project: { date: 1, isLate: 1, isExtraDay: 1, checkIn: 1, status: 1, 'scheduleOverride.workType': 1, discountUnits: 1, onDuty: 1, auxiliary: 1, _id: 0 } }
+                        // - checkOut                  → necesario para derivar horas extras
+                        // - scheduleOverride.shift    → turno puntual del día (gana al semanal)
+                        // - overtime.status           → decisión persistida de la hora extra
+                        { $project: { date: 1, isLate: 1, isExtraDay: 1, checkIn: 1, checkOut: 1, status: 1, 'scheduleOverride.workType': 1, 'scheduleOverride.shift': 1, 'overtime.status': 1, discountUnits: 1, onDuty: 1, auxiliary: 1, _id: 0 } }
                     ],
                     as: 'attendanceRecords'
                 }
@@ -534,6 +537,33 @@ routerUser.get(`${nameApi}/user/attendance/global-report`, async (req, res) => {
                             }
                         }
                     },
+                    // ── Horas extras ────────────────────────────────────────
+                    // Los minutos NO se agregan acá: se derivan en Node con
+                    // overtime.lib.js, la misma función que usan la celda del
+                    // horario y el reporte individual. Reescribir esa fórmula en
+                    // el lenguaje de agregación crearía una segunda definición de
+                    // "hora extra" que se desincronizaría a la primera revisión.
+                    //
+                    // Lo que sí se hace acá es reducir el array a lo mínimo
+                    // indispensable, para no arrastrar los documentos completos.
+                    overtimeSource: {
+                        $map: {
+                            input: '$attendanceRecords',
+                            as: 'r',
+                            in: {
+                                date: '$$r.date',
+                                checkIn: '$$r.checkIn',
+                                checkOut: '$$r.checkOut',
+                                // Turno puntual del día, si el admin lo cambió
+                                shift: '$$r.scheduleOverride.shift',
+                                overtime: { status: '$$r.overtime.status' }
+                            }
+                        }
+                    },
+                    // Horario semanal, para resolver el turno de cada día cuando
+                    // el registro no trae override (workSchedule se elimina en el
+                    // $project final; esto se borra en Node tras el cálculo).
+                    shiftByDay: '$workSchedule.scheduleByDay',
                     // Turno del empleado (workSchedule se elimina en el $project
                     // final; el turno se conserva como campo plano).
                     shiftType: '$workSchedule.shiftType'
@@ -564,6 +594,30 @@ routerUser.get(`${nameApi}/user/attendance/global-report`, async (req, res) => {
         // Ejecutar la aggregation
         const result = await UserModel.aggregate(pipeline);
 
+        // ── Horas extras por empleado ───────────────────────────────────────
+        // Se derivan de checkIn/checkOut con accumulateOvertime, la misma
+        // función del reporte individual y de la celda del horario. El turno
+        // efectivo de cada día sigue la misma precedencia que la UI:
+        //   override del día  >  regla semanal  >  turno del empleado.
+        result.forEach(emp => {
+            const days = (emp.overtimeSource || []).map(rec => {
+                const dow = rec?.date ? new Date(rec.date).getUTCDay() : null;
+                const dayRule = dow === null ? null : emp.shiftByDay?.[String(dow)];
+                return { record: rec, shift: rec?.shift || dayRule?.shift || emp.shiftType || 'Diurno' };
+            });
+
+            const ot = accumulateOvertime(days);
+            emp.overtimeApprovedMinutes = ot.approvedMinutes;
+            emp.overtimePendingMinutes = ot.pendingMinutes;
+            emp.overtimeRejectedMinutes = ot.rejectedMinutes;
+            emp.overtimeApprovedDays = ot.approvedDays;
+            emp.overtimePendingDays = ot.pendingDays;
+
+            // Campos auxiliares: solo existían para este cálculo.
+            delete emp.overtimeSource;
+            delete emp.shiftByDay;
+        });
+
         // ── Totales consolidados ────────────────────────────────────────────
         // Se calculan en Node.js sobre el array ya reducido (pocos campos,
         // pocos documentos comparado con el full Attendance collection).
@@ -583,6 +637,11 @@ routerUser.get(`${nameApi}/user/attendance/global-report`, async (req, res) => {
             totalVacaciones: result.reduce((a, r) => a + (r.vacacionesCount || 0), 0),
             totalOnDuty: result.reduce((a, r) => a + (r.onDutyDays || 0), 0),
             totalAuxiliary: result.reduce((a, r) => a + (r.auxiliaryDays || 0), 0),
+            // Horas extras del período, en MINUTOS y desglosadas por estado.
+            // El cliente decide cómo formatearlas.
+            totalOvertimeApprovedMinutes: result.reduce((a, r) => a + (r.overtimeApprovedMinutes || 0), 0),
+            totalOvertimePendingMinutes: result.reduce((a, r) => a + (r.overtimePendingMinutes || 0), 0),
+            totalOvertimeRejectedMinutes: result.reduce((a, r) => a + (r.overtimeRejectedMinutes || 0), 0),
         };
 
         return res.status(200).json({
