@@ -171,6 +171,14 @@ export default model('user', new Schema({
         outForkSchedule: {
             type: Boolean,
             default: false
+        },
+
+        // Genera horas extras de forma AUTOMÁTICA: lo que trabaje por encima
+        // de su jornada base queda aprobado sin pasar por un administrador.
+        // Se configura desde "Editar Perfil" en Client365.
+        autoApproveOvertime: {
+            type: Boolean,
+            default: false
         }
     },
 

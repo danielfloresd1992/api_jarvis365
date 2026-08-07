@@ -51,6 +51,33 @@ const AttendanceSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+
+    // ══════════════════════════════════════════════════════════════
+    // HORAS EXTRAS
+    // ══════════════════════════════════════════════════════════════
+    // Los MINUTOS no se guardan: se derivan de checkIn/checkOut y del turno
+    // con overtime.lib.js, así los registros anteriores también las muestran
+    // sin migrar nada. Acá vive solo la DECISIÓN, que no se puede derivar.
+    //   pending  → generó excedente y espera aprobación de un administrador
+    //   approved → aprobada (a mano, o sola si el usuario tiene
+    //              workSchedule.autoApproveOvertime en true)
+    //   rejected → el administrador la desestimó
+    overtime: {
+        status: {
+            type: String,
+            enum: ['pending', 'approved', 'rejected'],
+            default: 'pending'
+        },
+        // Quién decidió. En las automáticas queda null y `auto` en true.
+        decidedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'user',
+            default: null
+        },
+        decidedAt: { type: Date, default: null },
+        note: { type: String, default: '' },
+        auto: { type: Boolean, default: false }
+    },
     adminNotes: {
         type: String
     },

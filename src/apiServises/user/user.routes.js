@@ -24,6 +24,21 @@ import { parseISO, format, getDay, startOfDay, isValid } from 'date-fns';
 
 import { io } from '../../services/socket/io.js'
 import { emitCloseSessionForUser } from '../../services/socket/sessionEvents.js';
+import { overtimeOfDay } from './overtime.lib.js';
+
+
+// Estado con el que nace la hora extra al cerrar la jornada. Si el usuario
+// tiene `autoApproveOvertime`, lo que trabaje de más queda aprobado solo y
+// nunca aparece como pendiente para el administrador.
+// Se escribe SIEMPRE, aunque ese día no haya excedente: los minutos se
+// derivan después, y overtimeOfDay informa 'none' cuando no hay nada que
+// aprobar, así que un 'pending' sin excedente no ensucia ninguna vista.
+const overtimeOnCheckout = (userDoc) => {
+    const auto = userDoc?.workSchedule?.autoApproveOvertime === true;
+    return auto
+        ? { 'overtime.status': 'approved', 'overtime.auto': true, 'overtime.decidedAt': new Date() }
+        : { 'overtime.status': 'pending', 'overtime.auto': false };
+};
 
 const ATTENDANCE_TIMEZONE = 'America/Caracas';
 
@@ -612,7 +627,9 @@ routerUser.get(`${nameApi}/user/attendance/report`, async (req, res) => {
             date: { $gte: fromDate, $lte: toDate }
         }).sort({ date: 1 })
             // Nombres de quién modificó cada día (scheduleOverride.note.user)
-            .populate('scheduleOverride.note.user', 'name surName');
+            .populate('scheduleOverride.note.user', 'name surName')
+            // Quién decidió las horas extras, para el reporte individual
+            .populate('overtime.decidedBy', 'name surName img');
 
         const recordMap = new Map();
         records.forEach(r => recordMap.set(r.date.toISOString(), r));
@@ -930,7 +947,9 @@ routerUser.get(`${nameApi}/user/attendance/:dni`, async (req, res) => {
         })
             .populate('createdBy', 'name surName img')
             .populate('editedBy.user', 'name surName img')
-            .populate('comments.user', 'name surName img');
+            .populate('comments.user', 'name surName img')
+            // Quién aprobó/rechazó las horas extras (se muestra en DetailPopover)
+            .populate('overtime.decidedBy', 'name surName img');
 
         // 5. Respuesta si NO hay registro (Muy importante para el frontend)
         if (!attendance) {
@@ -1264,6 +1283,94 @@ routerUser.post(`${nameApi}/user/attendance/auxiliary`, validateAdminUser,
 
 
 // ══════════════════════════════════════════════════════════════════════
+// ENDPOINT: Aprobar o rechazar las horas extras de un día
+// ══════════════════════════════════════════════════════════════════════
+// POST .../user/attendance/overtime
+// body: { userId | dni, date, status: 'approved' | 'rejected', note? }
+//
+// Solo administradores. Los minutos NO se envían ni se guardan: se derivan
+// del propio registro, así el cliente no puede inflar la cantidad aprobada.
+routerUser.post(`${nameApi}/user/attendance/overtime`, validateAdminUser, async (req, res) => {
+    try {
+        const authorId = req.session.userId;
+        const { userId, dni, date, status, note } = req.body || {};
+
+        if (!['approved', 'rejected'].includes(status)) {
+            return res.status(400).json({ status: 400, error: 'Bad request', message: 'El estado debe ser "approved" o "rejected".' });
+        }
+        if (!date) {
+            return res.status(400).json({ status: 400, error: 'Bad request', message: 'La fecha (date) es obligatoria.' });
+        }
+
+        const userDoc = (userId && ObjectId.isValid(userId))
+            ? await UserModel.findById(userId)
+            : (dni ? await UserModel.findOne({ dni }) : null);
+
+        if (!userDoc) {
+            return res.status(404).json({ status: 404, error: 'Not found', message: 'Usuario no encontrado.' });
+        }
+
+        const dateObj = new Date(date);
+        dateObj.setUTCHours(0, 0, 0, 0);
+
+        const previousRecord = await AttendanceModel.findOne({ userId: userDoc._id, date: dateObj }).lean();
+        if (!previousRecord) {
+            return res.status(404).json({ status: 404, error: 'Not found', message: 'No hay registro de asistencia para esa fecha.' });
+        }
+
+        // Turno efectivo del día (override > regla semanal > turno global)
+        const dayNumber = dateObj.getUTCDay();
+        const map = userDoc.workSchedule?.scheduleByDay;
+        const rule = map?.get?.(String(dayNumber)) || map?.[String(dayNumber)] || null;
+        const shift = previousRecord.scheduleOverride?.shift || rule?.shift || userDoc.workSchedule?.shiftType || 'Diurno';
+
+        // Sin excedente no hay nada que decidir
+        const { minutes } = overtimeOfDay(previousRecord, shift);
+        if (minutes === 0) {
+            return res.status(400).json({ status: 400, error: 'Bad request', message: 'Ese día no generó horas extras.' });
+        }
+
+        const record = await AttendanceModel.findOneAndUpdate(
+            { userId: userDoc._id, date: dateObj },
+            {
+                $set: {
+                    'overtime.status': status,
+                    'overtime.decidedBy': authorId,
+                    'overtime.decidedAt': new Date(),
+                    'overtime.auto': false,
+                    'overtime.note': typeof note === 'string' ? note.trim() : ''
+                },
+                $push: {
+                    editedBy: {
+                        user: authorId,
+                        change: [{ field: 'overtime.status', from: previousRecord.overtime?.status ?? null, to: status }],
+                        date: new Date()
+                    }
+                }
+            },
+            { new: true }
+        )
+            .populate('comments.user', 'name surName img')
+            .populate('createdBy', 'name surName img')
+            .populate('editedBy.user', 'name surName img')
+            .populate('overtime.decidedBy', 'name surName img');
+
+        // Refrescar la celda en tiempo real (mismo canal que los demás flujos)
+        const dateEvent = new Date(record.date);
+        dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
+        io.emit(`${dateEvent.toISOString()}-${userDoc.email}`, { finalRecord: record, user: userDoc });
+
+        return res.status(200).json({ status: 200, result: record, minutes });
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ status: 500, message: 'Error server internal', error: error.message });
+    }
+});
+
+
+
+// ══════════════════════════════════════════════════════════════════════
 // ENDPOINT: Ficha del personal de HOY (roster con jornada efectiva)
 // ══════════════════════════════════════════════════════════════════════
 // GET .../user/roster/today — para el panel analítico: jornada efectiva de
@@ -1435,7 +1542,7 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                     const finalRecord = await AttendanceModel.findOneAndUpdate(
                         { _id: openYesterdayRecord._id },
                         {
-                            $set: { checkOut: now, updatedAt: now },
+                            $set: { checkOut: now, updatedAt: now, ...overtimeOnCheckout(user) },
                             $push: { imageReference: body.imageReference }
                         },
                         { new: true }
@@ -1654,7 +1761,7 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                 const finalRecord = await AttendanceModel.findOneAndUpdate(
                     { _id: documentExist._id },
                     {
-                        $set: { checkOut: now, updatedAt: now },
+                        $set: { checkOut: now, updatedAt: now, ...overtimeOnCheckout(user) },
                         $push: { imageReference: body.imageReference }
                     },
                     { new: true }
