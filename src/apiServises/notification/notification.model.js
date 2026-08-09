@@ -74,6 +74,12 @@ const NotificationSchema = new mongoose.Schema({
         name: { type: String, default: '' },
         // Ruta del front para abrirlo desde la campana
         path: { type: String, default: '' },
+        // Logo del recurso (el `image` del establecimiento). Se COPIA por la
+        // misma razón que el nombre: el aviso tiene que seguir mostrando de qué
+        // establecimiento se hablaba aunque después le cambien el logo o lo
+        // borren. Vacío cuando el recurso no tiene imagen — franquicias, por
+        // ejemplo —, y ahí la campana cae a un ícono según `kind`.
+        img: { type: String, default: null },
     },
 
     action: {

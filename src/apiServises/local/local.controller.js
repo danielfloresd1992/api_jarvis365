@@ -192,6 +192,7 @@ controller.setlocal = async (req, res) => {
                 id: result._id,
                 name: result.name || '',
                 path: '/clients&manasgement',
+                img: result.image || null,
             },
         });
 
@@ -321,6 +322,7 @@ controller.putLocal = async (req, res) => {
                     id: result._id,
                     name: result.name || local.name || '',
                     path: '/clients&manasgement',
+                    img: result.image || local.image || null,
                 },
                 changes: cambios,
             });
@@ -386,6 +388,7 @@ controller.deleteLocal = async (req, res) => {
                     id: local._id,
                     name: local.name || '',
                     path: '/clients&manasgement',
+                    img: local.image || null,
                 },
             });
 
