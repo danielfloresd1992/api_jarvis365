@@ -66,6 +66,20 @@ const NotificationSchema = new mongoose.Schema({
         img: { type: String, default: null },
     },
 
+    // ── Sobre quién ────────────────────────────────────────────────────
+    // El TERCERO afectado. En una solicitud de cambio de horario intervienen
+    // tres personas distintas y las tres tienen que quedar registradas:
+    //   actor            → quién solicitó
+    //   target           → de quién es el horario que se cambia
+    //   request.decidedBy → quién aprobó o rechazó
+    // Sin este campo, "Kervis solicitó un cambio" no dice a quién afecta.
+    target: {
+        user: { type: mongoose.Schema.Types.ObjectId, ref: 'user', default: null },
+        name: { type: String, default: '' },
+        surName: { type: String, default: '' },
+        img: { type: String, default: null },
+    },
+
     // ── Sobre qué ──────────────────────────────────────────────────────
     resource: {
         // 'establishment' | 'franchise' | 'user' | 'schedule' …

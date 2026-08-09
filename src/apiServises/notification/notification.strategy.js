@@ -274,21 +274,102 @@ registerStrategy('overtime.decided', {
 // 'admin' ya está contemplado en el modelo y en el servicio; falta el
 // middleware que resuelva quiénes son los administradores.
 
+/** Nombre del empleado afectado por la solicitud. */
+const targetName = (target) => `${target?.name || ''} ${target?.surName || ''}`.trim();
+
+/** "el 12/08/2026" · " on 08/12/2026" — vacío si no hay fechas. */
+const fechasDe = (ctx, lang = 'es') => {
+    const fechas = ctx.extra?.fechas || [];
+    if (fechas.length === 0) return '';
+    const lista = fechas.length === 1
+        ? fechas[0]
+        : `${fechas[0]}${fechas.length > 1 ? ` y ${fechas.length - 1} fecha${fechas.length > 2 ? 's' : ''} más` : ''}`;
+    return lang === 'en' ? ` on ${lista}` : ` el ${lista}`;
+};
+
+// Cambio APLICADO por un administrador, sin solicitud de por medio. Le llega al
+// empleado afectado: es su jornada la que cambió.
+registerStrategy('schedule.changed', {
+    scope: 'personal',
+    level: 'info',
+    action: 'updated',
+    audience: (ctx) => [ctx.extra?.targetUserId].filter(Boolean),
+    text: (ctx, lang) => lang === 'en'
+        ? {
+            title: 'Your schedule changed',
+            body: `${actorName(ctx.actor, 'en')} updated your schedule${fechasDe(ctx, 'en')}.`,
+        }
+        : {
+            title: 'Tu horario cambió',
+            body: `${actorName(ctx.actor)} modificó tu horario${fechasDe(ctx)}.`,
+        },
+});
+
 registerStrategy('schedule.changeRequested', {
     scope: 'admin',
     level: 'warning',
     action: 'requested',
-    text: (ctx, lang) => lang === 'en'
-        ? {
-            title: 'Schedule change request',
-            body: `${actorName(ctx.actor, 'en')} requested a schedule change`
-                + (ctx.resource?.name ? ` for ${ctx.resource.name}` : '') + '. Pending approval.',
-        }
-        : {
-            title: 'Solicitud de cambio de horario',
-            body: `${actorName(ctx.actor)} solicitó un cambio de horario`
-                + (ctx.resource?.name ? ` para ${ctx.resource.name}` : '') + '. Pendiente por aprobar.',
-        },
+    text: (ctx, lang) => {
+        const quien = targetName(ctx.target);
+        return lang === 'en'
+            ? {
+                title: 'Schedule change request',
+                body: `${actorName(ctx.actor, 'en')} requested a schedule change`
+                    + (quien ? ` for ${quien}` : '') + fechasDe(ctx, 'en')
+                    + '. Pending your approval.',
+            }
+            : {
+                title: 'Solicitud de cambio de horario',
+                body: `${actorName(ctx.actor)} solicitó un cambio de horario`
+                    + (quien ? ` para ${quien}` : '') + fechasDe(ctx)
+                    + '. Pendiente por aprobar.',
+            };
+    },
+});
+
+// El resultado se le avisa a QUIEN LO PIDIÓ, no a los administradores: ellos ya
+// lo saben porque acaban de decidirlo.
+registerStrategy('schedule.changeApproved', {
+    scope: 'personal',
+    level: 'success',
+    action: 'approved',
+    audience: (ctx) => [ctx.extra?.requesterId].filter(Boolean),
+    text: (ctx, lang) => {
+        const quien = targetName(ctx.target);
+        return lang === 'en'
+            ? {
+                title: 'Schedule change approved',
+                body: `${actorName(ctx.actor, 'en')} approved your schedule change`
+                    + (quien ? ` for ${quien}` : '') + '. It is already applied.',
+            }
+            : {
+                title: 'Cambio de horario aprobado',
+                body: `${actorName(ctx.actor)} aprobó tu cambio de horario`
+                    + (quien ? ` para ${quien}` : '') + '. Ya quedó aplicado.',
+            };
+    },
+});
+
+registerStrategy('schedule.changeRejected', {
+    scope: 'personal',
+    level: 'danger',
+    action: 'rejected',
+    audience: (ctx) => [ctx.extra?.requesterId].filter(Boolean),
+    text: (ctx, lang) => {
+        const quien = targetName(ctx.target);
+        const motivo = ctx.extra?.note ? (lang === 'en' ? ` Reason: ${ctx.extra.note}` : ` Motivo: ${ctx.extra.note}`) : '';
+        return lang === 'en'
+            ? {
+                title: 'Schedule change rejected',
+                body: `${actorName(ctx.actor, 'en')} rejected your schedule change`
+                    + (quien ? ` for ${quien}` : '') + '.' + motivo,
+            }
+            : {
+                title: 'Cambio de horario rechazado',
+                body: `${actorName(ctx.actor)} rechazó tu cambio de horario`
+                    + (quien ? ` para ${quien}` : '') + '.' + motivo,
+            };
+    },
 });
 
 

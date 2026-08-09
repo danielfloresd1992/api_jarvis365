@@ -25,6 +25,8 @@ import { parseISO, format, getDay, startOfDay, isValid } from 'date-fns';
 import { io } from '../../services/socket/io.js'
 import { emitCloseSessionForUser } from '../../services/socket/sessionEvents.js';
 import { overtimeOfDay, accumulateOvertime } from './overtime.lib.js';
+import { applyScheduleUpdates, validateScheduleItem, resolveTargetUser, notifyScheduleApplied } from './scheduleWrite.lib.js';
+import { notify, actorFromSession } from '../notification/notification.service.js';
 
 
 // Estado con el que nace la hora extra al cerrar la jornada. Si el usuario
@@ -1053,9 +1055,23 @@ routerUser.get(`${nameApi}/user/attendance/:dni`, async (req, res) => {
 // Recibe un array de { userId, dni, date, workType, startTime, endTime, isRestDay }
 // y crea o actualiza documentos AttendanceModel con scheduleOverride.
 // NO toca checkIn ni checkOut — solo escribe la regla especial del día.
-routerUser.post(`${nameApi}/user/schedule/dynamic/group`, validateAdminUser, async (req, res) => {
+// PERMISO: admin aplica directo · super deja la solicitud PENDIENTE.
+// Se cambió validateAdminUser por validateSession porque un usuario super que
+// no es admin ya no puede quedar fuera: su cambio no se aplica, pero sí se
+// registra. La distinción se hace adentro, no en el middleware.
+routerUser.post(`${nameApi}/user/schedule/dynamic/group`, validateSession, async (req, res) => {
     try {
         const { updates, adminUserId } = req.body;
+
+        const esAdmin = req.session.admin === true;
+        const esSuper = req.session.super === true;
+
+        if (!esAdmin && !esSuper) {
+            return res.status(403).json({
+                status: 403, error: 'Forbidden',
+                message: 'Se requiere permiso de administrador o de super usuario para cambiar el horario.'
+            });
+        }
 
         if (!Array.isArray(updates) || updates.length === 0) {
             return res.status(400).json({
@@ -1073,121 +1089,64 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, validateAdminUser, asy
             });
         }
 
-        const results = [];
-        const errors = [];
+        // ── Camino SOLICITUD: super que no es admin ────────────────────
+        // El cambio NO se escribe. Se guarda entero en la notificación y
+        // espera a que un administrador lo apruebe.
+        if (!esAdmin) {
+            // Se valida ANTES de dejarlo pendiente: no tiene sentido que un
+            // administrador apruebe algo que va a fallar al aplicarse.
+            const invalidos = updates
+                .map(item => ({ item, error: validateScheduleItem(item) }))
+                .filter(x => x.error);
 
-        for (const item of updates) {
-            try {
-                if (!item.userId && !item.dni) {
-                    errors.push({ item, error: 'Se requiere userId o dni.' });
-                    continue;
-                }
-                if (!item.date) {
-                    errors.push({ item, error: 'Se requiere fecha (date).' });
-                    continue;
-                }
-                if (!item.workType) {
-                    errors.push({ item, error: 'Se requiere tipo de jornada (workType).' });
-                    continue;
-                }
-
-                // El permiso SIEMPRE debe llevar un comentario que lo justifique
-                if (item.workType === 'permiso' && !(typeof item.note === 'string' && item.note.trim())) {
-                    errors.push({ item, error: 'El permiso requiere un comentario obligatorio.' });
-                    continue;
-                }
-
-                // Resolver userId desde dni si es necesario
-                let userId = item.userId;
-                if (!userId && item.dni) {
-                    const userDoc = await UserModel.findOne({ dni: item.dni });
-                    if (!userDoc) {
-                        errors.push({ item, error: `Usuario con DNI ${item.dni} no encontrado.` });
-                        continue;
-                    }
-                    userId = userDoc._id;
-                }
-
-                // Normalizar fecha a medianoche UTC
-                const dateObj = new Date(item.date);
-                dateObj.setUTCHours(0, 0, 0, 0);
-
-                // Conservar el historial de notas y registrar SIEMPRE quién modifica.
-                // (El $set del objeto completo con note:[] borraba el historial en
-                // cada edición, y un $push sobre scheduleOverride.note junto a ese
-                // $set genera conflicto de paths en MongoDB.)
-                const previousRecord = await AttendanceModel.findOne({ userId, date: dateObj })
-                    .select('scheduleOverride')
-                    .lean();
-                const previousNotes = previousRecord?.scheduleOverride?.note || [];
-
-                // Tipos sin horario de entrada/salida
-                const isNoTimeType = ['descanso', 'permiso', 'vacaciones', 'falta'].includes(item.workType);
-
-                const scheduleOverride = {
-                    workType: item.workType,
-                    shift: item.shift || null,
-                    startTime: isNoTimeType ? null : (item.startTime || null),
-                    endTime: isNoTimeType ? null : (item.endTime || null),
-                    note: [
-                        ...previousNotes,
-                        { user: adminUserId, message: item.note || 'Cambio de horario', date: new Date() }
-                    ]
-                };
-
-                // Auditoría del documento:
-                //  - Si NO existía → el admin lo crea (createdBy vía $setOnInsert).
-                //  - Si ya existía → se registra la edición en editedBy con los
-                //    campos del override que realmente cambiaron.
-                const prevOverride = previousRecord?.scheduleOverride || {};
-                const changedFields = ['workType', 'shift', 'startTime', 'endTime']
-                    .filter(field => (prevOverride?.[field] ?? null) !== (scheduleOverride[field] ?? null))
-                    // Guardar también el valor anterior y el nuevo de cada campo
-                    .map(field => ({
-                        field,
-                        from: prevOverride?.[field] ?? null,
-                        to: scheduleOverride[field] ?? null
-                    }));
-
-                const updateOp = {
-                    $set: {
-                        scheduleOverride,
-                        // Permiso y vacaciones también marcan el estado del día
-                        ...(item.workType === 'permiso' ? { status: 'permiso' } : {}),
-                        ...(item.workType === 'vacaciones' ? { status: 'vacaciones' } : {}),
-                    },
-                    $setOnInsert: { createdBy: adminUserId }
-                };
-                if (previousRecord && changedFields.length > 0) {
-                    updateOp.$push = {
-                        editedBy: { user: adminUserId, change: changedFields, date: new Date() }
-                    };
-                }
-
-                const record = await AttendanceModel.findOneAndUpdate(
-                    { userId, date: dateObj },
-                    updateOp,
-                    { upsert: true, new: true, setDefaultsOnInsert: true }
-                )
-                    .populate('scheduleOverride.note.user', 'name surName dni')
-                    .populate('createdBy', 'name surName img')
-                    .populate('editedBy.user', 'name surName img');
-
-                // Emitir evento Socket.IO para actualización en tiempo real
-                const userDoc = await UserModel.findById(userId);
-                if (userDoc) {
-                    const dateEvent = new Date(record.date);
-                    dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
-                    io.emit(`${dateEvent.toISOString()}-${userDoc.email}`, { finalRecord: record, user: userDoc });
-                }
-
-                results.push(record);
+            if (invalidos.length > 0) {
+                return res.status(400).json({
+                    status: 400, error: 'Bad request',
+                    message: 'Hay cambios inválidos en la solicitud.',
+                    errors: invalidos,
+                });
             }
-            catch (innerErr) {
-                console.log('Error processing item:', item, innerErr);
-                errors.push({ item, error: innerErr.message });
-            }
+
+            const target = await resolveTargetUser(updates);
+            const fechas = [...new Set(updates.map(u => {
+                const d = new Date(u.date);
+                return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString('es-VE', { timeZone: 'UTC' });
+            }).filter(Boolean))];
+
+            const notification = await notify({
+                type: 'schedule.changeRequested',
+                actor: actorFromSession(req),
+                target,
+                resource: {
+                    kind: 'schedule',
+                    id: target?.user || null,
+                    name: `${target?.name || ''} ${target?.surName || ''}`.trim(),
+                    // Al abrirla, el horario resalta a ese empleado en esa fecha
+                    path: target?.user
+                        ? `/user?userId=${target.user}&date=${new Date(updates[0].date).toISOString().slice(0, 10)}`
+                        : '/user',
+                    img: target?.img || null,
+                },
+                extra: { fechas },
+                request: { status: 'pending', payload: { updates } },
+            });
+
+            return res.status(202).json({
+                status: 202,
+                pending: true,
+                message: 'El cambio quedó PENDIENTE por aprobación de un administrador.',
+                notificationId: notification?._id || null,
+            });
         }
+
+        // La escritura vive en scheduleWrite.lib.js: la comparten este camino
+        // (el administrador aplica directo) y el de aprobar una solicitud.
+        const { results, errors } = await applyScheduleUpdates(updates, adminUserId);
+
+        // Avisar a cada empleado que su horario cambió. Va después de escribir
+        // y sin await bloqueante sobre la respuesta: el cambio ya está hecho y
+        // un problema al notificar no puede alterar lo que se devuelve.
+        notifyScheduleApplied(results, actorFromSession(req));
 
         return res.status(200).json({
             status: 200,

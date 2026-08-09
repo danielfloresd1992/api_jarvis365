@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import NotificationModel from './notification.model.js';
 import NotificationReadModel from './notificationRead.model.js';
 import { notify } from './notification.service.js';
+import { applyScheduleUpdates, notifyScheduleApplied } from '../user/scheduleWrite.lib.js';
 import { SYSTEM_USER_ID, SYSTEM_USER_LABEL } from '../../libs/systemUser.js';
 import { validateSession, validateAdminUser } from '../../middleware/validateSessionAndUser.js';
 
@@ -153,6 +154,108 @@ routerNotification.post(`${nameApi}/notifications/read-all`, validateSession, as
 
         const result = await NotificationReadModel.bulkWrite(ops, { ordered: false });
         return res.status(200).json({ status: 200, marked: result.upsertedCount ?? 0 });
+    }
+    catch (error) {
+        console.log(error);
+        return res.status(500).json({ status: 500, message: 'Error server internal', error: error.message });
+    }
+});
+
+
+/**
+ * POST /notifications/:id/decide   body: { decision: 'approved'|'rejected', note? }
+ *
+ * Resuelve una SOLICITUD pendiente. Solo administradores.
+ *
+ * Al aprobar se aplica el cambio guardado en request.payload con la MISMA
+ * función que usa el camino directo (applyScheduleUpdates), no con una copia:
+ * el cambio aprobado tiene que escribirse exactamente igual que si lo hubiera
+ * hecho el administrador a mano.
+ *
+ * Queda registrado quién decidió y cuándo, y se le avisa a quien lo solicitó.
+ */
+routerNotification.post(`${nameApi}/notifications/:id/decide`, validateAdminUser, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { decision, note } = req.body || {};
+
+        if (!ObjectId.isValid(id))
+            return res.status(400).json({ status: 400, error: 'Bad request', message: 'Id de notificación inválido.' });
+        if (!['approved', 'rejected'].includes(decision))
+            return res.status(400).json({ status: 400, error: 'Bad request', message: 'La decisión debe ser "approved" o "rejected".' });
+
+        const notification = await NotificationModel.findById(id);
+        if (!notification)
+            return res.status(404).json({ status: 404, error: 'Not found', message: 'Solicitud no encontrada.' });
+
+        if (notification.request?.status !== 'pending') {
+            // Dos administradores abriendo la campana a la vez: el segundo se
+            // encuentra con que ya está resuelta. Se informa, no se re-aplica.
+            return res.status(409).json({
+                status: 409, error: 'Conflict',
+                message: `Esta solicitud ya fue ${notification.request?.status === 'approved' ? 'aprobada' : 'rechazada'}.`,
+            });
+        }
+
+        let aplicado = { results: [], errors: [] };
+
+        if (decision === 'approved') {
+            const updates = notification.request?.payload?.updates || [];
+            if (updates.length === 0) {
+                return res.status(400).json({
+                    status: 400, error: 'Bad request',
+                    message: 'La solicitud no tiene cambios que aplicar.',
+                });
+            }
+
+            // El autor del cambio es QUIEN APRUEBA: es su firma la que lo
+            // autoriza, y así queda en la auditoría del documento de asistencia.
+            aplicado = await applyScheduleUpdates(updates, req.session.userId);
+
+            // El empleado también se entera de que su horario cambió: la
+            // solicitud era entre el solicitante y el administrador, pero la
+            // jornada que cambia es la suya.
+            notifyScheduleApplied(aplicado.results, {
+                user: req.session.userId,
+                name: req.session.name || '',
+            });
+
+            // Si NADA se pudo aplicar, la solicitud sigue pendiente: darla por
+            // aprobada dejaría al solicitante creyendo que su cambio entró.
+            if (aplicado.results.length === 0) {
+                return res.status(422).json({
+                    status: 422, error: 'Unprocessable',
+                    message: 'No se pudo aplicar ningún cambio. La solicitud sigue pendiente.',
+                    errors: aplicado.errors,
+                });
+            }
+        }
+
+        notification.request.status = decision;
+        notification.request.decidedBy = req.session.userId;
+        notification.request.decidedAt = new Date();
+        notification.request.note = typeof note === 'string' ? note.trim() : '';
+        await notification.save();
+
+        // Avisar a quien lo pidió. A los administradores no: acaban de decidirlo.
+        await notify({
+            type: decision === 'approved' ? 'schedule.changeApproved' : 'schedule.changeRejected',
+            actor: { user: req.session.userId, name: req.session.name || '' },
+            target: notification.target,
+            resource: notification.resource,
+            extra: { requesterId: notification.actor?.user, note: notification.request.note },
+        });
+
+        const poblada = await NotificationModel.findById(id)
+            .populate('actor.user request.decidedBy', 'name surName img')
+            .lean();
+
+        return res.status(200).json({
+            status: 200,
+            notification: poblada,
+            applied: aplicado.results.length,
+            errors: aplicado.errors,
+        });
     }
     catch (error) {
         console.log(error);

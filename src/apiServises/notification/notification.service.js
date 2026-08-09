@@ -39,14 +39,14 @@ export const ADMIN_ROOM = 'admins';
  * @param {object} [params.request]  { status, payload } para solicitudes
  * @returns {Promise<object|null>} la notificación guardada, o null si falló
  */
-export async function notify({ type, actor, resource, changes = [], extra = {}, request } = {}) {
+export async function notify({ type, actor, target, resource, changes = [], extra = {}, request } = {}) {
     try {
         // La sesión de Express solo garantiza el NOMBRE. Como la notificación
         // debe decir nombre y apellido, se completa desde la base cuando falta.
         // Es una lectura pequeña y deja el texto correcto para siempre: se
         // guarda renderizado, así que no hay una segunda oportunidad.
         const resolvedActor = await resolveActor(actor);
-        const ctx = { actor: resolvedActor, resource, changes, extra };
+        const ctx = { actor: resolvedActor, target, resource, changes, extra };
         const strategy = resolveStrategy(type);
         actor = resolvedActor;
 
@@ -73,6 +73,14 @@ export async function notify({ type, actor, resource, changes = [], extra = {}, 
                 surName: actor?.surName || '',
                 img: actor?.img || null,
             },
+            target: target
+                ? {
+                    user: target.user ?? target._id ?? null,
+                    name: target.name || '',
+                    surName: target.surName || '',
+                    img: target.img || null,
+                }
+                : undefined,
             resource: {
                 kind: resource?.kind || '',
                 id: resource?.id || null,
