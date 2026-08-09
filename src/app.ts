@@ -121,6 +121,7 @@ import { routerDocument } from './apiServises/documentsAndAnalytics/document.rou
 import { routerChat } from './apiServises/chat/router.js';
 import { routerAiChat } from './apiServises/aiChat/aiChat.routes.js';
 import { routerUser } from './apiServises/user/user.routes.js';
+import { routerNotification } from './apiServises/notification/notification.routes.js';
 import routerMultimedia from './apiServises/multimedia/routes.index.ts'
 import swaggerUi from 'swagger-ui-express';
 import swaggerSpec from './docs/swagger.js';
@@ -143,6 +144,7 @@ const apiRouter = express.Router();
 
 app
     .use(routerUser)
+    .use(routerNotification)
     .use(routerMultimedia)
     .use(routerPublisher)
     .use(routerFranchise)

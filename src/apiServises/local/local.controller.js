@@ -11,10 +11,22 @@ import Franchise from '../franchise/franchiseImg.model.js';
 import colors from 'colors';
 import mongoose from 'mongoose';
 import convertBoolean from '../../script/convertBoolean.js';
+import { notify, diffChanges, actorFromSession } from '../notification/notification.service.js';
 
 
 import { config } from 'dotenv';
 config();
+
+// Campos del establecimiento que se vigilan para la notificación, con su
+// etiqueta legible. Lo que no esté acá cambia sin generar aviso: la campana es
+// para lo que otro necesita enterarse, no para cada propiedad interna.
+const ESTABLISHMENT_FIELDS = {
+    name: 'Nombre',
+    location: 'Ubicación',
+    isActive: 'Estado',
+    typeMonitoring: 'Tipo de monitoreo',
+    lang: 'Idioma',
+};
 
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
@@ -171,6 +183,18 @@ controller.setlocal = async (req, res) => {
         }
         const newLocal = new Local({ ...validateEstablishment });
         const result = await newLocal.save();
+
+        notify({
+            type: 'establishment.created',
+            actor: actorFromSession(req),
+            resource: {
+                kind: 'establishment',
+                id: result._id,
+                name: result.name || '',
+                path: '/clients&manasgement',
+            },
+        });
+
         return res.status(200).json(result);
     }
     catch (error) {
@@ -270,8 +294,37 @@ controller.putLocal = async (req, res) => {
         }
 
         const result = await Local.findByIdAndUpdate(idParams, update, { new: true }).populate(populateQuery);
-   
+
         if (!result) return res.status(404).json({ message: 'Establishment no exist', error: 'Document not fount', status: 404 });
+
+        // ── Notificación ───────────────────────────────────────────────
+        // `local` es el documento ANTES del update, leído más arriba: sirve de
+        // referencia para el diff sin una segunda consulta.
+        //
+        // Activar y desactivar salen del "actualizado" genérico porque es el
+        // cambio que más se consulta y merece su propio aviso.
+        const cambios = diffChanges(local.toObject(), validatedEstablishment, ESTABLISHMENT_FIELDS);
+        const cambioEstado = cambios.find(c => c.field === 'isActive');
+
+        const tipo = cambioEstado
+            ? (cambioEstado.to ? 'establishment.activated' : 'establishment.deactivated')
+            : 'establishment.updated';
+
+        // Sin cambios reales no se notifica: guardar sin tocar nada no es un
+        // hecho que nadie necesite saber.
+        if (cambios.length > 0) {
+            notify({
+                type: tipo,
+                actor: actorFromSession(req),
+                resource: {
+                    kind: 'establishment',
+                    id: result._id,
+                    name: result.name || local.name || '',
+                    path: '/clients&manasgement',
+                },
+                changes: cambios,
+            });
+        }
 
         return res.status(200).json({ result: result });
         
@@ -322,6 +375,20 @@ controller.deleteLocal = async (req, res) => {
     Local.deleteOne({ _id: local._id })
         .then(element => {
             fs.unlinkSync(path.join(__dirname, `../../../uploads/${local.img.name}`))
+
+            // El nombre se copia en la notificación: el documento ya no existe
+            // y sin la copia el histórico quedaría en blanco.
+            notify({
+                type: 'establishment.deleted',
+                actor: actorFromSession(req),
+                resource: {
+                    kind: 'establishment',
+                    id: local._id,
+                    name: local.name || '',
+                    path: '/clients&manasgement',
+                },
+            });
+
             return res.status(200).send('local eliminado con exito de la collección Local');
         })
         .catch(err => {

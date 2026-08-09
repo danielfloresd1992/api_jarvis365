@@ -46,6 +46,30 @@ class SocketManager {
                 socket.join('lobby');
 
 
+                // ── Salas de notificación ─────────────────────────────
+                // El cliente se identifica al conectarse y entra a su propia
+                // sala (y a la de administradores si lo es).
+                //
+                // Sin esto, una notificación PERSONAL habría que emitirla a
+                // todos y esconderla en el front: eso no la hace privada, solo
+                // invisible. Con la sala, el contenido solo viaja a quien le
+                // corresponde.
+                socket.on('join-user', (payload) => {
+                    const userId = typeof payload === 'string' ? payload : payload?.userId;
+                    if (userId) socket.join(`user:${userId}`);
+                    if (payload?.admin === true) socket.join('admins');
+                });
+
+                // Al cerrar sesión sin recargar, el socket sigue vivo: hay que
+                // sacarlo de sus salas o seguiría recibiendo lo del usuario
+                // anterior.
+                socket.on('leave-user', (payload) => {
+                    const userId = typeof payload === 'string' ? payload : payload?.userId;
+                    if (userId) socket.leave(`user:${userId}`);
+                    socket.leave('admins');
+                });
+
+
 
                 socket.on('user-connection', data => {
                     io.emit('open-user-express', data);

@@ -1,6 +1,7 @@
 import moment from 'moment-timezone';
 import UserModel from './user.model.js';
 import AttendanceModel from './attendance.model.js';
+import { SYSTEM_USER_ID } from '../../libs/systemUser.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // SERVICIO: Corte diario de asistencia (retardos y ausencias)
@@ -337,10 +338,10 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
 // ══════════════════════════════════════════════════════════════════════
 // REGISTRO AUTOMÁTICO DE FALTAS
 // ══════════════════════════════════════════════════════════════════════
-// Usuario del sistema que firma las faltas automáticas (Jarvis Vision, ya
-// existe en la base de datos). Para que en el futuro las firme otro usuario
-// basta cambiar este _id acá, o definir ATTENDANCE_SYSTEM_USER_ID en el .env.
-const SYSTEM_USER_ID = process.env.ATTENDANCE_SYSTEM_USER_ID || '697657323dc213f05486e03a';
+// Usuario del sistema que firma las faltas automáticas. La constante se movió a
+// libs/systemUser.js porque ahora también la usa el sistema de notificaciones:
+// dos copias del mismo _id acabarían separándose el día que cambie.
+// Se sigue configurando con ATTENDANCE_SYSTEM_USER_ID en el .env.
 
 const AUTO_FAULT_NOTE = 'Falta registrada automáticamente: no marcó entrada al corte de asistencia.';
 

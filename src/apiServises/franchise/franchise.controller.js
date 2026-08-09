@@ -2,6 +2,7 @@ const controller = {};
 import FranchiseModel from './franchise.model.js';
 import LocalModel from '../local/local.model.js';
 import colors from 'colors';
+import { notify, actorFromSession } from '../notification/notification.service.js';
 
 
 controller.getAllFranchise = (req, res) => {
@@ -57,6 +58,17 @@ controller.setFranchise = async (req, res) => {
 
         const resultSave = await newFranchise.save();
 
+        notify({
+            type: 'franchise.created',
+            actor: actorFromSession(req),
+            resource: {
+                kind: 'franchise',
+                id: resultSave._id,
+                name: resultSave.name || '',
+                path: '/clients&manasgement',
+            },
+        });
+
         console.log(colors.bgCyan(`Franquicia ${body['name']} guardado a la colección de Franchise`.black));
 
         return res.json({ message: 'created resource', status: 200, data: resultSave }).status(200);
@@ -88,6 +100,17 @@ controller.deleteFranchise = async (req, res) => {
         const deleteFranchise = await FranchiseModel.deleteOne({ _id: id })
         
         if (deleteFranchise) {
+            notify({
+                type: 'franchise.deleted',
+                actor: actorFromSession(req),
+                resource: {
+                    kind: 'franchise',
+                    id: franchise._id,
+                    name: franchise.name || '',
+                    path: '/clients&manasgement',
+                },
+            });
+
             console.log(colors.bgCyan('Se elimino un elemento de la colección Franchise'.black));
             return res.json(franchise).status(200) ;
         };
