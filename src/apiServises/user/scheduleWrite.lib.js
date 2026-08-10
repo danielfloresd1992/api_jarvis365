@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import UserModel from './user.model.js';
 import AttendanceModel from './attendance.model.js';
 import { io } from '../../services/socket/io.js';
-import { notify } from '../notification/notification.service.js';
+import { notify, adminUserIds } from '../notification/notification.service.js';
 
 const { ObjectId } = mongoose.Types;
 
@@ -162,11 +162,28 @@ export async function applyScheduleUpdates(updates = [], authorUserId) {
  * quien lo trabaja, y hacerlo global sería mandarle a setenta y seis personas
  * un aviso que no es suyo cada vez que se edita una celda.
  *
- * @param {Array}  results  documentos de asistencia ya escritos
- * @param {object} actor    quién hizo el cambio (actorFromSession)
+ * QUIÉN APARECE EN EL AVISO
+ *
+ * Un cambio puede llegar por dos caminos, y no son lo mismo:
+ *   · el administrador lo aplica directo   → él lo decidió y él lo hizo
+ *   · alguien lo solicitó y se aprobó      → intervinieron DOS personas
+ *
+ * En el segundo caso el `actor` es quien aprueba, así que sin el solicitante el
+ * empleado leía "Kervis modificó tu horario" cuando Kervis solo autorizó lo que
+ * pidió otro. Por eso `requester` viaja aparte y el texto nombra a los dos.
+ *
+ * @param {Array}  results     documentos de asistencia ya escritos
+ * @param {object} actor       quién hizo el cambio (actorFromSession)
+ * @param {object} [requester] quién lo solicitó, si vino de una solicitud
  */
-export async function notifyScheduleApplied(results = [], actor) {
+export async function notifyScheduleApplied(results = [], actor, requester = null) {
     if (results.length === 0) return;
+
+    // Solo se nombra al solicitante si es OTRA persona: "a pedido de Kervis"
+    // firmado por Kervis sería ruido.
+    const requesterName = (requester && String(requester.user ?? requester._id ?? '') !== String(actor?.user ?? actor?._id ?? ''))
+        ? `${requester.name || ''} ${requester.surName || ''}`.trim()
+        : '';
 
     // Fechas por empleado
     const porUsuario = new Map();
@@ -184,53 +201,66 @@ export async function notifyScheduleApplied(results = [], actor) {
         .lean();
     const porId = new Map(users.map(u => [String(u._id), u]));
 
+    // Los administradores, MENOS quien hizo el cambio: contarle lo que acaba de
+    // hacer es ruido. Se consulta una sola vez para todo el lote, no por
+    // empleado.
+    const adminIds = await adminUserIds(actor?.user ?? actor?._id ?? null);
+
     for (const [userId, fechas] of porUsuario) {
         const user = porId.get(userId);
         if (!user) continue;
 
+        const target = {
+            user: user._id,
+            name: user.name || '',
+            surName: user.surName || '',
+            img: user.img || null,
+        };
+        const resource = {
+            kind: 'schedule',
+            id: user._id,
+            name: `${user.name || ''} ${user.surName || ''}`.trim(),
+            path: `/user?userId=${userId}&date=${new Date(results.find(r => String(r.userId) === userId).date).toISOString().slice(0, 10)}`,
+            img: user.img || null,
+        };
+        const fechasUnicas = [...new Set(fechas)];
+
+        // Al empleado: "tu horario cambió".
         await notify({
             type: 'schedule.changed',
             actor,
-            target: {
-                user: user._id,
-                name: user.name || '',
-                surName: user.surName || '',
-                img: user.img || null,
-            },
-            resource: {
-                kind: 'schedule',
-                id: user._id,
-                name: `${user.name || ''} ${user.surName || ''}`.trim(),
-                path: `/user?userId=${userId}&date=${new Date(results.find(r => String(r.userId) === userId).date).toISOString().slice(0, 10)}`,
-                img: user.img || null,
-            },
-            extra: { fechas: [...new Set(fechas)], targetUserId: userId },
+            target,
+            resource,
+            extra: { fechas: fechasUnicas, targetUserId: userId, requesterName },
         });
+
+        // A los demás administradores: "X modificó el horario de Y". Son dos
+        // documentos porque el texto se guarda ya renderizado y cada audiencia
+        // necesita leer una frase distinta.
+        //
+        // El empleado se saca de la lista por si además es administrador: ya
+        // recibió el suyo y no necesita el mismo hecho contado dos veces.
+        const paraAdmins = adminIds.filter(id => id !== userId);
+        if (paraAdmins.length > 0) {
+            await notify({
+                type: 'schedule.changedAdmin',
+                actor,
+                target,
+                resource,
+                extra: { fechas: fechasUnicas, targetUserId: userId, adminIds: paraAdmins, requesterName },
+            });
+        }
     }
 }
 
 
-/**
- * Datos del empleado afectado por el lote, para dejarlos referenciados en la
- * solicitud. Se toma el primero: una solicitud se registra por empleado.
- */
-export async function resolveTargetUser(updates = []) {
-    const item = updates[0];
-    if (!item) return null;
+// `otherAdminIds` vivía acá; se movió a notification.service.js como
+// `adminUserIds` cuando el retiro de solicitudes necesitó lo mismo. Tener dos
+// copias significaba que un cambio en el criterio de "quién es administrador"
+// se aplicaría en un sitio y no en el otro.
 
-    const query = item.userId && ObjectId.isValid(item.userId)
-        ? { _id: item.userId }
-        : (item.dni ? { dni: item.dni } : null);
-    if (!query) return null;
 
-    const user = await UserModel.findOne(query).select('name surName img dni').lean();
-    if (!user) return null;
-
-    return {
-        user: user._id,
-        name: user.name || '',
-        surName: user.surName || '',
-        img: user.img || null,
-        dni: user.dni || '',
-    };
-}
+// `resolveTargetUser` vivía acá y devolvía SOLO el primer empleado del lote, con
+// lo que una solicitud que tocaba a cinco personas se registraba como si fuera
+// de una. Lo reemplazó `resolveTargets` en scheduleRequest.lib.js, que los
+// resuelve todos.

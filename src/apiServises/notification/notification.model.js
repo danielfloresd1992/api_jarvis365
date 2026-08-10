@@ -44,6 +44,36 @@ const NotificationSchema = new mongoose.Schema({
     // Es la clave con la que notification.strategy.js elige cómo construirla.
     type: { type: String, required: true, index: true },
 
+    // FAMILIA VISUAL. La declara la estrategia del tipo y viaja al cliente para
+    // que sepa cómo pintar la notificación sin tener que parsear el `type`.
+    //
+    // Si el front dedujera la apariencia partiendo la cadena por el punto,
+    // agregar un tipo nuevo obligaría a tocar el front también, y un tipo mal
+    // escrito caería en un estilo cualquiera sin avisar. Con la familia
+    // explícita, el backend decide y el front solo obedece.
+    //
+    //   schedule → horario y asistencia: guardia, permisos, faltas, día extra,
+    //              horas extras, entrada y salida
+    //   resource → establecimientos y franquicias
+    //   system   → anuncios de la plataforma
+    family: {
+        type: String,
+        enum: ['schedule', 'resource', 'system', 'attendance', 'general'],
+        default: 'general',
+        index: true,
+    },
+
+    // Datos PROPIOS de la familia, que solo su vista sabe leer.
+    //
+    // Una notificación de marcaje necesita llevar las fotos de entrada y
+    // salida, los minutos de retardo y las unidades de descuento; una de
+    // establecimiento, nada de eso. Darle a cada familia sus campos en el
+    // esquema llenaría el modelo de propiedades vacías para las demás.
+    //
+    // Es Mixed a propósito: acá el esquema no valida la forma porque la forma
+    // la define la estrategia que la escribe y la vista que la lee.
+    meta: { type: mongoose.Schema.Types.Mixed, default: null },
+
     // A quién le llega.
     //   global   → a todos los usuarios
     //   personal → solo a los de `recipients`
@@ -115,9 +145,13 @@ const NotificationSchema = new mongoose.Schema({
     // cambio de horario y queda 'pending' hasta que un administrador decide.
     // Con status 'none' la notificación es un simple aviso.
     request: {
+        // 'withdrawn' es distinto de 'rejected' a propósito: rechazar es un
+        // administrador negando un cambio ajeno, y retirar es quien lo pidió
+        // arrepintiéndose. Con un solo estado la auditoría diría "rechazada
+        // por Kervis" cuando Kervis nunca llegó a verla.
         status: {
             type: String,
-            enum: ['none', 'pending', 'approved', 'rejected'],
+            enum: ['none', 'pending', 'approved', 'rejected', 'withdrawn'],
             default: 'none',
             index: true,
         },
@@ -143,6 +177,11 @@ const NotificationSchema = new mongoose.Schema({
 // consultas: las globales y las dirigidas a un usuario.
 NotificationSchema.index({ scope: 1, createdAt: -1 });
 NotificationSchema.index({ recipients: 1, createdAt: -1 });
+
+// Las solicitudes PENDIENTES se consultan por dos caminos calientes: al pintar
+// la grilla del horario y antes de aceptar una solicitud nueva, para ver si otra
+// ya tomó esa celda. Las dos filtran por tipo y estado.
+NotificationSchema.index({ type: 1, 'request.status': 1 });
 
 
 const NotificationModel = mongoose.model('notification', NotificationSchema);

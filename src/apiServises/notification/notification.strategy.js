@@ -39,12 +39,18 @@ const readable = (v, lang = 'es') => {
 
 // ── Contrato de una estrategia ────────────────────────────────────────
 // {
+//   family: 'schedule' | 'resource' | 'system' | 'general'
 //   scope:  'global' | 'personal' | 'admin'
 //   level:  'info' | 'success' | 'warning' | 'danger'
 //   action: created | updated | deleted | activated | deactivated | requested…
 //   text(ctx, lang) -> { title, body }
 //   audience(ctx)   -> array de userId  (solo si scope !== 'global')
 // }
+//
+// `family` es lo único que mira el CLIENTE para decidir cómo se pinta la
+// notificación. Se declara acá y no se deduce del nombre del tipo: partir la
+// cadena por el punto obligaría a tocar el front cada vez que nace un tipo, y
+// un tipo mal escrito caería en un estilo cualquiera sin avisar.
 
 const STRATEGIES = new Map();
 
@@ -75,6 +81,113 @@ export const resolveStrategy = (type) => STRATEGIES.get(type) || FALLBACK;
 
 
 // ══════════════════════════════════════════════════════════════════════
+// MARCAJE DE ASISTENCIA
+// ══════════════════════════════════════════════════════════════════════
+// El resultado de fichar entrada o salida, para el PROPIO empleado.
+//
+// Es estrictamente PERSONAL: la audiencia es él y nadie más. Sus retardos y
+// sus unidades de descuento son suyos, y una notificación global o de admin
+// los pondría a la vista de gente que no tiene por qué verlos.
+//
+// El detalle —fotos, horas, minutos de retardo— viaja en `meta`, que es lo que
+// lee la vista de esta familia en el cliente.
+
+/** "3 unidades" · "1 unidad" */
+const unidades = (n, lang = 'es') => lang === 'en'
+    ? `${n} unit${n === 1 ? '' : 's'}`
+    : `${n} unidad${n === 1 ? '' : 'es'}`;
+
+/**
+ * Hora legible del marcaje, en la zona del monitoreo: "08:02 am".
+ *
+ * Intl en es-VE devuelve "a. m." — con punto final. Metida en una frase que
+ * también termina en punto queda "a las 08:02 a. m..", así que se normaliza a
+ * "am"/"pm". Además separa con espacio fino, que no siempre se ve bien.
+ */
+const horaDe = (fecha) => {
+    if (!fecha) return '';
+    try {
+        return new Date(fecha)
+            .toLocaleTimeString('es-VE', {
+                timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit', hour12: true,
+            })
+            .replace(/[  ]/g, ' ')
+            .replace(/\ba\.\s*m\./i, 'am')
+            .replace(/\bp\.\s*m\./i, 'pm')
+            .trim();
+    } catch { return ''; }
+};
+
+registerStrategy('attendance.checkIn', {
+    family: 'attendance',
+    scope: 'personal',
+    level: 'info',
+    action: 'created',
+    audience: (ctx) => [ctx.extra?.targetUserId].filter(Boolean),
+    text: (ctx, lang) => {
+        const m = ctx.meta || {};
+        const hora = horaDe(m.checkIn);
+
+        // Si por lo que sea no hay hora, la frase se arma sin ella: mejor
+        // "Marcaste tu entrada." que "Marcaste tu entrada a las .".
+        const aLas = hora ? ` a las ${hora}` : '';
+        const at = hora ? ` at ${hora}` : '';
+
+        // Sin retardo el mensaje FELICITA, no solo informa: llegar a tiempo es
+        // lo que se quiere reforzar y merece leerse distinto.
+        if (!m.isLate) {
+            return lang === 'en'
+                ? { title: 'Entry recorded', body: `You clocked in${at}. On time — thanks for your punctuality.` }
+                : { title: 'Entrada registrada', body: `Marcaste tu entrada${aLas}. Llegaste a tiempo, gracias por tu puntualidad.` };
+        }
+
+        const desc = m.discountUnits > 0
+            ? (lang === 'en'
+                ? ` It generates a discount of ${unidades(m.discountUnits, 'en')}.`
+                : ` Genera un descuento de ${unidades(m.discountUnits)}.`)
+            : '';
+
+        return lang === 'en'
+            ? {
+                title: 'Entry recorded with delay',
+                body: `You clocked in${at}, ${m.minutesLate || 0} minutes after your start time.${desc}`,
+            }
+            : {
+                title: 'Entrada registrada con retardo',
+                body: `Marcaste tu entrada${aLas}, ${m.minutesLate || 0} minutos después de tu hora.${desc}`,
+            };
+    },
+});
+
+registerStrategy('attendance.checkOut', {
+    family: 'attendance',
+    scope: 'personal',
+    level: 'success',
+    action: 'updated',
+    audience: (ctx) => [ctx.extra?.targetUserId].filter(Boolean),
+    text: (ctx, lang) => {
+        const m = ctx.meta || {};
+        const hora = horaDe(m.checkOut);
+        const aLas = hora ? ` a las ${hora}` : '';
+        const at = hora ? ` at ${hora}` : '';
+
+        // Cada dato se agrega solo si existe: así el aviso nunca queda con un
+        // hueco a la vista ("Trabajaste —.").
+        const jornada = m.workedLabel
+            ? (lang === 'en' ? ` Worked: ${m.workedLabel}.` : ` Trabajaste ${m.workedLabel}.`)
+            : '';
+        const extra = m.isExtraDay
+            ? (lang === 'en' ? ' Counted as an extra day.' : ' Cuenta como día extra.')
+            : '';
+
+        return lang === 'en'
+            ? { title: 'Day closed', body: `You clocked out${at}.${jornada}${extra}` }
+            : { title: 'Jornada cerrada', body: `Marcaste tu salida${aLas}.${jornada}${extra}` };
+    },
+});
+
+
+// ══════════════════════════════════════════════════════════════════════
 // ANUNCIOS DEL SISTEMA
 // ══════════════════════════════════════════════════════════════════════
 // Aviso global que no nace de que alguien tocara un documento: lo firma el
@@ -83,6 +196,7 @@ export const resolveStrategy = (type) => STRATEGIES.get(type) || FALLBACK;
 // por cada uno.
 
 registerStrategy('system.announcement', {
+    family: 'system',
     scope: 'global',
     level: 'success',
     action: 'created',
@@ -101,6 +215,7 @@ registerStrategy('system.announcement', {
 // ══════════════════════════════════════════════════════════════════════
 
 registerStrategy('establishment.created', {
+    family: 'resource',
     scope: 'global',
     level: 'success',
     action: 'created',
@@ -116,6 +231,7 @@ registerStrategy('establishment.created', {
 });
 
 registerStrategy('establishment.updated', {
+    family: 'resource',
     scope: 'global',
     level: 'info',
     action: 'updated',
@@ -138,6 +254,7 @@ registerStrategy('establishment.updated', {
 // Activación y desactivación van aparte del "actualizado" genérico: es el
 // cambio que más se consulta y merece su propio color y su propio texto.
 registerStrategy('establishment.deactivated', {
+    family: 'resource',
     scope: 'global',
     level: 'warning',
     action: 'deactivated',
@@ -153,6 +270,7 @@ registerStrategy('establishment.deactivated', {
 });
 
 registerStrategy('establishment.activated', {
+    family: 'resource',
     scope: 'global',
     level: 'success',
     action: 'activated',
@@ -168,6 +286,7 @@ registerStrategy('establishment.activated', {
 });
 
 registerStrategy('establishment.deleted', {
+    family: 'resource',
     scope: 'global',
     level: 'danger',
     action: 'deleted',
@@ -188,6 +307,7 @@ registerStrategy('establishment.deleted', {
 // ══════════════════════════════════════════════════════════════════════
 
 registerStrategy('franchise.created', {
+    family: 'resource',
     scope: 'global',
     level: 'success',
     action: 'created',
@@ -203,6 +323,7 @@ registerStrategy('franchise.created', {
 });
 
 registerStrategy('franchise.updated', {
+    family: 'resource',
     scope: 'global',
     level: 'info',
     action: 'updated',
@@ -223,6 +344,7 @@ registerStrategy('franchise.updated', {
 });
 
 registerStrategy('franchise.deleted', {
+    family: 'resource',
     scope: 'global',
     level: 'danger',
     action: 'deleted',
@@ -245,6 +367,7 @@ registerStrategy('franchise.deleted', {
 // las que vengan: la audiencia sale del contexto, no de una consulta.
 
 registerStrategy('overtime.decided', {
+    family: 'schedule',
     scope: 'personal',
     level: 'info',
     action: 'updated',
@@ -287,42 +410,134 @@ const fechasDe = (ctx, lang = 'es') => {
     return lang === 'en' ? ` on ${lista}` : ` el ${lista}`;
 };
 
-// Cambio APLICADO por un administrador, sin solicitud de por medio. Le llega al
-// empleado afectado: es su jornada la que cambió.
+// Cambio APLICADO por un administrador, sin solicitud de por medio.
+//
+// Genera DOS avisos, no uno, porque son dos audiencias que necesitan leer cosas
+// distintas: al empleado le importa que "su" horario cambió, y al resto de
+// administradores les importa quién le tocó el horario a quién. Un solo texto
+// no puede decir "tu horario" y "el horario de Ana" a la vez — se guarda ya
+// renderizado, así que no hay una segunda oportunidad de adaptarlo al lector.
 registerStrategy('schedule.changed', {
+    family: 'schedule',
     scope: 'personal',
     level: 'info',
     action: 'updated',
     audience: (ctx) => [ctx.extra?.targetUserId].filter(Boolean),
-    text: (ctx, lang) => lang === 'en'
-        ? {
-            title: 'Your schedule changed',
-            body: `${actorName(ctx.actor, 'en')} updated your schedule${fechasDe(ctx, 'en')}.`,
-        }
-        : {
-            title: 'Tu horario cambió',
-            body: `${actorName(ctx.actor)} modificó tu horario${fechasDe(ctx)}.`,
-        },
+    text: (ctx, lang) => {
+        // Si vino de una solicitud, intervinieron dos personas y las dos tienen
+        // que quedar en el texto: quien lo pidió y quien lo autorizó.
+        const pedido = ctx.extra?.requesterName;
+        return lang === 'en'
+            ? {
+                title: 'Your schedule changed',
+                body: `${actorName(ctx.actor, 'en')} updated your schedule${fechasDe(ctx, 'en')}`
+                    + (pedido ? `, as requested by ${pedido}` : '') + '.',
+            }
+            : {
+                title: 'Tu horario cambió',
+                body: `${actorName(ctx.actor)} modificó tu horario${fechasDe(ctx)}`
+                    + (pedido ? `, a solicitud de ${pedido}` : '') + '.',
+            };
+    },
+});
+
+// La misma modificación, contada para los OTROS administradores.
+//
+// Es 'personal' y no 'admin' a propósito: el scope 'admin' emite a la sala
+// entera y ahí no se puede dejar a nadie afuera, con lo que el administrador
+// que acaba de hacer el cambio se lo recibiría a sí mismo. Con destinatarios
+// explícitos —los admins menos el actor— cada quien recibe solo lo que no sabe.
+registerStrategy('schedule.changedAdmin', {
+    family: 'schedule',
+    scope: 'personal',
+    level: 'info',
+    action: 'updated',
+    audience: (ctx) => ctx.extra?.adminIds || [],
+    text: (ctx, lang) => {
+        // Sin nombre del empleado la frase se arma igual, en genérico: mejor
+        // "el horario de un empleado" que "el horario de ".
+        const quien = targetName(ctx.target);
+        const pedido = ctx.extra?.requesterName;
+        return lang === 'en'
+            ? {
+                title: 'Schedule modified',
+                body: `${actorName(ctx.actor, 'en')} updated `
+                    + (quien ? `${quien}'s schedule` : 'an employee\'s schedule')
+                    + `${fechasDe(ctx, 'en')}`
+                    + (pedido ? `, as requested by ${pedido}` : '') + '.',
+            }
+            : {
+                title: 'Horario modificado',
+                body: `${actorName(ctx.actor)} modificó el horario de `
+                    + (quien || 'un empleado')
+                    + `${fechasDe(ctx)}`
+                    + (pedido ? `, a solicitud de ${pedido}` : '') + '.',
+            };
+    },
 });
 
 registerStrategy('schedule.changeRequested', {
+    family: 'schedule',
     scope: 'admin',
     level: 'warning',
     action: 'requested',
     text: (ctx, lang) => {
+        // A CUÁNTOS toca, no solo al primero.
+        //
+        // El lote puede cambiar el horario de varias personas de una vez, y
+        // antes el texto nombraba únicamente al primero: un administrador leía
+        // "cambio para Ana" y al aprobar movía la jornada de cinco. Quien
+        // autoriza tiene que saber el alcance de lo que autoriza.
+        const afectados = ctx.extra?.targets || [];
+        const otros = Math.max(0, afectados.length - 1);
         const quien = targetName(ctx.target);
+
+        const paraEs = quien
+            ? ` para ${quien}${otros > 0 ? ` y ${otros} empleado${otros === 1 ? '' : 's'} más` : ''}`
+            : '';
+        const paraEn = quien
+            ? ` for ${quien}${otros > 0 ? ` and ${otros} more employee${otros === 1 ? '' : 's'}` : ''}`
+            : '';
+
         return lang === 'en'
             ? {
                 title: 'Schedule change request',
                 body: `${actorName(ctx.actor, 'en')} requested a schedule change`
-                    + (quien ? ` for ${quien}` : '') + fechasDe(ctx, 'en')
+                    + paraEn + fechasDe(ctx, 'en')
                     + '. Pending your approval.',
             }
             : {
                 title: 'Solicitud de cambio de horario',
                 body: `${actorName(ctx.actor)} solicitó un cambio de horario`
-                    + (quien ? ` para ${quien}` : '') + fechasDe(ctx)
+                    + paraEs + fechasDe(ctx)
                     + '. Pendiente por aprobar.',
+            };
+    },
+});
+
+// Quien la pidió se arrepintió y la retiró. Va al revés que las demás: acá los
+// administradores son los que NO se enteraron, porque la tenían pendiente en su
+// bandeja esperando una decisión que ya no hace falta.
+registerStrategy('schedule.changeWithdrawn', {
+    family: 'schedule',
+    scope: 'personal',
+    level: 'info',
+    action: 'rejected',
+    audience: (ctx) => ctx.extra?.adminIds || [],
+    text: (ctx, lang) => {
+        const quien = targetName(ctx.target);
+        return lang === 'en'
+            ? {
+                title: 'Request withdrawn',
+                body: `${actorName(ctx.actor, 'en')} withdrew their schedule change request`
+                    + (quien ? ` for ${quien}` : '') + fechasDe(ctx, 'en')
+                    + '. Nothing left to approve.',
+            }
+            : {
+                title: 'Solicitud retirada',
+                body: `${actorName(ctx.actor)} retiró su solicitud de cambio de horario`
+                    + (quien ? ` para ${quien}` : '') + fechasDe(ctx)
+                    + '. No queda nada por aprobar.',
             };
     },
 });
@@ -330,6 +545,7 @@ registerStrategy('schedule.changeRequested', {
 // El resultado se le avisa a QUIEN LO PIDIÓ, no a los administradores: ellos ya
 // lo saben porque acaban de decidirlo.
 registerStrategy('schedule.changeApproved', {
+    family: 'schedule',
     scope: 'personal',
     level: 'success',
     action: 'approved',
@@ -351,6 +567,7 @@ registerStrategy('schedule.changeApproved', {
 });
 
 registerStrategy('schedule.changeRejected', {
+    family: 'schedule',
     scope: 'personal',
     level: 'danger',
     action: 'rejected',

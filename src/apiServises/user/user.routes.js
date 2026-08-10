@@ -25,8 +25,13 @@ import { parseISO, format, getDay, startOfDay, isValid } from 'date-fns';
 import { io } from '../../services/socket/io.js'
 import { emitCloseSessionForUser } from '../../services/socket/sessionEvents.js';
 import { overtimeOfDay, accumulateOvertime } from './overtime.lib.js';
-import { applyScheduleUpdates, validateScheduleItem, resolveTargetUser, notifyScheduleApplied } from './scheduleWrite.lib.js';
+import { applyScheduleUpdates, validateScheduleItem, notifyScheduleApplied } from './scheduleWrite.lib.js';
+import {
+    normalizeUpdates, resolveTargets, snapshotSlots,
+    pendingForSlots, emitScheduleRequest,
+} from './scheduleRequest.lib.js';
 import { notify, actorFromSession } from '../notification/notification.service.js';
+import { publishAttendanceMark } from './attendanceMark.lib.js';
 
 
 // Estado con el que nace la hora extra al cerrar la jornada. Si el usuario
@@ -1081,12 +1086,19 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, validateSession, async
             });
         }
 
-        if (!adminUserId || !ObjectId.isValid(adminUserId)) {
-            return res.status(400).json({
-                status: 400,
-                message: 'Se requiere "adminUserId" válido para registrar quién modifica el horario.',
-                error: 'Bad request'
-            });
+        // El autor del cambio sale de la SESIÓN, no del cuerpo de la petición.
+        //
+        // Antes se usaba `adminUserId` tal como lo mandaba el cliente, así que
+        // la auditoría del documento de asistencia —quién creó, quién editó—
+        // decía lo que el front declarara, no quién estaba realmente detrás.
+        // Un id equivocado, o puesto a mano, firmaba el cambio con otro nombre.
+        //
+        // Se sigue aceptando en el cuerpo por compatibilidad con el cliente
+        // actual, pero solo para avisar cuando no coincide: no manda.
+        const authorUserId = req.session.userId;
+
+        if (adminUserId && String(adminUserId) !== String(authorUserId)) {
+            console.log(`[horario] adminUserId del cuerpo (${adminUserId}) ignorado; firma la sesión (${authorUserId}).`);
         }
 
         // ── Camino SOLICITUD: super que no es admin ────────────────────
@@ -1107,11 +1119,31 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, validateSession, async
                 });
             }
 
-            const target = await resolveTargetUser(updates);
-            const fechas = [...new Set(updates.map(u => {
-                const d = new Date(u.date);
-                return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString('es-VE', { timeZone: 'UTC' });
-            }).filter(Boolean))];
+            // Celdas, empleados y foto del "antes", todo en una pasada.
+            const { items, targetIds, slots } = await normalizeUpdates(updates);
+            const targets = await resolveTargets(targetIds);
+
+            // ¿Ya hay una solicitud esperando sobre alguna de estas celdas?
+            // Dejar entrar la segunda deja a los administradores con dos
+            // pendientes contradictorias y, al aprobar las dos, gana la última
+            // sin que nadie lo haya decidido.
+            const enConflicto = await pendingForSlots(slots);
+            if (enConflicto.length > 0) {
+                const previa = enConflicto[0];
+                const quien = `${previa.actor?.name || ''} ${previa.actor?.surName || ''}`.trim();
+                return res.status(409).json({
+                    status: 409,
+                    error: 'Conflict',
+                    message: quien
+                        ? `Ya hay una solicitud pendiente sobre esas fechas, la pidió ${quien}.`
+                        : 'Ya hay una solicitud pendiente sobre esas fechas.',
+                    pendingId: previa._id,
+                    slots: (previa.meta?.slots || []).filter(s => slots.includes(s)),
+                });
+            }
+
+            const target = targets[0] || null;
+            const fechas = [...new Set(items.map(i => i.date.toLocaleDateString('es-VE', { timeZone: 'UTC' })))];
 
             const notification = await notify({
                 type: 'schedule.changeRequested',
@@ -1123,25 +1155,45 @@ routerUser.post(`${nameApi}/user/schedule/dynamic/group`, validateSession, async
                     name: `${target?.name || ''} ${target?.surName || ''}`.trim(),
                     // Al abrirla, el horario resalta a ese empleado en esa fecha
                     path: target?.user
-                        ? `/user?userId=${target.user}&date=${new Date(updates[0].date).toISOString().slice(0, 10)}`
+                        ? `/user?userId=${target.user}&date=${items[0].date.toISOString().slice(0, 10)}`
                         : '/user',
                     img: target?.img || null,
                 },
-                extra: { fechas },
+                extra: { fechas, targets },
+                // `meta` lleva lo que necesita la GRILLA y el control de
+                // conflictos: qué celdas toca, a quiénes, y cómo estaban antes.
+                meta: {
+                    slots,
+                    targets,
+                    before: await snapshotSlots(items),
+                    updatesCount: items.length,
+                },
                 request: { status: 'pending', payload: { updates } },
             });
+
+            // La celda se pinta como pendiente en el acto, sin recargar.
+            if (notification) {
+                emitScheduleRequest('created', {
+                    notificationId: String(notification._id),
+                    slots,
+                    targets,
+                    requestedBy: actorFromSession(req),
+                    createdAt: notification.createdAt,
+                });
+            }
 
             return res.status(202).json({
                 status: 202,
                 pending: true,
                 message: 'El cambio quedó PENDIENTE por aprobación de un administrador.',
                 notificationId: notification?._id || null,
+                slots,
             });
         }
 
         // La escritura vive en scheduleWrite.lib.js: la comparten este camino
         // (el administrador aplica directo) y el de aprobar una solicitud.
-        const { results, errors } = await applyScheduleUpdates(updates, adminUserId);
+        const { results, errors } = await applyScheduleUpdates(updates, authorUserId);
 
         // Avisar a cada empleado que su horario cambió. Va después de escribir
         // y sin await bloqueante sobre la respuesta: el cambio ya está hecho y
@@ -1611,9 +1663,12 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                         { new: true }
                     );
 
-                    const dateEvent = new Date(finalRecord.date);
-                    dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
-                    io.emit(`${dateEvent.toISOString()}-${user.email}`, { finalRecord, user });
+                    await publishAttendanceMark({
+                        record: finalRecord,
+                        user,
+                        kind: 'checkOut',
+                        schedule: { shift: 'Nocturno', endTime: yesterdayEndTime, startTime: yesterdayDayRule?.startTime || null },
+                    });
 
                     // Fin de jornada: los frontends cierran la sesión del usuario
                     emitCloseSessionForUser(user._id);
@@ -1728,6 +1783,16 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
             ? { minutesLate, discountUnits, graceMinutes: LATE_GRACE_MINUTES, startTime: effectiveStartTime }
             : null;
 
+        // Horario efectivo de hoy, para la notificación privada del marcaje.
+        // `minutesLate` va acá porque es lo único del retardo que NO se
+        // persiste en el documento: se calcula al vuelo contra la hora pautada.
+        const marcajeSchedule = {
+            startTime: effectiveStartTime,
+            endTime: effectiveEndTime,
+            shift: effectiveShiftType,
+            minutesLate: realIsLate ? minutesLate : 0,
+        };
+
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // PASO 3 — ENTRADA de turno nocturno de hoy
         // (la salida ya fue manejada en el PASO 1)
@@ -1794,9 +1859,7 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                 await finalRecord.populate('createdBy', 'name surName img');
             }
 
-            const dateEvent = new Date(finalRecord.date);
-            dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
-            io.emit(`${dateEvent.toISOString()}-${user.email}`, { finalRecord, user });
+            await publishAttendanceMark({ record: finalRecord, user, kind: 'checkIn', schedule: marcajeSchedule });
 
             return res.json({
                 finalRecord,
@@ -1830,9 +1893,7 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                     { new: true }
                 );
 
-                const dateEvent = new Date(finalRecord.date);
-                dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
-                io.emit(`${dateEvent.toISOString()}-${user.email}`, { finalRecord, user });
+                await publishAttendanceMark({ record: finalRecord, user, kind: 'checkOut', schedule: marcajeSchedule });
 
                 // Fin de jornada: los frontends cierran la sesión del usuario
                 emitCloseSessionForUser(user._id);
@@ -1857,9 +1918,8 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                 { new: true }
             );
 
-            const dateEvent = new Date(finalRecord.date);
-            dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
-            io.emit(`${dateEvent.toISOString()}-${user.email}`, { finalRecord, user });
+            await publishAttendanceMark({ record: finalRecord, user, kind: 'checkIn', schedule: marcajeSchedule });
+
             return res.json({
                 finalRecord,
                 user,
@@ -1883,9 +1943,8 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
         });
         await finalRecord.populate('createdBy', 'name surName img');
 
-        const dateEvent = new Date(finalRecord.date);
-        dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
-        io.emit(`${dateEvent.toISOString()}-${user.email}`, { finalRecord, user });
+        await publishAttendanceMark({ record: finalRecord, user, kind: 'checkIn', schedule: marcajeSchedule });
+
         return res.json({
             finalRecord,
             user,

@@ -39,14 +39,14 @@ export const ADMIN_ROOM = 'admins';
  * @param {object} [params.request]  { status, payload } para solicitudes
  * @returns {Promise<object|null>} la notificación guardada, o null si falló
  */
-export async function notify({ type, actor, target, resource, changes = [], extra = {}, request } = {}) {
+export async function notify({ type, actor, target, resource, changes = [], extra = {}, meta = null, request } = {}) {
     try {
         // La sesión de Express solo garantiza el NOMBRE. Como la notificación
         // debe decir nombre y apellido, se completa desde la base cuando falta.
         // Es una lectura pequeña y deja el texto correcto para siempre: se
         // guarda renderizado, así que no hay una segunda oportunidad.
         const resolvedActor = await resolveActor(actor);
-        const ctx = { actor: resolvedActor, target, resource, changes, extra };
+        const ctx = { actor: resolvedActor, target, resource, changes, extra, meta };
         const strategy = resolveStrategy(type);
         actor = resolvedActor;
 
@@ -65,6 +65,9 @@ export async function notify({ type, actor, target, resource, changes = [], extr
 
         const doc = await NotificationModel.create({
             type,
+            // La familia sale de la estrategia, no del nombre del tipo: es ella
+            // quien sabe a qué se parece lo que está describiendo.
+            family: strategy.family || 'general',
             scope,
             recipients,
             actor: {
@@ -90,6 +93,7 @@ export async function notify({ type, actor, target, resource, changes = [], extr
             action: strategy.action || 'updated',
             level: strategy.level || 'info',
             changes,
+            meta,
             i18n: {
                 es: strategy.text(ctx, 'es'),
                 en: strategy.text(ctx, 'en'),
@@ -199,6 +203,34 @@ export function diffChanges(before = {}, after = {}, fields = {}) {
     }
 
     return cambios;
+}
+
+
+/**
+ * Ids de los administradores, sin el que se indique.
+ *
+ * Lo usan las notificaciones que van "a los administradores menos el que acaba
+ * de actuar": contarle a alguien lo que él mismo hizo es ruido. Se devuelven
+ * cadenas para poder compararlas sin pelear con ObjectId.
+ *
+ * Si la consulta falla devuelve vacío: quedarse sin avisar a los
+ * administradores es preferible a tumbar el aviso principal.
+ *
+ * @param {string} [exceptUserId]
+ * @returns {Promise<string[]>}
+ */
+export async function adminUserIds(exceptUserId = null) {
+    try {
+        const excluido = String(exceptUserId ?? '');
+        const admins = await UserModel.find({ admin: true }).select('_id').lean();
+        return admins
+            .map(a => String(a._id))
+            .filter(id => id && id !== excluido);
+    }
+    catch (error) {
+        console.log('[notification] no se pudo resolver administradores:', error?.message || error);
+        return [];
+    }
 }
 
 
