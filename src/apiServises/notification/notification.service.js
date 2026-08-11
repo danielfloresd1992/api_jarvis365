@@ -33,7 +33,7 @@ export const ADMIN_ROOM = 'admins';
  * @param {object} params
  * @param {string} params.type      tipo registrado en notification.strategy.js
  * @param {object} params.actor     { user, name, surName, img } quién lo hizo
- * @param {object} [params.resource] { kind, id, name, path } sobre qué
+ * @param {object} [params.resource] { kind, id, name, path, img } sobre qué
  * @param {Array}  [params.changes]  [{ field, label, from, to }]
  * @param {object} [params.extra]    contexto libre para la estrategia
  * @param {object} [params.request]  { status, payload } para solicitudes
@@ -89,6 +89,11 @@ export async function notify({ type, actor, target, resource, changes = [], extr
                 id: resource?.id || null,
                 name: resource?.name || '',
                 path: resource?.path || '',
+                // `img` se quedaba fuera: los controladores lo mandaban, el
+                // modelo lo declaraba, pero acá nunca se copiaba, así que
+                // llegaba siempre en null y la campana caía al ícono genérico.
+                // El logo del establecimiento no se veía por esto.
+                img: resource?.img || null,
             },
             action: strategy.action || 'updated',
             level: strategy.level || 'info',
@@ -237,9 +242,38 @@ export async function adminUserIds(exceptUserId = null) {
 /**
  * Actor a partir de la sesión de Express.
  * Centralizado para que todos los controladores lo armen igual.
+ *
+ * OJO CON `req.session.name`: addCredential.js lo guarda como NOMBRE COMPLETO
+ * ("Daniel Flores") y no existe `req.session.surName`. Usarlo como nombre de
+ * pila dejaba al actor con apellido vacío, resolveActor lo completaba desde la
+ * base y el texto terminaba diciendo "Daniel Flores Flores".
+ *
+ * La sesión sí guarda el documento entero en `dataUser`, que trae nombre,
+ * apellido e imagen por separado: de ahí sale todo, y sin consultar la base.
+ *
+ * Sin `dataUser` —sesión vieja— se devuelve solo el id a propósito: es mejor
+ * que resolveActor lo lea completo de la base a pasarle un nombre compuesto que
+ * volvería a duplicar el apellido.
+ *
+ * LO QUE SE ACEPTA: `dataUser` es una foto del momento del login, así que si
+ * alguien se cambia la imagen de perfil, sus notificaciones seguirán firmadas
+ * con la anterior hasta que vuelva a entrar. Se asume porque acá las sesiones
+ * duran poco —marcar la salida las cierra— y la alternativa era una consulta a
+ * la base por cada notificación, incluidas las que se emiten en lote, una por
+ * empleado.
  */
-export const actorFromSession = (req) => ({
-    user: req?.session?.userId || null,
-    name: req?.session?.name || '',
-    surName: req?.session?.surName || '',
-});
+export const actorFromSession = (req) => {
+    const userId = req?.session?.userId || null;
+    const u = req?.session?.dataUser;
+
+    if (u?.name) {
+        return {
+            user: userId,
+            name: u.name,
+            surName: u.surName || '',
+            img: u.img || null,
+        };
+    }
+
+    return { user: userId };
+};

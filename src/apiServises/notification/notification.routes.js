@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 
 import NotificationModel from './notification.model.js';
 import NotificationReadModel from './notificationRead.model.js';
-import { notify, adminUserIds } from './notification.service.js';
+import { notify, adminUserIds, actorFromSession } from './notification.service.js';
 import { applyScheduleUpdates, notifyScheduleApplied } from '../user/scheduleWrite.lib.js';
 import { staleSlots, emitScheduleRequest, parseSlot } from '../user/scheduleRequest.lib.js';
 import { SYSTEM_USER_ID, SYSTEM_USER_LABEL } from '../../libs/systemUser.js';
@@ -251,7 +251,7 @@ routerNotification.post(`${nameApi}/notifications/:id/decide`, validateAdminUser
             // el aviso no atribuya el cambio solo a quien lo aprobó.
             notifyScheduleApplied(
                 aplicado.results,
-                { user: req.session.userId, name: req.session.name || '' },
+                actorFromSession(req),
                 notification.actor,
             );
 
@@ -275,7 +275,7 @@ routerNotification.post(`${nameApi}/notifications/:id/decide`, validateAdminUser
         // Avisar a quien lo pidió. A los administradores no: acaban de decidirlo.
         await notify({
             type: decision === 'approved' ? 'schedule.changeApproved' : 'schedule.changeRejected',
-            actor: { user: req.session.userId, name: req.session.name || '' },
+            actor: actorFromSession(req),
             target: notification.target,
             resource: notification.resource,
             extra: { requesterId: notification.actor?.user, note: notification.request.note },
@@ -423,11 +423,7 @@ routerNotification.post(`${nameApi}/notifications/:id/withdraw`, validateSession
         // y tienen que saber que ya no hay nada que decidir.
         await notify({
             type: 'schedule.changeWithdrawn',
-            actor: {
-                user: req.session.userId,
-                name: req.session.name || '',
-                surName: req.session.surName || '',
-            },
+            actor: actorFromSession(req),
             target: notification.target,
             resource: notification.resource,
             extra: {

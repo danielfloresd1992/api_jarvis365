@@ -1522,6 +1522,9 @@ routerUser.get(`${nameApi}/user/day-role/today`, validateSession, async (req, re
 // ══════════════════════════════════════════════════════════════════════
 // ENDPOINT: Comentarios de asistencia (solo usuarios super)
 // ══════════════════════════════════════════════════════════════════════
+/** Cuánto del comentario se copia en la notificación. Ver el `meta` de abajo. */
+const COMMENT_PREVIEW_MAX = 400;
+
 // POST .../user/attendance/comment
 // body: { userId | dni, date, message }
 // Agrega un comentario al documento Attendance del día (lo crea si no
@@ -1575,6 +1578,55 @@ routerUser.post(`${nameApi}/user/attendance/comment`, validateSuperUser, async (
         const dateEvent = new Date(record.date);
         dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
         io.emit(`${dateEvent.toISOString()}-${userDoc.email}`, { finalRecord: record, user: userDoc });
+
+        // ── Aviso al equipo ────────────────────────────────────────────
+        // Solo cuando se comenta el día de OTRA persona. Anunciarle a la
+        // plantilla que alguien escribió una nota en su propia celda no le
+        // sirve a nadie, y quien la escribió ya sabe que lo hizo.
+        //
+        // Sin await: el comentario ya está guardado y la respuesta no debe
+        // esperar por el aviso, que además nunca lanza.
+        if (String(targetUserId) !== String(authorId)) {
+            const diaClave = dateObj.toISOString().slice(0, 10);
+
+            notify({
+                type: 'attendance.commented',
+                actor: actorFromSession(req),
+                target: {
+                    user: userDoc._id,
+                    name: userDoc.name || '',
+                    surName: userDoc.surName || '',
+                    img: userDoc.img || null,
+                },
+                resource: {
+                    kind: 'schedule',
+                    id: record._id,
+                    name: `${userDoc.name || ''} ${userDoc.surName || ''}`.trim(),
+                    // `detail=1` le dice al horario que además de ir a la celda
+                    // despliegue su ficha: el aviso es sobre el comentario, y
+                    // dejarlo en la celda cerrada obligaría a buscarlo a mano.
+                    path: `/user?userId=${userDoc._id}&date=${diaClave}&detail=1`,
+                    img: userDoc.img || null,
+                },
+                // El comentario va en `meta` y no en el texto: la vista lo pinta
+                // como cita aparte, y así el título se lee corrido en la campana
+                // por larga que sea la nota.
+                meta: {
+                    // Recortado a propósito: el comentario completo vive en el
+                    // documento de asistencia, que es su sitio. Acá es una
+                    // vista previa, y una nota de cien mil caracteres se
+                    // guardaría en la notificación, viajaría por socket a toda
+                    // la plantilla y se volvería a mandar en cada apertura de
+                    // la campana. La celda tiene el texto entero.
+                    message: cleanMessage.length > COMMENT_PREVIEW_MAX
+                        ? `${cleanMessage.slice(0, COMMENT_PREVIEW_MAX)}…`
+                        : cleanMessage,
+                    dayKey: diaClave,
+                    dayLabel: dateObj.toLocaleDateString('es-VE', { timeZone: 'UTC' }),
+                    attendanceId: String(record._id),
+                },
+            });
+        }
 
         return res.status(200).json({ status: 200, result: record });
     }
