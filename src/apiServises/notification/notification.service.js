@@ -1,7 +1,12 @@
 import NotificationModel from './notification.model.js';
 import UserModel from '../user/user.model.js';
-import { resolveStrategy } from './notification.strategy.js';
+import { resolveStrategy } from './strategies/index.js';
 import { io } from '../../services/socket/io.js';
+import { userRoom, ADMIN_ROOM } from './notification.audience.js';
+
+// Las salas se re-exportan porque otros módulos las importan desde acá desde
+// antes de que existiera notification.audience.js.
+export { userRoom, ADMIN_ROOM };
 
 // ══════════════════════════════════════════════════════════════════════
 // SERVICIO DE NOTIFICACIONES
@@ -16,11 +21,11 @@ import { io } from '../../services/socket/io.js';
 
 export const NOTIFICATION_EVENT = 'notification:new';
 
-/** Sala de socket de un usuario. El cliente se une al conectarse. */
-export const userRoom = (userId) => `user:${String(userId)}`;
 
-/** Sala de administradores, para el scope 'admin'. */
-export const ADMIN_ROOM = 'admins';
+
+
+
+
 
 
 /**
