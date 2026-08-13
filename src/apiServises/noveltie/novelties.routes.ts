@@ -116,7 +116,36 @@ routerNoveltie.get(`${nameApi}/noveltie/local=:local/since=:since/until=:until/p
 
 routerNoveltie.get(`${nameApi}/novelty`, validateSession, controller.getNovelty);
 
-//routerNoveltie.get(`${nameApi}/noveltiesFill-user=:user/&since=:since/&until=:until`, extendSession, validateSession, controller.getfillNoveltie);
+// ══════════════════════════════════════════════════════════════════════
+// NOVEDADES DE UN USUARIO EN UN RANGO — para el cálculo de bonificación
+// ══════════════════════════════════════════════════════════════════════
+// GET /novelties/by-user?userId=<id>&since=YYYY-MM-DD&until=YYYY-MM-DD
+//
+// Ocupa el lugar de `noveltiesFill-user=...`, que estaba comentada acá desde
+// hacía tiempo y cuyo controlador (`getfillNoveltie`) ya no existe.
+//
+// POR QUÉ UNA RUTA NUEVA Y NO AMPLIAR getNoveltiesFilter
+//
+// Esa parecía el candidato natural, pero no sirve para esto:
+//
+//   1. Lleva TODO en parámetros de ruta (`local=:local/since=:since/...`). Un
+//      filtro opcional por usuario obligaría a cambiar la ruta, y con ella a
+//      todos los que ya la llaman.
+//   2. EXIGE `local.name` y filtra por el campo `date`, y en el modelo tanto
+//      `local` como `date` están marcados DEPRECATED. Montar la bonificación
+//      —que decide dinero— sobre dos campos obsoletos es empezar torcido.
+//   3. Fija el tamaño de página en 10 dentro del propio controlador.
+//
+// Esta usa parámetros de consulta, se apoya en `createdAt` —que existe porque
+// el esquema declara `timestamps: true`— y devuelve el resumen ya contado.
+//
+// QUÉ CUENTA COMO "SUS" NOVEDADES
+//
+// Las que la persona REPORTÓ (`sharedByUser.user.id`), no las que validó. La
+// bonificación premia levantar la novedad; validar es otro trabajo y se
+// contaría por otra vía. Quién validó viaja igual en la respuesta, porque una
+// novedad rechazada no debería sumar lo mismo que una aprobada.
+routerNoveltie.get(`${nameApi}/novelties/by-user`, extendSession, validateSession, controller.getNoveltiesByUser);
 
 routerNoveltie.get(`${nameApi}/novelties/id=:id`, validateSession, controller.getNoveltiesById);
 

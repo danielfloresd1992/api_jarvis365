@@ -136,6 +136,105 @@ export default class ControllerNovelty {
 
 
 
+    /**
+     * Novedades que REPORTÓ un usuario dentro de un rango de fechas.
+     *
+     * GET /novelties/by-user?userId=<id>&since=YYYY-MM-DD&until=YYYY-MM-DD
+     *
+     * Alimenta el cálculo de bonificación, así que devuelve dos cosas: el
+     * listado con los datos de la validación de cada novedad, y el resumen ya
+     * contado —cuántas aprobadas, rechazadas y sin decidir—.
+     *
+     * EL RESUMEN SE CUENTA ACÁ, NO EN EL CLIENTE
+     *
+     * Si el listado se paginara y el cliente sumara lo que recibe, el total
+     * sería el de la página y no el del período. Contándolo acá, el resumen es
+     * del rango completo aunque el listado venga recortado.
+     *
+     * EL DÍA `until` ENTRA COMPLETO
+     *
+     * Quien pide "del 1 al 15" espera que el 15 cuente. Cortar en la medianoche
+     * del 15 perdería todo lo reportado ese día, que es justo el error por el
+     * que a alguien le faltaría un bono.
+     */
+    getNoveltiesByUser = async (req: Request, res: any): Promise<void> => {
+        try {
+            const { userId, since, until } = req.query as Record<string, string>;
+
+            if (!userId || !Types.ObjectId.isValid(userId)) {
+                res.status(400).json({
+                    status: 400, error: 'Bad request',
+                    message: 'Se requiere "userId" válido.',
+                });
+                return;
+            }
+
+            const desde = since ? new Date(`${since}T00:00:00.000Z`) : null;
+            const hasta = until ? new Date(`${until}T00:00:00.000Z`) : null;
+
+            if ((desde && Number.isNaN(desde.getTime())) || (hasta && Number.isNaN(hasta.getTime()))) {
+                res.status(400).json({
+                    status: 400, error: 'Bad request',
+                    message: 'Las fechas deben tener el formato YYYY-MM-DD.',
+                });
+                return;
+            }
+            if (desde && hasta && desde > hasta) {
+                res.status(400).json({
+                    status: 400, error: 'Bad request',
+                    message: 'La fecha inicial no puede ser posterior a la final.',
+                });
+                return;
+            }
+
+            const query: any = { 'sharedByUser.user.id': new Types.ObjectId(userId) };
+
+            if (desde || hasta) {
+                query.createdAt = {};
+                if (desde) query.createdAt.$gte = desde;
+                if (hasta) {
+                    // El día final entra entero: se corta al empezar el siguiente.
+                    const finDelDia = new Date(hasta);
+                    finDelDia.setUTCDate(finDelDia.getUTCDate() + 1);
+                    query.createdAt.$lt = finDelDia;
+                }
+            }
+
+            const novedades: any[] = await NoveltieModel
+                .find(query)
+                .populate('sharedByUser.user.id validationResult.validatedByUser.user.id establishment')
+                .sort({ createdAt: -1 })
+                // Fuera lo pesado y lo obsoleto: acá se cuenta y se revisa, no
+                // se reproducen imágenes ni videos.
+                .select('-fileNoveltie -rulesForBonus -isValidate -menu -userPublic -description -local -imageUrl -videoUrl -imageToShare')
+                .lean();
+
+            // `isApproved` puede venir true, false o sin definir, y los tres
+            // significan cosas distintas: aprobada, rechazada y sin revisar.
+            const aprobadas = novedades.filter(n => n?.validationResult?.isApproved === true).length;
+            const rechazadas = novedades.filter(n => n?.validationResult?.isApproved === false).length;
+
+            res.status(200).json({
+                status: 200,
+                userId,
+                since: since || null,
+                until: until || null,
+                resumen: {
+                    total: novedades.length,
+                    aprobadas,
+                    rechazadas,
+                    sinValidar: novedades.length - aprobadas - rechazadas,
+                },
+                novelties: novedades,
+            });
+        }
+        catch (err) {
+            console.log(err);
+            res.status(500).json({ status: 500, error: 'Error server internal', message: (err as Error).message });
+        }
+    };
+
+
     getNoveltiesFilter = async (req: Request, res: any): Promise<void> => {
         try {
             const name = req.params.local;
