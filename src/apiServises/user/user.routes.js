@@ -32,6 +32,7 @@ import {
 } from './scheduleRequest.lib.js';
 import { notify, actorFromSession } from '../notification/notification.service.js';
 import { publishAttendanceMark } from './attendanceMark.lib.js';
+import { esAltaDeHoy } from './newEmployee.lib.js';
 
 
 // Estado con el que nace la hora extra al cerrar la jornada. Si el usuario
@@ -1819,13 +1820,26 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
             || (!hasOverride && dayRule?.workType === 'extra');
 
         const LATE_GRACE_MINUTES = 8;
-        const shouldCheckLate = hasOverride ? true : user?.workSchedule?.lateArrivalControl;
+
+        // Su PRIMER día no se le cobra. A quien se acaba de dar de alta se le
+        // arma el horario el mismo día, muchas veces cuando ya empezó a
+        // trabajar: cobrarle un retardo contra una hora pautada que hace un
+        // rato no existía es cobrarle un error de captura. Ver newEmployee.lib.
+        const esNuevoHoy = esAltaDeHoy(user, now);
+
+        const shouldCheckLate = esNuevoHoy
+            ? false
+            : (hasOverride ? true : user?.workSchedule?.lateArrivalControl);
         const realIsLate = shouldCheckLate
             ? nowMinutes > (startMinutes + LATE_GRACE_MINUTES)
             : false;
 
         // Unidades a descontar por el retardo (1 por bloque de 20 min pasada
         // la tolerancia), persistidas en el documento al marcar la entrada.
+        //
+        // `minutesLate` se sigue calculando aunque sea su primer día: sirve
+        // para el aviso —"entraste 40 minutos después de tu hora"— sin que eso
+        // se convierta en descuento, porque `realIsLate` ya es false.
         const minutesLate = Math.max(0, nowMinutes - startMinutes);
         const discountUnits = realIsLate ? computeDiscountUnits(minutesLate) : 0;
 

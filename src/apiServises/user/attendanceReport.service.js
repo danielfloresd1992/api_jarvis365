@@ -1,4 +1,5 @@
 import moment from 'moment-timezone';
+import { esAltaDeHoy } from './newEmployee.lib.js';
 import UserModel from './user.model.js';
 import AttendanceModel from './attendance.model.js';
 import { SYSTEM_USER_ID } from '../../libs/systemUser.js';
@@ -187,6 +188,26 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
             startTime: rule.startTime,
             endTime: rule.endTime
         };
+
+        // 0) Dado de alta HOY: su primer día no se le cobra.
+        //
+        // Va ANTES que todo lo demás, incluso antes de la falta ya registrada,
+        // porque es la única regla que habla de si corresponde evaluarlo: a
+        // alguien que entró hoy se le arma el horario el mismo día, a veces
+        // cuando ya empezó a trabajar. Sin esto, el corte de las 15:00 le
+        // registra una falta automática a quien se dio de alta a las 14:00.
+        //
+        // Sale por `notRequired`, que es el cajón de "hoy no se le exige":
+        // aparece en el reporte con su motivo, pero no cuenta como ausente ni
+        // como retardo y no alimenta el registro automático de faltas.
+        if (esAltaDeHoy(user, referenceDate)) {
+            notRequired.push({
+                ...base,
+                reason: 'alta de hoy',
+                note: 'Primer día: no genera falta ni llegada tarde',
+            });
+            continue;
+        }
 
         // 1) Falta registrada (manual del admin o automática del corte):
         //    PREVALECE incluso si marcó entrada después — pasada la hora del
