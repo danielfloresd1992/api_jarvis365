@@ -1,10 +1,31 @@
 import controller from './menu.controller.js';
+import categoryController from './menuCategory.controller.js';
 import express from 'express';
 import menuSchema from './menu.schema.js'
 import MenuModel from './menu.model.js';
 import { extendSession, validateSession, validateSessionAndUserSuper, validateSuperUser, validateAdminUser } from '../../middleware/validateSessionAndUser.js';
 import nameApi from '../../libs/name_api.js';
 const routerMenu = express.Router();
+
+
+
+// ── Catálogo de categorías ────────────────────────────────────────────
+// Van PRIMERO, antes de las rutas con parámetro. Hoy no hay ambigüedad
+// —'/menu/categories' no encaja en '/menu/category=:category' ni en
+// '/menu/id=:id'—, pero Express resuelve por orden de registro y la primera
+// que encaje se queda con la petición: si mañana alguien agrega
+// '/menu/:algo', estas seguirían funcionando por estar arriba.
+//
+// La lista la puede ver cualquier sesión (se necesita para elegir categoría al
+// crear una alerta); crear, editar y borrar es solo de super usuario.
+
+routerMenu.get(`${nameApi}/menu/categories`, extendSession, validateSession, categoryController.getCategories);
+
+routerMenu.post(`${nameApi}/menu/categories`, extendSession, validateSuperUser, categoryController.createCategory);
+
+routerMenu.put(`${nameApi}/menu/categories/id=:id`, extendSession, validateSuperUser, categoryController.updateCategory);
+
+routerMenu.delete(`${nameApi}/menu/categories/id=:id`, extendSession, validateSuperUser, categoryController.deleteCategory);
 
 
 
