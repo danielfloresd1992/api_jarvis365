@@ -448,15 +448,28 @@ const construir = () => new Promise((resolveDoc, reject) => {
         ]);
 
     // ── Pie de página en todas ──
+    //
+    // OJO: el pie se dibuja por DEBAJO del margen inferior, y pdfkit agrega una
+    // pagina nueva en cuanto se escribe texto fuera del area util. Con cinco
+    // paginas de contenido eso generaba diez hojas en blanco al final, una por
+    // cada llamada a `text`. Se anula el margen mientras se pinta y se
+    // restaura despues.
     const rango = doc.bufferedPageRange();
     for (let i = 0; i < rango.count; i++) {
         doc.switchToPage(rango.start + i);
+
+        const margenInferior = doc.page.margins.bottom;
+        doc.page.margins.bottom = 0;
+
         doc.rect(0, PAGE.height - 22, PAGE.width, 22).fill(COLORS.cream);
         doc.fill(COLORS.muted).font('Helvetica').fontSize(7.6)
             .text('Jarvis365 · Sistema de notificaciones · Guía técnica',
-                PAGE.margin, PAGE.height - 15, { width: W / 2 });
+                PAGE.margin, PAGE.height - 15, { width: W / 2, lineBreak: false });
         doc.text(`Página ${i + 1} de ${rango.count}`,
-            PAGE.margin + W / 2, PAGE.height - 15, { width: W / 2, align: 'right' });
+            PAGE.margin + W / 2, PAGE.height - 15,
+            { width: W / 2, align: 'right', lineBreak: false });
+
+        doc.page.margins.bottom = margenInferior;
     }
 
     doc.end();

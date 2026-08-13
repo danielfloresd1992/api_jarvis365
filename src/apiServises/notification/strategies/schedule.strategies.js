@@ -1,5 +1,6 @@
 import { registerStrategy } from './registry.js';
 import { actorName, targetName, fechasDe } from './helpers.js';
+import { resumenDeCambios } from '../../user/scheduleLabels.lib.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // PERSONAL — impacta directamente a un usuario
@@ -40,17 +41,60 @@ registerStrategy('schedule.changed', {
         // Si vino de una solicitud, intervinieron dos personas y las dos tienen
         // que quedar en el texto: quien lo pidió y quien lo autorizó.
         const pedido = ctx.extra?.requesterName;
+
+        // Se dice QUÉ se puso, no solo que hubo un cambio: "Falta el
+        // 12/08/2026" en lugar de "modificó tu horario el 12/08/2026". Sin el
+        // tipo había que abrir la grilla para enterarse de qué se trataba.
+        //
+        // Si el aviso es viejo y no trae el detalle, se cae a la lista de
+        // fechas de siempre: los avisos anteriores se siguen leyendo bien.
+        const que = resumenDeCambios(ctx.extra?.cambios || [], lang);
+
         return lang === 'en'
             ? {
-                title: 'Your schedule changed',
-                body: `${actorName(ctx.actor, 'en')} updated your schedule${fechasDe(ctx, 'en')}`
+                title: que ? `Your schedule: ${que}` : 'Your schedule changed',
+                body: `${actorName(ctx.actor, 'en')} updated your schedule`
+                    + (que ? ` — ${que}` : fechasDe(ctx, 'en'))
                     + (pedido ? `, as requested by ${pedido}` : '') + '.',
             }
             : {
-                title: 'Tu horario cambió',
-                body: `${actorName(ctx.actor)} modificó tu horario${fechasDe(ctx)}`
+                title: que ? `Tu horario: ${que}` : 'Tu horario cambió',
+                body: `${actorName(ctx.actor)} modificó tu horario`
+                    + (que ? ` — ${que}` : fechasDe(ctx))
                     + (pedido ? `, a solicitud de ${pedido}` : '') + '.',
             };
+    },
+});
+
+// Guardia o auxiliar del día.
+//
+// Se separa de `schedule.changed` porque no es lo mismo: aquello cambia QUÉ
+// jornada te toca —libre, falta, permiso—; esto te da un papel dentro de una
+// jornada que sigue igual. Mezclarlos obligaría a un texto que valiera para las
+// dos cosas, y no hay ninguno que las diga bien.
+registerStrategy('schedule.dayRole', {
+    family: 'schedule',
+    scope: 'personal',
+    level: 'info',
+    action: 'updated',
+    audience: (ctx) => [ctx.extra?.targetUserId].filter(Boolean),
+    text: (ctx, lang) => {
+        const c = ctx.extra?.cambio || {};
+        const rol = (lang === 'en' ? c.etiquetaEn : c.etiqueta) || '';
+        const fecha = c.fecha || '';
+        const quien = actorName(ctx.actor, lang);
+
+        // Quitar el rol también se avisa: enterarse de que ya NO te toca la
+        // guardia importa tanto como enterarse de que sí.
+        if (c.asignado === false) {
+            return lang === 'en'
+                ? { title: `${rol} removed`, body: `${quien} removed you as ${rol.toLowerCase()}${fecha ? ` on ${fecha}` : ''}.` }
+                : { title: `${rol} retirada`, body: `${quien} te quitó ${rol.toLowerCase()}${fecha ? ` del ${fecha}` : ''}.` };
+        }
+
+        return lang === 'en'
+            ? { title: fecha ? `${rol} on ${fecha}` : rol, body: `${quien} assigned you as ${rol.toLowerCase()}${fecha ? ` on ${fecha}` : ''}.` }
+            : { title: fecha ? `${rol} del ${fecha}` : rol, body: `${quien} te asignó ${rol.toLowerCase()}${fecha ? ` el ${fecha}` : ''}.` };
     },
 });
 
@@ -71,19 +115,21 @@ registerStrategy('schedule.changedAdmin', {
         // "el horario de un empleado" que "el horario de ".
         const quien = targetName(ctx.target);
         const pedido = ctx.extra?.requesterName;
+        const que = resumenDeCambios(ctx.extra?.cambios || [], lang);
+
         return lang === 'en'
             ? {
-                title: 'Schedule modified',
+                title: que ? `Schedule: ${que}` : 'Schedule modified',
                 body: `${actorName(ctx.actor, 'en')} updated `
                     + (quien ? `${quien}'s schedule` : 'an employee\'s schedule')
-                    + `${fechasDe(ctx, 'en')}`
+                    + (que ? ` — ${que}` : fechasDe(ctx, 'en'))
                     + (pedido ? `, as requested by ${pedido}` : '') + '.',
             }
             : {
-                title: 'Horario modificado',
+                title: que ? `Horario: ${que}` : 'Horario modificado',
                 body: `${actorName(ctx.actor)} modificó el horario de `
                     + (quien || 'un empleado')
-                    + `${fechasDe(ctx)}`
+                    + (que ? ` — ${que}` : fechasDe(ctx))
                     + (pedido ? `, a solicitud de ${pedido}` : '') + '.',
             };
     },

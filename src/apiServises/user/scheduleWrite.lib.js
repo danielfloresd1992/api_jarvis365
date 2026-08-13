@@ -3,6 +3,7 @@ import UserModel from './user.model.js';
 import AttendanceModel from './attendance.model.js';
 import { io } from '../../services/socket/io.js';
 import { notify, adminUserIds } from '../notification/notification.service.js';
+import { detalleDelCambio } from './scheduleLabels.lib.js';
 
 const { ObjectId } = mongoose.Types;
 
@@ -185,14 +186,16 @@ export async function notifyScheduleApplied(results = [], actor, requester = nul
         ? `${requester.name || ''} ${requester.surName || ''}`.trim()
         : '';
 
-    // Fechas por empleado
+    // Cambios por empleado, con QUÉ se le puso cada día.
+    //
+    // Antes solo se guardaba la fecha, así que el aviso decía "modificó tu
+    // horario el 12/08" y para saber si te habían puesto falta, libre o
+    // vacaciones había que abrir la grilla e ir a mirar la celda.
     const porUsuario = new Map();
     for (const record of results) {
         const key = String(record.userId);
         if (!porUsuario.has(key)) porUsuario.set(key, []);
-        porUsuario.get(key).push(
-            new Date(record.date).toLocaleDateString('es-VE', { timeZone: 'UTC' }),
-        );
+        porUsuario.get(key).push(detalleDelCambio(record));
     }
 
     // Los nombres en UNA consulta, no una por empleado
@@ -206,7 +209,7 @@ export async function notifyScheduleApplied(results = [], actor, requester = nul
     // empleado.
     const adminIds = await adminUserIds(actor?.user ?? actor?._id ?? null);
 
-    for (const [userId, fechas] of porUsuario) {
+    for (const [userId, cambios] of porUsuario) {
         const user = porId.get(userId);
         if (!user) continue;
 
@@ -223,7 +226,12 @@ export async function notifyScheduleApplied(results = [], actor, requester = nul
             path: `/user?userId=${userId}&date=${new Date(results.find(r => String(r.userId) === userId).date).toISOString().slice(0, 10)}`,
             img: user.img || null,
         };
-        const fechasUnicas = [...new Set(fechas)];
+        // Una fecha puede aparecer dos veces si el lote la tocó dos veces:
+        // manda la ÚLTIMA escritura, que es la que quedó en la celda.
+        const porDia = new Map();
+        cambios.forEach(c => porDia.set(c.dayKey, c));
+        const cambiosUnicos = [...porDia.values()].sort((a, b) => a.dayKey.localeCompare(b.dayKey));
+        const fechasUnicas = cambiosUnicos.map(c => c.fecha);
 
         // Al empleado: "tu horario cambió".
         await notify({
@@ -231,7 +239,10 @@ export async function notifyScheduleApplied(results = [], actor, requester = nul
             actor,
             target,
             resource,
-            extra: { fechas: fechasUnicas, targetUserId: userId, requesterName },
+            extra: { fechas: fechasUnicas, targetUserId: userId, requesterName, cambios: cambiosUnicos },
+            // `meta` lleva el desglose que pinta la vista: cada día con lo que
+            // se le puso, para poder resaltarlo sin volver a consultar nada.
+            meta: { cambios: cambiosUnicos },
         });
 
         // A los demás administradores: "X modificó el horario de Y". Son dos
@@ -247,7 +258,8 @@ export async function notifyScheduleApplied(results = [], actor, requester = nul
                 actor,
                 target,
                 resource,
-                extra: { fechas: fechasUnicas, targetUserId: userId, adminIds: paraAdmins, requesterName },
+                extra: { fechas: fechasUnicas, targetUserId: userId, adminIds: paraAdmins, requesterName, cambios: cambiosUnicos },
+                meta: { cambios: cambiosUnicos },
             });
         }
     }

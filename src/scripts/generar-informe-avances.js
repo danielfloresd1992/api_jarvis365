@@ -1,12 +1,13 @@
 import PDFDocument from 'pdfkit';
 import { writeFileSync, mkdirSync } from 'fs';
-import { dirname, resolve } from 'path';
+import { dirname, resolve, join } from 'path';
+import { homedir } from 'os';
 import { fileURLToPath } from 'url';
 
 // ══════════════════════════════════════════════════════════════════════
 // INFORME DE AVANCES — para leer, no para programar
 // ══════════════════════════════════════════════════════════════════════
-// Produce docs/informe-avances.pdf.
+// Deja el PDF en el ESCRITORIO (o en la ruta que se le pase como argumento).
 //
 //     npm run build && node dist/scripts/generar-informe-avances.js
 //
@@ -137,6 +138,33 @@ const antesAhora = (doc, filas) => {
 };
 
 
+/** Una jornada de la línea de tiempo: fecha a la izquierda, hitos a la derecha. */
+const dia = (doc, fecha, hitos) => {
+    doc.font('Helvetica').fontSize(9.5);
+    const textoW = W - 92;
+    const alto = hitos.reduce((acc, h) =>
+        acc + doc.heightOfString(h, { width: textoW, lineGap: 1.8 }) + 5, 0) + 12;
+
+    ensure(doc, alto + 8);
+    const y = doc.y + 4;
+
+    doc.rect(PAGE.margin, y, 78, alto).fill(COLORS.cream);
+    doc.fill(COLORS.band).font('Helvetica-Bold').fontSize(9)
+        .text(fecha, PAGE.margin + 8, y + 8, { width: 64 });
+
+    let cursor = y + 7;
+    hitos.forEach(h => {
+        const hAlto = doc.heightOfString(h, { width: textoW, lineGap: 1.8 });
+        doc.circle(PAGE.margin + 90, cursor + 5, 1.8).fill(COLORS.accent);
+        doc.fill(COLORS.text).font('Helvetica').fontSize(9.5)
+            .text(h, PAGE.margin + 98, cursor, { width: textoW, lineGap: 1.8 });
+        cursor += hAlto + 5;
+    });
+
+    doc.y = y + alto + 6;
+};
+
+
 // ══════════════════════════════════════════════════════════════════════
 
 const construir = () => new Promise((resolveDoc, reject) => {
@@ -158,8 +186,10 @@ const construir = () => new Promise((resolveDoc, reject) => {
         .text('Novedades de la plataforma', PAGE.margin, 48, { width: W });
     doc.font('Helvetica').fontSize(13.5)
         .text('Qué se agregó y qué cambia en el día a día', PAGE.margin, 86, { width: W });
+    doc.font('Helvetica-Bold').fontSize(10.5)
+        .text('Del jueves 6 al jueves 13 de agosto de 2026', PAGE.margin, 110, { width: W });
     doc.fontSize(9.5).fillOpacity(0.85)
-        .text(`Amazonas365  ·  ${generado}`, PAGE.margin, 128, { width: W });
+        .text(`Amazonas365  ·  Generado el ${generado}`, PAGE.margin, 132, { width: W });
     doc.fillOpacity(1);
     doc.y = 206;
 
@@ -169,8 +199,9 @@ const construir = () => new Promise((resolveDoc, reject) => {
         + 'sistema, sino qué se puede hacer ahora que antes no se podía.');
 
     parrafo(doc,
-        'El hilo que une casi todo lo nuevo es el mismo: que la información llegue sola a quien '
-        + 'le corresponde, en el momento, sin que nadie tenga que estar revisando pantallas.');
+        'Recoge el trabajo de una semana, del jueves 6 al jueves 13 de agosto. El hilo que une '
+        + 'casi todo es el mismo: que la información llegue sola a quien le corresponde, en el '
+        + 'momento, sin que nadie tenga que estar revisando pantallas.');
 
     // ── 1 ──
     titulo(doc, 'Avisos en tiempo real', 1);
@@ -247,8 +278,8 @@ const construir = () => new Promise((resolveDoc, reject) => {
 
     vinetas(doc, [
         'Lo aprobado, lo pendiente y lo rechazado se ven por separado y siempre suman el total generado.',
-        'En la grilla se distinguen por color: verde aprobadas, azul esperando decisión, rojo rechazadas.',
-        'Los reportes individuales y globales muestran las mismas cifras que la grilla.',
+        'En la grilla se distinguen por color: verde aprobadas, azul esperando decisión, rojo rechazadas. La leyenda del panel lateral explica cada color.',
+        'Los reportes individuales y globales muestran las mismas cifras que la grilla, y el global suma el total aprobado de toda la plantilla.',
     ]);
 
     nota(doc,
@@ -291,7 +322,26 @@ const construir = () => new Promise((resolveDoc, reject) => {
         + 'pantalla.');
 
     // ── 8 ──
-    titulo(doc, 'Reportes Express: la app de monitoreo', 8);
+    titulo(doc, 'Novedades y alertas', 8);
+    entradilla(doc, 'Un arreglo puntual que evitaba perder material.');
+
+    parrafo(doc,
+        'Cuando una alerta tiene video e imagen y al grupo se envió la imagen, el botón para '
+        + 'descargar el video queda disponible igual. Antes, haber enviado la foto dejaba el '
+        + 'video fuera de alcance aunque estuviera grabado.');
+
+    // ── 9 ──
+    titulo(doc, 'Orden interno y documentación', 9);
+    entradilla(doc, 'No se ve en pantalla, pero es lo que permite seguir avanzando rápido.');
+
+    vinetas(doc, [
+        'Los archivos más grandes del horario y de los avisos se repartieron en piezas con nombre propio, sin cambiar cómo funcionan. Un archivo de dos mil trescientas líneas con ocho pantallas dentro se volvió una carpeta donde cada cosa está donde uno la busca.',
+        'Se escribió una guía técnica del sistema de avisos que se genera leyendo el propio código, así que no puede quedar desactualizada.',
+        'Cada cambio de esta semana quedó verificado antes de publicarse: se comprobó que lo reorganizado se comporta exactamente igual que antes.',
+    ]);
+
+    // ── 10 ──
+    titulo(doc, 'Reportes Express: la app de monitoreo', 10);
     entradilla(doc, 'Los mismos avisos, en la aplicación de las estaciones.');
 
     vinetas(doc, [
@@ -301,7 +351,7 @@ const construir = () => new Promise((resolveDoc, reject) => {
     ]);
 
     // ── 9 ──
-    titulo(doc, 'Confiabilidad', 9);
+    titulo(doc, 'Confiabilidad', 11);
     entradilla(doc, 'Menos formas de equivocarse sin darse cuenta.');
 
     antesAhora(doc, [
@@ -316,8 +366,44 @@ const construir = () => new Promise((resolveDoc, reject) => {
         'Las notificaciones ya no repiten el apellido de quien las firma ni pierden la foto del establecimiento.',
     ]);
 
-    // ── 10 ──
-    titulo(doc, 'Qué falta para que todo esto se vea', 10);
+    // ── 12 ──
+    titulo(doc, 'La semana, día por día', 12);
+    entradilla(doc, 'El mismo trabajo, en el orden en que se hizo.');
+
+    dia(doc, 'Vie 7', [
+        'Cálculo de horas extras a partir de la entrada y la salida, con aprobación.',
+        'Aprobación parcial: se puede autorizar solo una parte de lo generado.',
+        'Horas extras en el reporte global, leyenda de colores y rechazadas en rojo.',
+        'Refuerzo del registro automático de faltas en el corte del día.',
+        'Descarga del video cuando al grupo se envió la imagen.',
+    ]);
+    dia(doc, 'Dom 9', [
+        'Sistema de avisos: se guardan, llegan en el momento y se distinguen por tipo.',
+        'La campana, con su bandeja y su contador.',
+        'El logo del establecimiento aparece en su aviso.',
+        'Solicitudes de cambio de horario con aprobación de un administrador.',
+    ]);
+    dia(doc, 'Lun 10', [
+        'Aviso privado del marcaje, con las dos fotos y el resultado de la jornada.',
+        'Aceptar o rechazar solicitudes desde la propia celda del horario.',
+        'Bloqueo del doble envío en todo el horario.',
+        'La bandeja carga de siete en siete y deja de estirarse.',
+    ]);
+    dia(doc, 'Mar 11', [
+        'Los comentarios del horario avisan al equipo y abren la celda comentada.',
+        'Reorganización de las pantallas del horario para poder mantenerlas.',
+    ]);
+    dia(doc, 'Mié 12', [
+        'Reorganización del sistema de avisos y guía técnica que se genera sola.',
+    ]);
+    dia(doc, 'Jue 13', [
+        'Al personal dado de alta hoy no se le registra falta ni llegada tarde.',
+        'La bandeja de la app de monitoreo adopta el aspecto de esa aplicación.',
+        'Descarga del directorio de personal activo en Excel.',
+    ]);
+
+    // ── 13 ──
+    titulo(doc, 'Qué falta para que todo esto se vea', 13);
 
     nota(doc,
         'Buena parte de lo descrito ya está publicado y funcionando en las pantallas. Pero varias '
@@ -338,14 +424,30 @@ const construir = () => new Promise((resolveDoc, reject) => {
         + 'funciones todavía no responden.');
 
     // ── Pie ──
+    //
+    // OJO CON ESTO: el pie se dibuja por DEBAJO del margen inferior, y pdfkit
+    // agrega una pagina nueva en cuanto se escribe texto fuera del area util.
+    // Con cuatro paginas de contenido eso generaba ocho paginas en blanco al
+    // final del documento, una por cada llamada a `text`.
+    //
+    // Se anula el margen inferior mientras se pinta el pie y se restaura
+    // despues. Sin esta linea el documento vuelve a llenarse de hojas vacias.
     const rango = doc.bufferedPageRange();
     for (let i = 0; i < rango.count; i++) {
         doc.switchToPage(rango.start + i);
+
+        const margenInferior = doc.page.margins.bottom;
+        doc.page.margins.bottom = 0;
+
         doc.rect(0, PAGE.height - 24, PAGE.width, 24).fill(COLORS.cream);
         doc.fill(COLORS.muted).font('Helvetica').fontSize(7.8)
-            .text('Amazonas365 · Novedades de la plataforma', PAGE.margin, PAGE.height - 16, { width: W / 2 });
+            .text('Amazonas365 · Novedades de la plataforma', PAGE.margin, PAGE.height - 16,
+                { width: W / 2, lineBreak: false });
         doc.text(`Página ${i + 1} de ${rango.count}`,
-            PAGE.margin + W / 2, PAGE.height - 16, { width: W / 2, align: 'right' });
+            PAGE.margin + W / 2, PAGE.height - 16,
+            { width: W / 2, align: 'right', lineBreak: false });
+
+        doc.page.margins.bottom = margenInferior;
     }
 
     doc.end();
@@ -353,8 +455,11 @@ const construir = () => new Promise((resolveDoc, reject) => {
 
 
 const main = async () => {
-    const aqui = dirname(fileURLToPath(import.meta.url));
-    const destino = resolve(aqui, '..', '..', 'docs', 'informe-avances.pdf');
+    // Por defecto va al ESCRITORIO, que es donde se necesita para compartirlo.
+    // Se puede pasar otra ruta como argumento.
+    const destino = process.argv[2]
+        ? resolve(process.argv[2])
+        : join(homedir(), 'Desktop', 'novedades-plataforma.pdf');
 
     const pdf = await construir();
     mkdirSync(dirname(destino), { recursive: true });

@@ -32,6 +32,7 @@ import {
 } from './scheduleRequest.lib.js';
 import { notify, actorFromSession } from '../notification/notification.service.js';
 import { publishAttendanceMark } from './attendanceMark.lib.js';
+import { etiquetaRol, claveDia, fechaCorta } from './scheduleLabels.lib.js';
 import { esAltaDeHoy } from './newEmployee.lib.js';
 
 
@@ -1341,6 +1342,42 @@ const makeDayRoleHandler = ({ field, subject, label, taken }) => async (req, res
         const dateEvent = new Date(record.date);
         dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
         io.emit(`${dateEvent.toISOString()}-${userDoc.email}`, { finalRecord: record, user: userDoc });
+
+        // ── Aviso al empleado ──────────────────────────────────────────
+        // Designar la guardia o el auxiliar del día ES un cambio de horario y
+        // hasta ahora no avisaba a nadie: se enteraba quien mirara la grilla.
+        //
+        // Solo cuando el valor CAMBIA. Volver a guardar lo mismo no es noticia.
+        if (prevValue !== value) {
+            const cambio = {
+                dayKey: claveDia(record.date),
+                fecha: fechaCorta(record.date),
+                rol: field,
+                etiqueta: etiquetaRol(field),
+                etiquetaEn: etiquetaRol(field, 'en'),
+                asignado: value,
+            };
+
+            notify({
+                type: 'schedule.dayRole',
+                actor: actorFromSession(req),
+                target: {
+                    user: userDoc._id,
+                    name: userDoc.name || '',
+                    surName: userDoc.surName || '',
+                    img: userDoc.img || null,
+                },
+                resource: {
+                    kind: 'schedule',
+                    id: userDoc._id,
+                    name: `${userDoc.name || ''} ${userDoc.surName || ''}`.trim(),
+                    path: `/user?userId=${userDoc._id}&date=${cambio.dayKey}`,
+                    img: userDoc.img || null,
+                },
+                extra: { targetUserId: String(userDoc._id), cambio },
+                meta: { cambios: [cambio] },
+            });
+        }
 
         return res.status(200).json({ status: 200, result: record });
     }
