@@ -1,5 +1,30 @@
 # Documentación de jarvis_api
 
+## Informe de novedades (para leer, no para programar)
+
+**[informe-avances.pdf](informe-avances.pdf)** — qué se agregó a la plataforma
+y qué cambia en el día a día, en lenguaje llano. Es el documento que se le
+enseña a alguien que no toca el código: gerencia, RRHH, un supervisor nuevo.
+
+Incluye una última sección con lo que todavía depende de actualizar el
+servidor central a mano, que es la diferencia entre "está hecho" y "se ve".
+
+### Cómo regenerarlo
+
+```bash
+npm run build
+node dist/scripts/generar-informe-avances.js
+```
+
+A diferencia de la guía técnica, **este texto está redactado, no se deduce del
+código**. Cuando se sumen funciones nuevas hay que escribirlas en el generador:
+[`src/scripts/generar-informe-avances.js`](../src/scripts/generar-informe-avances.js).
+
+Regla al ampliarlo: si una frase necesita saber qué es un *endpoint*, un
+*socket* o una colección, está mal escrita para este documento.
+
+---
+
 ## Guía del sistema de notificaciones
 
 **[guia-sistema-notificaciones.pdf](guia-sistema-notificaciones.pdf)** — cómo
