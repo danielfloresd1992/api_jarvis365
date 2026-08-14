@@ -5,6 +5,7 @@ import NotificationModel from '../notification.model.js';
 import { notify, adminUserIds, actorFromSession } from '../notification.service.js';
 import { applyScheduleUpdates, notifyScheduleApplied } from '../../user/scheduleWrite.lib.js';
 import { staleSlots, emitScheduleRequest, parseSlot } from '../../user/scheduleRequest.lib.js';
+import { isMenuRequest, applyMenuRequest, notifyMenuApplied } from '../../menu/menuRequest.lib.js';
 import { validateSession, validateAdminUser } from '../../../middleware/validateSessionAndUser.js';
 
 // ══════════════════════════════════════════════════════════════════════
@@ -64,6 +65,70 @@ routerNotification.post(`${nameApi}/notifications/:id/decide`, validateAdminUser
                 status: 409, error: 'Conflict',
                 message: `Esta solicitud ya fue ${estados[notification.request?.status] || 'resuelta'}.`,
             });
+        }
+
+        // ── Solicitudes sobre una ALERTA ──────────────────────────────
+        // Se resuelven acá y se sale: el resto de esta ruta es del horario y no
+        // hay nada que compartir salvo el registro de la decisión.
+        //
+        // Va antes que todo lo demás a propósito. Más abajo se consultan celdas
+        // del horario y se comparan con lo que había; una solicitud de alerta no
+        // tiene ninguna de las dos cosas y caería en comprobaciones que no le
+        // corresponden.
+        if (isMenuRequest(notification)) {
+            let alertaResultante = null;
+
+            if (decision === 'approved') {
+                const resultado = await applyMenuRequest(notification.request.payload, req.session.userId);
+
+                // Si no se pudo aplicar, la solicitud SIGUE pendiente. Darla por
+                // aprobada dejaría a quien la pidió creyendo que su cambio entró,
+                // y a la alerta sin cambiar.
+                if (!resultado.ok) {
+                    return res.status(422).json({
+                        status: 422, error: 'Unprocessable',
+                        message: resultado.message || 'No se pudo aplicar el cambio.',
+                    });
+                }
+                alertaResultante = resultado.menu;
+            }
+
+            notification.request.status = decision;
+            notification.request.decidedBy = req.session.userId;
+            notification.request.decidedAt = new Date();
+            notification.request.note = note || '';
+            await notification.save();
+
+            const actor = actorFromSession(req);
+            const operacion = notification.request.payload?.operation;
+
+            // Al aprobar se avisa con alcance global, igual que si lo hubiera
+            // hecho un administrador a mano: para el resto del sistema el cambio
+            // es el mismo, sin importar por qué camino llegó.
+            if (decision === 'approved' && alertaResultante) {
+                await notifyMenuApplied({
+                    menu: alertaResultante,
+                    actor,
+                    operation: operacion,
+                    body: notification.request.payload?.body || {},
+                    bonusBefore: notification.meta?.bonusBefore || null,
+                });
+            }
+
+            // Y a quien lo pidió se le contesta, apruebe o rechace. Sin esto,
+            // proponer un cambio sería mandarlo a un pozo.
+            await notify({
+                type: operacion === 'bonus' ? 'bonus.request.resolved' : 'menu.request.resolved',
+                actor,
+                resource: notification.resource,
+                extra: {
+                    decision,
+                    note: note || '',
+                    requesterId: notification.actor?.id ? String(notification.actor.id) : null,
+                },
+            });
+
+            return res.status(200).json({ status: 200, decision, notification });
         }
 
         let aplicado = { results: [], errors: [] };

@@ -5,6 +5,8 @@ import menuSchema from './menu.schema.js'
 import MenuModel from './menu.model.js';
 import { extendSession, validateSession, validateSessionAndUserSuper, validateSuperUser, validateAdminUser } from '../../middleware/validateSessionAndUser.js';
 import nameApi from '../../libs/name_api.js';
+import { MENU_OPERATION, requestMenuChange, notifyMenuApplied } from './menuRequest.lib.js';
+import { actorFromSession } from '../notification/notification.service.js';
 const routerMenu = express.Router();
 
 
@@ -38,15 +40,55 @@ routerMenu.get(`${nameApi}/menu/id=:id`, extendSession, validateSession, control
 
 
 
+// ══════════════════════════════════════════════════════════════════════
+// CREAR, EDITAR Y ELIMINAR — dos caminos según quién lo pide
+// ══════════════════════════════════════════════════════════════════════
+// Los dos endpoints siguen aceptando a un usuario `super`, pero lo que hacen
+// con su petición es distinto:
+//
+//   admin === true   se aplica y DESPUÉS se avisa, con alcance global
+//   super === true   se guarda una SOLICITUD y se avisa a los administradores;
+//                    la alerta no cambia hasta que uno apruebe
+//
+// El middleware sigue siendo `validateSuperUser` a propósito: un administrador
+// también tiene `super`, así que la puerta es la misma y lo que cambia es la
+// decisión de adentro. Poner `validateAdminUser` acá dejaría al usuario super
+// sin poder ni siquiera proponer.
+//
+// La respuesta lo dice: `applied: true` es "ya está", `applied: false` es
+// "quedó pendiente". Sin ese dato, la pantalla mostraría "guardado" sobre un
+// cambio que todavía no ocurrió.
+
 routerMenu.post(`${nameApi}/menu`, extendSession, validateSuperUser, async ( req, res ) => {
     try{
         const body = req.body;
         const menuValiate = await menuSchema.validate(body);
 
+        if (req.session.admin !== true) {
+            const notificacion = await requestMenuChange({
+                menu: null,
+                actor: actorFromSession(req),
+                operation: MENU_OPERATION.CREATE,
+                body: menuValiate,
+                requesterId: req.session.userId,
+            });
+            return res.status(202).json({
+                status: 202, applied: false, request: notificacion,
+                message: 'La alerta quedó pendiente de aprobación por un administrador.',
+            });
+        }
+
         // El autor sale de la sesión (nunca del body). Docs antiguos sin createdBy.
         const menu = new MenuModel({ ...menuValiate, createdBy: req.session.userId });
         await menu.save();
         await menu.populate('createdBy', 'name surName img');
+
+        await notifyMenuApplied({
+            menu,
+            actor: actorFromSession(req),
+            operation: MENU_OPERATION.CREATE,
+            body: menuValiate,
+        });
 
         return res.json(menu);
     }

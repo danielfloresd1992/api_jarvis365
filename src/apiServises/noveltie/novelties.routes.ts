@@ -86,7 +86,7 @@ routerNoveltie.get(`${nameApi}/noveltie/date=:date/shift=:shift/establishments=:
         if(shift && shift !== 'all') query.shift = shift;
 
         let resultSeleted: any;
-        let seleted = 'userPublic rulesForBonus userPublic videoUrl imageUrl collection_status fileNoveltie sharedByAmazonActive menu givenToTheGroup isValidate local description _id sharedByUser imageToShare validationResult'.split(' ');
+        let seleted = 'userPublic userPublic videoUrl imageUrl collection_status fileNoveltie sharedByAmazonActive menu givenToTheGroup isValidate local description _id sharedByUser imageToShare validationResult'.split(' ');
 
 
         if(properties){

@@ -135,47 +135,93 @@ const Menu = new Schema({
         require: true
     },
 
-    rulesForBonus: {  // IS DEPRECATED
-        forLocal: {},
-        worth: {
-            type: Number,
-            require: true
-        },
+    // ══════════════════════════════════════════════════════════════════
+    // SISTEMA DE BONIFICACIÓN
+    // ══════════════════════════════════════════════════════════════════
+    // Reemplaza a `rulesForBonus` y a `bonusCalculationRules`, que se
+    // retiraron. Los dos guardaban lo mismo de dos formas distintas y ninguno
+    // se consumía en ningún lado; migrarlos era mas barato que sostenerlos.
+    //
+    // Se lee en TRES CAPAS, de la más general a la más específica, y gana la
+    // más específica solo en los campos que declara:
+    //
+    //     defaultRule          todos los establecimientos
+    //     franchiseExceptions  por marca — el reglamento dice "SOLO FRANCISCAS"
+    //     localExceptions      un establecimiento concreto
+    //
+    // Un establecimiento nuevo entra por `defaultRule` sin que nadie lo
+    // agregue. Con una lista de ids, en cambio, el día que abre una Francisca
+    // la alerta dejaría de bonificar ahí sin que nada lo indicara.
+    //
+    // La resolución vive en libs/bonus — acá solo se guarda.
+    bonusSystem: {
 
-        amulative: {
-            type: Number,
-            require: true
-        }
-    },
+        // El interruptor. En false no se evalúa nada y la novedad se sella con
+        // `appliesBonus: false`. Apagado NO es lo mismo que "vale cero": lo
+        // primero es una decisión, lo segundo un valor.
+        isEnabled: { type: Boolean, default: false },
 
-
-    // ── NUEVO SISTEMA DE BONIFICACIÓN ─────────────────────────────────────
-    // Reemplaza a rulesForBonus (deprecated). Mapea al reglamento oficial:
-    //   worth = multiplicador del bono: 1 (X1), 2 (X2), 3 (X3), 5 (X5)
-    //   valueBonusForTheStaffOnDuty: valor en puntos según turno (0.20 / 0.30)
-    //   reglamentoCode: código del ítem en el reglamento (ej: "1.1", "R2.3")
-    bonusCalculationRules: {
-        // true  → esta alerta genera bono al operador
-        activate: { type: Boolean, default: false },
+        // ── La regla general ──────────────────────────────────────────
         defaultRule: {
-            // Multiplicador: 1=X1, 2=X2, 3=X3, 5=X5
-            worth:  { type: Number, default: 1 },
-            // Veces que debe ocurrir para contarse como bono (ej: "bono a la 2° vez")
-            acum:   { type: Number, default: 1 },
-            // Valor monetario/puntaje por bono según turno del operador
-            valueBonusForTheStaffOnDuty: {
-                day:   { type: Number, default: 0.20 },   // turno diurno
-                nigth: { type: Number, default: 0.30 }    // turno nocturno / extra
+            bonifies: { type: Boolean, default: true },
+
+            // Multiplicador del bono. Junto con la acumulación expresa las
+            // proporciones del reglamento: "3x1" es acumulación 3 y valor 1;
+            // "1x2" es acumulación 1 y valor 2.
+            bonusWorth: { type: Number, default: 1, min: 0 },
+
+            // Cuántas veces tiene que ocurrir para contar como bono.
+            // Mínimo 1 porque es DIVISOR en el corte: un 0 daría infinito y un
+            // negativo, bonos negativos. Los datos que se migraron traían
+            // catorce valores negativos.
+            accumulationRequired: { type: Number, default: 1, min: 1 },
+
+            // Valor del punto según el turno del operador.
+            pointValue: {
+                day: { type: Number, default: 0.20 },
+                night: { type: Number, default: 0.30 },
             },
-            // Referencia al código del reglamento (ej: "1.1", "R3.2", "E2.1")
-            reglamentoCode: { type: String, default: '' },
-            // Descripción interna de la regla de bono
-            description:    { type: String, default: '' },
-            // Indica si la regla está activa por defecto al crear la alerta
-            defaultActive:  { type: Boolean, default: true }
+
+            // Umbrales propios de ESTA alerta: { minutes: 30 }. El reglamento
+            // tiene casos como "15 minutos en Doral, 30 en las demás". Va como
+            // Mixed porque cada alerta tiene los suyos; el precio es que nadie
+            // los valida, así que el nombre de la clave importa.
+            thresholdParams: { type: Schema.Types.Mixed, default: null },
         },
-        // Reglas específicas por establecimiento (estructura a definir según necesidad)
-        localSpecificRules: { type: [], default: [] }
+
+        // ── Las excepciones ───────────────────────────────────────────
+        // `null` en un campo = hereda de la capa de arriba. Solo se declara lo
+        // que cambia, así una excepción que solo toca la acumulación no repite
+        // el valor del bono.
+        franchiseExceptions: [{
+            franchise: { type: Schema.Types.ObjectId, ref: 'Franchise', required: true },
+            bonifies: { type: Boolean, default: null },
+            bonusWorth: { type: Number, default: null },
+            accumulationRequired: { type: Number, default: null },
+            thresholdParams: { type: Schema.Types.Mixed, default: null },
+            note: { type: String, default: '' },
+            _id: false,
+        }],
+
+        localExceptions: [{
+            local: { type: Schema.Types.ObjectId, ref: 'Local', required: true },
+            bonifies: { type: Boolean, default: null },
+            bonusWorth: { type: Number, default: null },
+            accumulationRequired: { type: Number, default: null },
+            thresholdParams: { type: Schema.Types.Mixed, default: null },
+
+            // Por qué este establecimiento es distinto. Se muestra al lado de
+            // la excepción: sin esto, en seis meses nadie sabe si fue una
+            // decisión o un error de carga. Los datos viejos ya tenían ese
+            // problema — guardaban el NOMBRE del local junto al id, y uno quedó
+            // como "Yacambu" en una alerta y "La Villa" en otra tras un cambio
+            // de nombre. Por eso acá se guarda el id y nada más.
+            note: { type: String, default: '' },
+            _id: false,
+        }],
+
+        // Código del ítem en el reglamento: "1.1", "R2.6", "E4.3".
+        regulationCode: { type: String, default: '' },
     },
 
 

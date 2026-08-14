@@ -206,20 +206,44 @@ const Novelties = new Schema({
     },
     */
 
-    /*
-    rulesForBonus: { // DEPRECATED
-        worth: {
-            type: Number,
-            default: null
-            
-        },
-        
-        amulative: {
-            type: Number,
-            default: null
-        }
+    // ══════════════════════════════════════════════════════════════════
+    // SELLO DE BONIFICACIÓN
+    // ══════════════════════════════════════════════════════════════════
+    // La regla que aplicaba EN EL MOMENTO de reportar, ya resuelta para este
+    // establecimiento y este turno. Reemplaza al `rulesForBonus` que estaba
+    // comentado acá.
+    //
+    // Se COPIA y no se consulta a la alerta. El reglamento se actualiza —el
+    // vigente lleva fecha en el encabezado—, así que sin el sello un cambio de
+    // hoy recalcularía lo que se pagó la semana pasada, y no habría forma de
+    // reconstruir por qué se pagó lo que se pagó.
+    //
+    // `appliesBonus` tiene TRES estados y los tres significan cosas distintas:
+    //     true   bonificaba, y acá está con cuánto
+    //     false  no bonificaba, y fue una decisión
+    //     null   la novedad es anterior al sistema
+    //
+    // Guarda la REGLA, no el resultado: "se considera bono a la 2ª vez" no se
+    // puede decidir mirando una novedad suelta. El total se calcula al corte,
+    // en libs/bonus/bonusTotals.lib.js.
+    bonus: {
+        appliesBonus: { type: Boolean, default: null },
+
+        // De qué capa salió: 'disabled' | 'default' | 'franchise' | 'local'.
+        // Es lo que después responde "¿por qué esta novedad valía 2?".
+        appliedFrom: { type: String, default: null },
+
+        bonusWorth: { type: Number, default: null },
+        accumulationRequired: { type: Number, default: null },
+
+        // Ya resuelto para el turno; no hay que volver a decidirlo al contar.
+        pointValue: { type: Number, default: null },
+        workShift: { type: String, default: null },
+
+        thresholdParams: { type: Schema.Types.Mixed, default: null },
+        regulationCode: { type: String, default: '' },
+        frozenAt: { type: Date, default: null },
     },
-    */
 
     //  DATOS DEL USUARIO
     sharedByUser: {

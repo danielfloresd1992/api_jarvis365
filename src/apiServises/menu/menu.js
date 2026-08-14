@@ -1,4 +1,5 @@
 import Menu from './menu.model.js';
+import { normalizeBonusSystem } from '../../libs/bonus/index.js';
 
 export default {
 
@@ -59,31 +60,9 @@ export default {
 
                 managerReferenceId: body.managerReferenceId,
                 managerReferenceTitle: body.managerReferenceTitle,
-                // DEPRECATED — se mantiene por compatibilidad con registros anteriores
-                rulesForBonus: {
-                    forLocal:  body.rulesForBonus?.forLocal  ?? 'Todos',
-                    worth:     body.rulesForBonus?.worth     ?? 0,
-                    amulative: body.rulesForBonus?.amulative ?? 0
-                },
-
-                // NUEVO sistema de bonificación (mapea al reglamento oficial)
-                bonusCalculationRules: body.bonusCalculationRules
-                    ? {
-                        activate: body.bonusCalculationRules.activate ?? false,
-                        defaultRule: {
-                            worth:  body.bonusCalculationRules.defaultRule?.worth  ?? 1,
-                            acum:   body.bonusCalculationRules.defaultRule?.acum   ?? 1,
-                            valueBonusForTheStaffOnDuty: {
-                                day:   body.bonusCalculationRules.defaultRule?.valueBonusForTheStaffOnDuty?.day   ?? 0.20,
-                                nigth: body.bonusCalculationRules.defaultRule?.valueBonusForTheStaffOnDuty?.nigth ?? 0.30
-                            },
-                            reglamentoCode: body.bonusCalculationRules.defaultRule?.reglamentoCode ?? '',
-                            description:    body.bonusCalculationRules.defaultRule?.description    ?? '',
-                            defaultActive:  body.bonusCalculationRules.defaultRule?.defaultActive  ?? true
-                        },
-                        localSpecificRules: body.bonusCalculationRules.localSpecificRules ?? []
-                    }
-                    : undefined,
+                // Sistema de bonificación. Se normaliza en libs/bonus para que
+                // el alta y la edición construyan exactamente lo mismo.
+                bonusSystem: normalizeBonusSystem(body.bonusSystem),
 
                 useOnlyForTheReportingDocument:    body.useOnlyForTheReportingDocument,
                 useOfLiveAlertForTheCustomer:      body.useOfLiveAlertForTheCustomer,
@@ -163,6 +142,11 @@ export default {
             // El bloqueo administrativo SOLO se cambia por su endpoint dedicado
             // (PATCH /menu/lock): el PUT normal no puede ponerlo ni quitarlo.
             delete fields.isLocked;
+
+            // La bonificación pasa por el mismo normalizador que el alta: si no,
+            // editar podría guardar una acumulación en 0 —divisor del corte—
+            // que el alta sí habría frenado.
+            if (fields.bonusSystem) fields.bonusSystem = normalizeBonusSystem(fields.bonusSystem);
 
             const change = Object.keys(fields).map(key => ({ key, value: fields[key] }));
             if(change.length === 0) return reject('Sin cambios para guardar');

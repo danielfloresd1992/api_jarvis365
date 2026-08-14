@@ -23,6 +23,7 @@ import MonitoringStateModel from '../../services/monitoring/monitoringState.mode
 import publisher from '../../services/publisher/publisher.layer.js';
 import { IsDaylightSavingTimeBoolean } from '../time/time.model.js';
 import session from 'express-session';
+import { buildBonusSeal } from '../../libs/bonus/index.js';
 import { rejects } from 'assert';
 
 
@@ -123,7 +124,7 @@ export default class ControllerNovelty {
                 }
             };
 
-            const resultNoveltie = await NoveltieModel.find(query).select('-rulesForBonus -userPublic').populate('menuRef');
+            const resultNoveltie = await NoveltieModel.find(query).select('-userPublic').populate('menuRef');
 
             res.status(200).json(resultNoveltie);
         }
@@ -206,7 +207,7 @@ export default class ControllerNovelty {
                 .sort({ createdAt: -1 })
                 // Fuera lo pesado y lo obsoleto: acá se cuenta y se revisa, no
                 // se reproducen imágenes ni videos.
-                .select('-fileNoveltie -rulesForBonus -isValidate -menu -userPublic -description -local -imageUrl -videoUrl -imageToShare')
+                .select('-fileNoveltie -isValidate -menu -userPublic -description -local -imageUrl -videoUrl -imageToShare')
                 .lean();
 
             // `isApproved` puede venir true, false o sin definir, y los tres
@@ -254,7 +255,7 @@ export default class ControllerNovelty {
                 .find(query)
                 .populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id establishment')
                 .sort({ $natural: -1 })
-                .select('-fileNoveltie -rulesForBonus -isValidate -menu -userPublic -description -local')
+                .select('-fileNoveltie -isValidate -menu -userPublic -description -local')
                 .skip(page * 10)
                 .limit(10);
 
@@ -378,20 +379,23 @@ export default class ControllerNovelty {
 
             //    if(!resultMenu) return res.status(400).json({ error: 'The result of the title property is not registered in the system' })
 
-            /*
-                let rules: any // LOGIC IS DEPRECATED
-                if (novelties.body.rulesForBonus === 'undefined' || novelties.body.rulesForBonus === undefined || novelties.body.rulesForBonus === null) {
-                    rules = {
-                        worth: 0,
-                        amulative: 0
-                    }
-                }
-                else {
-    
-                    rules = novelties.body.rulesForBonus;
-                }
-    
-                */
+            // ── SELLO DE BONIFICACIÓN ─────────────────────────────────
+            // Se resuelve acá, con la alerta y el establecimiento delante, y se
+            // COPIA dentro de la novedad. Después nadie vuelve a consultar la
+            // configuración: el reglamento cambia y lo ya reportado no.
+            //
+            // Hace falta el documento completo del establecimiento, no su id:
+            // la resolución mira su franquicia para las excepciones por marca.
+            const establecimiento = novelties.body.localId
+                ? await LocalModel.findById(novelties.body.localId).select('_id franchiseReference')
+                : null;
+
+            // El turno decide el valor del punto (0,20 diurno / 0,30 nocturno).
+            // Solo se acepta lo que el modelo permite; cualquier otra cosa cae
+            // en diurno, que es el valor conservador.
+            const turnoDeclarado = novelties.body.shift === 'night' ? 'night' : 'day';
+
+            const bonusSeal = buildBonusSeal(resultMenu, establecimiento, turnoDeclarado);
 
             const newNoveltie = new NoveltieModel({
 
@@ -417,18 +421,6 @@ export default class ControllerNovelty {
 
                 establishment: novelties.body.localId,
 
-                /*
-               userPublic: {
-                   name: novelties.body.userName, 
-                   userId: novelties.body.userId,
-               },
-              
-               rulesForBonus: {
-                   worth: rules.worth,
-                   amulative: rules.amulative
-               },
-               */
-
                 sharedByUser: {
                     createdAt: Date.now(),
                     user: {
@@ -447,7 +439,13 @@ export default class ControllerNovelty {
                 imageToShare: novelties.body.imageToShare,
                 imageUrl: novelties.body.imageUrl ? novelties.body.imageUrl : null,
                 videoUrl: novelties.body.videoUrl,
-                menuRef: novelties.body.alertId ? new Types.ObjectId(novelties.body.alertId) : null
+                menuRef: novelties.body.alertId ? new Types.ObjectId(novelties.body.alertId) : null,
+
+                // El turno se guarda además del sello: el sello dice con qué
+                // valor se congeló, y este campo permite filtrar novedades por
+                // turno sin abrir el sello.
+                shift: turnoDeclarado,
+                bonus: bonusSeal,
             });
 
             if (novelties.body.numberTiket) newNoveltie.orderTicketNumber = novelties.body.numberTiket;

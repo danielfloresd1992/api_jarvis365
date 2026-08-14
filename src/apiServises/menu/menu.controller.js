@@ -1,4 +1,7 @@
 import menu from './menu.js';
+import MenuModel from './menu.model.js';
+import { MENU_OPERATION, requestMenuChange, notifyMenuApplied } from './menuRequest.lib.js';
+import { actorFromSession } from '../notification/notification.service.js';
 import menuModel from './menu.model.js';
 import colors from 'colors';
 
@@ -109,8 +112,48 @@ controller.getCategory = async (req, res) => {
 
 controller.putMenu = async (req, res) => {
     try {
+        // Un cambio de bonificación no se lee igual que renombrar un campo: se
+        // avisa con su propia familia y su propio estilo. Se decide por el
+        // CONTENIDO del cuerpo, no por la ruta, para que el cliente no tenga
+        // que elegir a qué endpoint pegarle.
+        const esCambioDeBono = 'bonusSystem' in (req.body || {});
+        const operacion = esCambioDeBono ? MENU_OPERATION.BONUS : MENU_OPERATION.UPDATE;
+
+        // Hace falta el estado ANTERIOR para poder contar qué cambió. Después
+        // de guardar ya no hay con qué comparar.
+        const antes = req.body?._id
+            ? await MenuModel.findById(req.body._id).select('es en bonusSystem').lean()
+            : null;
+
+        // El usuario super propone; el administrador aplica. Ver la nota en
+        // menu.routes.js sobre por qué el middleware es el mismo para los dos.
+        if (req.session.admin !== true) {
+            const notificacion = await requestMenuChange({
+                menu: antes,
+                actor: actorFromSession(req),
+                operation: operacion,
+                body: req.body,
+                requesterId: req.session.userId,
+            });
+            return res.status(202).json({
+                status: 202, applied: false, request: notificacion,
+                message: esCambioDeBono
+                    ? 'El cambio de bonificación quedó pendiente de aprobación por un administrador.'
+                    : 'El cambio quedó pendiente de aprobación por un administrador.',
+            });
+        }
+
         // El autor de la edición sale de la sesión (nunca del body)
         const update = await menu.putMenu(req.body, req.session.userId);
+
+        await notifyMenuApplied({
+            menu: update,
+            actor: actorFromSession(req),
+            operation: operacion,
+            body: req.body,
+            bonusBefore: antes?.bonusSystem || null,
+        });
+
         return res.json(update);
     }
     catch(err){
@@ -128,9 +171,34 @@ controller.deleteByIdMenu = async (req, res) => {
     try{
 
         const id = req.params.id;
+
+        // Se lee ANTES de borrar: después no queda nombre que poner en el aviso,
+        // y "se eliminó una alerta" sin decir cuál no sirve de nada.
+        const antes = await MenuModel.findById(id).select('es en').lean();
+        if (!antes) return res.status(404).json({ status: 404, error: 'Not found', message: 'Menú no encontrado' });
+
+        if (req.session.admin !== true) {
+            const notificacion = await requestMenuChange({
+                menu: antes,
+                actor: actorFromSession(req),
+                operation: MENU_OPERATION.DELETE,
+                body: {},
+                requesterId: req.session.userId,
+            });
+            return res.status(202).json({
+                status: 202, applied: false, request: notificacion,
+                message: 'La eliminación quedó pendiente de aprobación por un administrador.',
+            });
+        }
+
         const resultMenu = await menu.getDeleteMenu(id)
 
         if(resultMenu.deletedCount > 0) {
+            await notifyMenuApplied({
+                menu: antes,
+                actor: actorFromSession(req),
+                operation: MENU_OPERATION.DELETE,
+            });
             return res.status(200).json(resultMenu);
         }
         else{

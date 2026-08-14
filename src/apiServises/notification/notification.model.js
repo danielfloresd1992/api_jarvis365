@@ -58,7 +58,7 @@ const NotificationSchema = new mongoose.Schema({
     //   system   → anuncios de la plataforma
     family: {
         type: String,
-        enum: ['schedule', 'resource', 'system', 'attendance', 'comment', 'general'],
+        enum: ['schedule', 'resource', 'system', 'attendance', 'comment', 'menu', 'bonus', 'general'],
         default: 'general',
         index: true,
     },

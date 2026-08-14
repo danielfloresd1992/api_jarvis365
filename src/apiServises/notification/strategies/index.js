@@ -29,6 +29,7 @@
 
 import './attendance.strategies.js';   // marcaje: entrada y salida del propio empleado
 import './comment.strategies.js';      // notas escritas sobre el día de otra persona
+import './menu.strategies.js';         // alertas y su bonificación (dos familias)
 import './resource.strategies.js';     // establecimientos y franquicias
 import './schedule.strategies.js';     // horario, horas extras y solicitudes de cambio
 import './system.strategies.js';       // anuncios de la plataforma
