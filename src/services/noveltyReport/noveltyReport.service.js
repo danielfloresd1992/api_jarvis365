@@ -1,6 +1,7 @@
 import moment from 'moment-timezone';
 import mongoose from 'mongoose';
 import Noveltie from '../../apiServises/noveltie/noveltie.model.js';
+import MenuModel from '../../apiServises/menu/menu.model.js';
 import LocalModel from '../../apiServises/local/local.model.js';
 import Schedules from '../../apiServises/schedules/schedule.model.js';
 import AttendanceModel from '../../apiServises/user/attendance.model.js';
@@ -137,14 +138,39 @@ const addCounts = (target, source) => {
  * @param {boolean} [options.isFinal]  true → reporte final del día operativo COMPLETO
  *                                     (08:00→07:00); false → corte parcial hasta ahora.
  * @param {Date|moment} [options.at]   instante de referencia (default: ahora).
+ * @param {string} [options.category]       categoría OPERATIVA ('delay', 'food'…)
+ * @param {string} [options.bonusCategory]  categoría de BONIFICACIÓN
+ *
+ * Los dos filtros son opcionales y se combinan (AND). Sin ellos el reporte es
+ * exactamente el de siempre, que es el que usan el job de WhatsApp y el PDF.
  */
-export async function buildNoveltyCountReport({ isFinal = false, at } = {}) {
+export async function buildNoveltyCountReport({ isFinal = false, at, category, bonusCategory } = {}) {
     const now = at ? moment.tz(at, REPORT_TZ) : moment.tz(REPORT_TZ);
     const { start, end } = getOperationalDay(now);
     const rangeEnd = isFinal ? end : moment.min(now, end);
 
     const locals = await getLocalsInTodaySchedule(start);
     const localIds = locals.map(l => new mongoose.Types.ObjectId(String(l._id)));
+
+    // ── Filtro por categoría ──────────────────────────────────────────
+    // Las categorías no viven en la novedad sino en su alerta (`Menu`), así que
+    // primero se resuelve QUÉ alertas entran y después se filtra por `menuRef`.
+    //
+    // Se hace en dos pasos y no con un $lookup porque el catálogo de alertas es
+    // chico y estable: una consulta que devuelve ids sale mucho más barata que
+    // cruzar toda la colección de novedades del día.
+    let menuFilter = null;
+    if (category || bonusCategory) {
+        const criterio = {
+            ...(category ? { category } : {}),
+            ...(bonusCategory ? { bonusCategory } : {}),
+        };
+        const menus = await MenuModel.find(criterio).select('_id').lean();
+
+        // Con la lista vacía el $in no matchea nada, que es lo correcto: el
+        // filtro pedido no tiene alertas y el reporte debe dar cero, no todo.
+        menuFilter = { menuRef: { $in: menus.map(m => m._id) } };
+    }
 
     // Conteo por establecimiento en una sola agregación.
     // Compatibilidad con documentos históricos:
@@ -162,6 +188,7 @@ export async function buildNoveltyCountReport({ isFinal = false, at } = {}) {
                     { establishment: { $in: localIds } },
                     { 'local.idLocal': { $in: localIds } },
                 ],
+                ...(menuFilter ?? {}),
             },
         },
         {

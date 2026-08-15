@@ -59,7 +59,14 @@ const menuSchema = yup.object({
 
     doesItrequireVideo: yup.boolean().default(false),
     
+    // Categoría OPERATIVA: 'delay', 'food', 'employee'… Lista fija, no se
+    // administra (ver la nota en menu.model.js).
     category: yup.string().required(),
+
+    // Categoría de BONIFICACIÓN: con qué criterio agrupa esta alerta en los
+    // cortes de bono. Opcional a propósito — las alertas que ya existen no
+    // tienen ninguna y se siguen guardando sin problema.
+    bonusCategory: yup.string().nullable().optional(),
 
 
     isArea: yup.boolean().required(),

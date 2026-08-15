@@ -112,9 +112,43 @@ const Menu = new Schema({
         default: false
     },
 
+    // ══════════════════════════════════════════════════════════════════
+    // CATEGORÍA OPERATIVA — LISTA FIJA, NO SE ADMINISTRA
+    // ══════════════════════════════════════════════════════════════════
+    // 'delay', 'food', 'employee', 'protocol'… la lista de siempre.
+    //
+    // Es fija a propósito, y no es capricho: fuera de acá hay dos sistemas que
+    // la leen con nombres escritos a mano y que se despliegan por separado.
+    //
+    //   · reportes365 agrupa las páginas del reporte por esta cadena y trata
+    //     'delay' de forma especial según el nombre de la alerta.
+    //   · Jarvis-express365 la tiene hardcodeada en sus JSON ('delay', 'door').
+    //
+    // Una categoría nueva acá sería una que ninguno de los dos entiende, y el
+    // síntoma no sería un error visible: la alerta simplemente no aparecería
+    // donde corresponde. Lo administrable es `bonusCategory`, acá abajo.
     category: {
         type: String,
         require: true,
+    },
+
+    // ══════════════════════════════════════════════════════════════════
+    // CATEGORÍA DE BONIFICACIÓN — administrable
+    // ══════════════════════════════════════════════════════════════════
+    // Con qué criterio se agrupa esta alerta para los cortes de bonificación.
+    // Es independiente de la operativa: dos alertas de categorías distintas
+    // pueden bonificar por el mismo concepto, y al revés.
+    //
+    // Guarda el `value` del catálogo (BonusCategory) como CADENA y no como
+    // referencia, por el mismo motivo que `category`: convertirla en ref
+    // obligaría a migrar todo lo ya cargado.
+    //
+    // Es OPCIONAL: las alertas que ya existen no tienen ninguna y siguen
+    // funcionando igual.
+    bonusCategory: {
+        type: String,
+        default: null,
+        trim: true,
     },
 
     // NOTA: el campo 'especial' completo está definido arriba (líneas 38-49).

@@ -1,5 +1,5 @@
 import controller from './menu.controller.js';
-import categoryController from './menuCategory.controller.js';
+import bonusCategoryController from './bonusCategory.controller.js';
 import express from 'express';
 import menuSchema from './menu.schema.js'
 import MenuModel from './menu.model.js';
@@ -11,23 +11,28 @@ const routerMenu = express.Router();
 
 
 
-// ── Catálogo de categorías ────────────────────────────────────────────
+// ── Catálogo de categorías de BONIFICACIÓN ────────────────────────────
 // Van PRIMERO, antes de las rutas con parámetro. Hoy no hay ambigüedad
-// —'/menu/categories' no encaja en '/menu/category=:category' ni en
+// —'/menu/bonus-categories' no encaja en '/menu/category=:category' ni en
 // '/menu/id=:id'—, pero Express resuelve por orden de registro y la primera
 // que encaje se queda con la petición: si mañana alguien agrega
 // '/menu/:algo', estas seguirían funcionando por estar arriba.
 //
-// La lista la puede ver cualquier sesión (se necesita para elegir categoría al
-// crear una alerta); crear, editar y borrar es solo de super usuario.
+// OJO, no confundir con la categoría OPERATIVA ('delay', 'food'…): ésa es una
+// lista fija que vive en el cliente y no se administra, porque reportes365 y
+// Jarvis-express365 la leen con nombres escritos a mano. Ver la nota en
+// menu.model.js. Acá solo se administran las de bonificación.
+//
+// La lista la puede ver cualquier sesión (se necesita para elegirla al crear
+// una alerta); crear, editar y borrar es solo de super usuario.
 
-routerMenu.get(`${nameApi}/menu/categories`, extendSession, validateSession, categoryController.getCategories);
+routerMenu.get(`${nameApi}/menu/bonus-categories`, extendSession, validateSession, bonusCategoryController.getBonusCategories);
 
-routerMenu.post(`${nameApi}/menu/categories`, extendSession, validateSuperUser, categoryController.createCategory);
+routerMenu.post(`${nameApi}/menu/bonus-categories`, extendSession, validateSuperUser, bonusCategoryController.createBonusCategory);
 
-routerMenu.put(`${nameApi}/menu/categories/id=:id`, extendSession, validateSuperUser, categoryController.updateCategory);
+routerMenu.put(`${nameApi}/menu/bonus-categories/id=:id`, extendSession, validateSuperUser, bonusCategoryController.updateBonusCategory);
 
-routerMenu.delete(`${nameApi}/menu/categories/id=:id`, extendSession, validateSuperUser, categoryController.deleteCategory);
+routerMenu.delete(`${nameApi}/menu/bonus-categories/id=:id`, extendSession, validateSuperUser, bonusCategoryController.deleteBonusCategory);
 
 
 
