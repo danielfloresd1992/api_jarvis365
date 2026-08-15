@@ -379,23 +379,14 @@ export default class ControllerNovelty {
 
             //    if(!resultMenu) return res.status(400).json({ error: 'The result of the title property is not registered in the system' })
 
-            // ── SELLO DE BONIFICACIÓN ─────────────────────────────────
-            // Se resuelve acá, con la alerta y el establecimiento delante, y se
-            // COPIA dentro de la novedad. Después nadie vuelve a consultar la
-            // configuración: el reglamento cambia y lo ya reportado no.
+            // ── ACÁ NO SE SELLA LA BONIFICACIÓN ───────────────────────
+            // Al reportar todavía no se sabe si la novedad va a contar: puede
+            // quedar invalidada. El sello se congela recién cuando un validador
+            // la aprueba, en updateNovelties. Ver libs/bonus/bonusSeal.lib.js.
             //
-            // Hace falta el documento completo del establecimiento, no su id:
-            // la resolución mira su franquicia para las excepciones por marca.
-            const establecimiento = novelties.body.localId
-                ? await LocalModel.findById(novelties.body.localId).select('_id franchiseReference')
-                : null;
-
-            // El turno decide el valor del punto (0,20 diurno / 0,30 nocturno).
-            // Solo se acepta lo que el modelo permite; cualquier otra cosa cae
-            // en diurno, que es el valor conservador.
-            const turnoDeclarado = novelties.body.shift === 'night' ? 'night' : 'day';
-
-            const bonusSeal = buildBonusSeal(resultMenu, establecimiento, turnoDeclarado);
+            // `shift` tampoco se toca acá: conserva el valor por defecto del
+            // modelo. Es la propiedad de siempre y jarvis-reportes depende de
+            // ella, así que no se cambia su significado.
 
             const newNoveltie = new NoveltieModel({
 
@@ -440,12 +431,6 @@ export default class ControllerNovelty {
                 imageUrl: novelties.body.imageUrl ? novelties.body.imageUrl : null,
                 videoUrl: novelties.body.videoUrl,
                 menuRef: novelties.body.alertId ? new Types.ObjectId(novelties.body.alertId) : null,
-
-                // El turno se guarda además del sello: el sello dice con qué
-                // valor se congeló, y este campo permite filtrar novedades por
-                // turno sin abrir el sello.
-                shift: turnoDeclarado,
-                bonus: bonusSeal,
             });
 
             if (novelties.body.numberTiket) newNoveltie.orderTicketNumber = novelties.body.numberTiket;
@@ -566,6 +551,68 @@ export default class ControllerNovelty {
                 }
             }
 
+
+
+            // ── SELLO DE BONIFICACIÓN ─────────────────────────────────────
+            // Se congela acá y no al crear la novedad: recién cuando un
+            // validador la aprueba se sabe que va a contar.
+            //
+            // La regla vigente en ESE momento se COPIA dentro. Después el
+            // reglamento puede cambiar y lo ya aprobado conserva la suya; sin
+            // el sello, un cambio de hoy recalcularía lo que se pagó la semana
+            // pasada. Ver libs/bonus/bonusSeal.lib.js.
+            //
+            // Se sella UNA sola vez. Si más tarde la invalidan, el sello queda
+            // pero deja de contar sola: el corte exige aprobación ADEMÁS del
+            // sello (countsForBonus, en libs/bonus/bonusTotals.lib.js).
+            //
+            // HACEN FALTA LAS DOS COSAS: aprobada y con turno.
+            //
+            // El turno llega en su PROPIO PUT (los botones "Turno día" y
+            // "Turno noche" del componente Noveltie), separado del de validar,
+            // y pueden llegar en cualquier orden. Como el turno define el valor
+            // del punto, sellar apenas se aprueba —con el turno todavía en
+            // null— congelaría el valor diurno para siempre, aunque después se
+            // marcara noche.
+            //
+            // Por eso se mira el resultado que va a quedar DESPUÉS de este
+            // update, no lo que había antes, y se sella cuando ya están las
+            // dos: la que complete el par dispara el sello.
+            const turnoResultante = 'shift' in body ? body.shift : findNovelty.shift;
+
+            const quedaAprobada = 'validationResult' in body
+                ? body.validationResult?.isApproved === true
+                : findNovelty.validationResult?.isApproved === true;
+
+            if (quedaAprobada && turnoResultante && !findNovelty.bonus?.frozenAt) {
+                try {
+                    const alerta = findNovelty.menuRef
+                        ? await MenuModel.findById(findNovelty.menuRef)
+                        : null;
+
+                    // Hace falta el documento del establecimiento y no su id:
+                    // la resolución mira su franquicia para las excepciones por
+                    // marca.
+                    const idEstablecimiento = findNovelty.establishment ?? findNovelty.local?.idLocal;
+                    const establecimiento = idEstablecimiento
+                        ? await LocalModel.findById(idEstablecimiento).select('_id franchiseReference')
+                        : null;
+
+                    // Se sella con el turno que queda tras este update, que es
+                    // el que acaba de llegar si vino en este mismo PUT.
+                    if (alerta && establecimiento) {
+                        body.bonus = buildBonusSeal(alerta, establecimiento, turnoResultante);
+                    }
+                    else {
+                        console.log(colors.yellow(`[bonus-seal] la novedad ${id} no tiene alerta o establecimiento: no se selló`));
+                    }
+                }
+                catch (bonusError: any) {
+                    // Validar es lo importante. Si el sello falla se deja
+                    // constancia y la validación sigue su curso.
+                    console.log(colors.yellow(`[bonus-seal] no se pudo sellar la novedad ${id}: ${bonusError?.message ?? bonusError}`));
+                }
+            }
 
 
             const updateDocument = await NoveltieModel.findOneAndUpdate({ _id: id }, body, { new: true, runValidators: true }).populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id establishment');

@@ -107,6 +107,7 @@ const Novelties = new Schema({
         type: Boolean,
         default : true
     },
+    
 
     shift:  {
         type: String,
