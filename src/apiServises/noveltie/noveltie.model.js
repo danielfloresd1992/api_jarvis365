@@ -208,44 +208,87 @@ const Novelties = new Schema({
     */
 
     // ══════════════════════════════════════════════════════════════════
-    // SELLO DE BONIFICACIÓN
+    // BONIFICACIÓN CONGELADA
     // ══════════════════════════════════════════════════════════════════
-    // La regla que aplicaba EN EL MOMENTO de reportar, ya resuelta para este
-    // establecimiento y este turno. Reemplaza al `rulesForBonus` que estaba
-    // comentado acá.
+    // Cuánto bonificó ESTA novedad, resuelto y guardado en el momento en que un
+    // validador la aprobó.
     //
-    // Se COPIA y no se consulta a la alerta. El reglamento se actualiza —el
-    // vigente lleva fecha en el encabezado—, así que sin el sello un cambio de
-    // hoy recalcularía lo que se pagó la semana pasada, y no habría forma de
-    // reconstruir por qué se pagó lo que se pagó.
     //
-    // `appliesBonus` tiene TRES estados y los tres significan cosas distintas:
+    // POR QUÉ SE COPIA EN VEZ DE REFERENCIAR
+    //
+    // La regla se edita y el valor del punto también. Sin copiar, corregir una
+    // regla hoy recalcularía lo que se pagó la semana pasada, y no habría forma
+    // de reconstruir por qué se pagó lo que se pagó. Lo que ya se aprobó no se
+    // vuelve a mirar: el reglamento cambia, lo pagado no.
+    //
+    //
+    // `applies` TIENE TRES ESTADOS Y LOS TRES DICEN COSAS DISTINTAS
+    //
     //     true   bonificaba, y acá está con cuánto
     //     false  no bonificaba, y fue una decisión
-    //     null   la novedad es anterior al sistema
-    //
-    // Guarda la REGLA, no el resultado: "se considera bono a la 2ª vez" no se
-    // puede decidir mirando una novedad suelta. El total se calcula al corte,
-    // en libs/bonus/bonusTotals.lib.js.
+    //     null   nunca se selló: es anterior al sistema, o todavía no se validó
     bonus: {
-        appliesBonus: { type: Boolean, default: null },
 
-        // De qué capa salió: 'disabled' | 'default' | 'franchise' | 'local'.
-        // Es lo que después responde "¿por qué esta novedad valía 2?".
+        applies: { type: Boolean, default: null },
+
+        // ── De la regla ───────────────────────────────────────────────
+        // De cuál salió. Es rastro, no fuente: los números de abajo son los que
+        // mandan. Sirve para responder "¿de qué regla vino esto?" sin adivinar.
+        rule: {
+            type: Schema.Types.ObjectId,
+            ref: 'BonusRule',
+            default: null,
+        },
+
+        // CUÁNTOS BONOS VALE ESTA ALERTA. Es el número operativo: el corte
+        // suma este campo y nada más.
+        //
+        // Sale de bonusAwarded / alertsRequired, ya resuelto para el turno del
+        // operador y el establecimiento. Una regla de 4 alertas por bono deja
+        // 0,25 acá; una que otorga 5 bonos deja 5.
+        //
+        // Las alertas que sobran de un grupo NO se pierden: seis alertas de una
+        // regla 4x1 son 1,5 bonos, no 1.
+        bonusPerAlert: { type: Number, default: null },
+
+        // Los dos números de la regla, tal como el reglamento los escribe
+        // ("4x1"). No entran en el cálculo —para eso está bonusPerAlert—, pero
+        // 0,25 suelto no le dice nada a nadie y "4 por 1" sí.
+        alertsRequired: { type: Number, default: null },
+        bonusAwarded: { type: Number, default: null },
+
+        // 'rule' | 'override' — si el valor salió de la regla general o de una
+        // excepción del establecimiento. Es lo que responde "¿por qué esta pagó
+        // 5 y aquella 1?" sin tener que reconstruir la regla de esa fecha.
         appliedFrom: { type: String, default: null },
 
-        bonusWorth: { type: Number, default: null },
-        accumulationRequired: { type: Number, default: null },
-
-        // Ya resuelto para el turno; no hay que volver a decidirlo al contar.
-        pointValue: { type: Number, default: null },
+        // ── Del operador ──────────────────────────────────────────────
+        // El turno decide cuántos bonos otorga la alerta, y es el del OPERADOR
+        // que la reportó, no el de la novedad: el bono es suyo, y un operador
+        // nocturno puede reportar un hecho ocurrido de día.
         workShift: { type: String, default: null },
 
-        thresholdParams: { type: Schema.Types.Mixed, default: null },
-        regulationCode: { type: String, default: '' },
+        // De qué capa del horario salió el turno:
+        // 'override' (se lo cambiaron ese día) | 'regla' (su horario semanal) |
+        // 'shiftType' (su jornada base) | 'default' (no tenía horario cargado).
+        //
+        // El último caso importa: significa que se asumió diurno sin dato, y
+        // esas novedades conviene revisarlas antes de pagar.
+        shiftSource: { type: String, default: null },
+
+        // ── Del dinero ────────────────────────────────────────────────
+        // Cuánto valía UN bono en ese momento. El valor es global y editable,
+        // así que se congela: cambiarlo mañana no puede mover lo de esta semana.
+        //
+        // La tasa de cambio NO se congela acá: se aplica al liquidar, y toda la
+        // liquidación va al mismo cambio.
+        pointValue: { type: Number, default: null },
+
         frozenAt: { type: Date, default: null },
     },
 
+
+    // ══════════════════════════════════════════════════════════════════
     //  DATOS DEL USUARIO
     sharedByUser: {
 

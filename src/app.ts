@@ -122,6 +122,7 @@ import { routerChat } from './apiServises/chat/router.js';
 import { routerAiChat } from './apiServises/aiChat/aiChat.routes.js';
 import { routerUser } from './apiServises/user/user.routes.js';
 import { routerNotification } from './apiServises/notification/notification.routes.js';
+import { routerBonus } from './apiServises/bonus/bonus.routes.js';
 import routerMultimedia from './apiServises/multimedia/routes.index.ts'
 import swaggerUi from 'swagger-ui-express';
 import swaggerSpec from './docs/swagger.js';
@@ -156,6 +157,7 @@ app
     .use(routerAlert)
     .use(routerSchedule)
     .use(routerNoveltyReport)
+    .use(routerBonus)
     .use(routerMonitoring)
     .use(routesTimer)
     .use(routesFailed)
