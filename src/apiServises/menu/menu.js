@@ -1,5 +1,4 @@
 import Menu from './menu.model.js';
-import { normalizeBonusSystem } from '../../libs/bonus/index.js';
 
 export default {
 
@@ -60,10 +59,6 @@ export default {
 
                 managerReferenceId: body.managerReferenceId,
                 managerReferenceTitle: body.managerReferenceTitle,
-                // Sistema de bonificación. Se normaliza en libs/bonus para que
-                // el alta y la edición construyan exactamente lo mismo.
-                bonusSystem: normalizeBonusSystem(body.bonusSystem),
-
                 useOnlyForTheReportingDocument:    body.useOnlyForTheReportingDocument,
                 useOfLiveAlertForTheCustomer:      body.useOfLiveAlertForTheCustomer,
                 noSubtitleInTheReport:             body.noSubtitleInTheReport,
@@ -142,11 +137,6 @@ export default {
             // El bloqueo administrativo SOLO se cambia por su endpoint dedicado
             // (PATCH /menu/lock): el PUT normal no puede ponerlo ni quitarlo.
             delete fields.isLocked;
-
-            // La bonificación pasa por el mismo normalizador que el alta: si no,
-            // editar podría guardar una acumulación en 0 —divisor del corte—
-            // que el alta sí habría frenado.
-            if (fields.bonusSystem) fields.bonusSystem = normalizeBonusSystem(fields.bonusSystem);
 
             const change = Object.keys(fields).map(key => ({ key, value: fields[key] }));
             if(change.length === 0) return reject('Sin cambios para guardar');

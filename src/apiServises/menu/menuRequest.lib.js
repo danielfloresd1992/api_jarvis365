@@ -1,7 +1,6 @@
 import MenuModel from './menu.model.js';
 import menuLayer from './menu.js';
 import { notify } from '../notification/notification.service.js';
-import { diffBonusSystems, normalizeBonusSystem } from '../../libs/bonus/index.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // CAMBIOS SOBRE UNA ALERTA: APLICAR O SOLICITAR
@@ -17,29 +16,18 @@ import { diffBonusSystems, normalizeBonusSystem } from '../../libs/bonus/index.j
 // aprobar una solicitud escriba EXACTAMENTE lo mismo que habría escrito el
 // camino directo: al aprobar se llama a la misma función, no a una copia.
 //
-//
-// POR QUÉ LA BONIFICACIÓN VIAJA APARTE
-//
-// Un cambio de nombre y un cambio de lo que cobra la gente no se leen igual.
-// Se separan en dos operaciones y dos familias visuales —`menu` y `bonus`—
-// desde el momento en que se solicitan, no al mostrarlas.
 
 /** Operaciones que se pueden pedir sobre una alerta. */
 export const MENU_OPERATION = {
     CREATE: 'create',
     UPDATE: 'update',
     DELETE: 'delete',
-    BONUS: 'bonus',
 };
-
-/** La bonificación tiene su propia familia, su propio tipo y su propio estilo. */
-const esOperacionDeBono = (operation) => operation === MENU_OPERATION.BONUS;
 
 const tipoAplicado = (operation) => ({
     [MENU_OPERATION.CREATE]: 'menu.created',
     [MENU_OPERATION.UPDATE]: 'menu.updated',
     [MENU_OPERATION.DELETE]: 'menu.deleted',
-    [MENU_OPERATION.BONUS]: 'bonus.updated',
 }[operation] || 'menu.updated');
 
 
@@ -52,15 +40,9 @@ const recursoDeAlerta = (menu) => ({
 });
 
 
-/**
- * Qué campos cambian, para el cuerpo del aviso.
- *
- * `bonusSystem` se saca de la lista: sus cambios se cuentan aparte y con sus
- * propias palabras. Dejarlo diría "actualizó: bonusSystem", que no le dice nada
- * a nadie.
- */
+/** Qué campos cambian, para el cuerpo del aviso. */
 const camposCambiados = (body = {}) => Object.keys(body)
-    .filter(k => !['_id', 'bonusSystem', '__v', 'updateByUser'].includes(k))
+    .filter(k => !['_id', '__v', 'updateByUser'].includes(k))
     .map(field => ({ field }));
 
 
@@ -69,25 +51,17 @@ const camposCambiados = (body = {}) => Object.keys(body)
  *
  * @param {object} opciones.menu       la alerta después del cambio
  * @param {object} opciones.actor      quién lo hizo (de la sesión)
- * @param {string} opciones.operation  create | update | delete | bonus
+ * @param {string} opciones.operation  create | update | delete
  * @param {object} opciones.body       lo que se guardó (para listar campos)
- * @param {object} opciones.bonusBefore  bonificación anterior, solo si operation es 'bonus'
  */
-export const notifyMenuApplied = ({ menu, actor, operation, body = {}, bonusBefore = null }) => {
+export const notifyMenuApplied = ({ menu, actor, operation, body = {} }) => {
     const extra = {};
-
-    if (esOperacionDeBono(operation)) {
-        // Los cambios ya redactados salen de libs/bonus, el mismo texto que ve
-        // la lista de alertas y el PDF. Un aviso que describa el cambio de otra
-        // forma que el informe obliga a decidir cuál de los dos miente.
-        extra.bonusChanges = diffBonusSystems(bonusBefore, menu?.bonusSystem);
-    }
 
     return notify({
         type: tipoAplicado(operation),
         actor,
         resource: recursoDeAlerta(menu),
-        changes: esOperacionDeBono(operation) ? [] : camposCambiados(body),
+        changes: camposCambiados(body),
         extra,
         // Los cambios van TAMBIÉN en `meta` y no solo en `extra`: `extra` vive
         // durante el renderizado del texto y se descarta, mientras que `meta`
@@ -96,7 +70,6 @@ export const notifyMenuApplied = ({ menu, actor, operation, body = {}, bonusBefo
         meta: {
             menuId: menu?._id ? String(menu._id) : null,
             operation,
-            ...(extra.bonusChanges ? { bonusChanges: extra.bonusChanges } : {}),
         },
     });
 };
@@ -112,26 +85,14 @@ export const notifyMenuApplied = ({ menu, actor, operation, body = {}, bonusBefo
 export const requestMenuChange = ({ menu, actor, operation, body = {}, requesterId }) => {
     const extra = { operation, requesterId: requesterId ? String(requesterId) : null };
 
-    if (esOperacionDeBono(operation)) {
-        extra.bonusChanges = diffBonusSystems(
-            menu?.bonusSystem,
-            normalizeBonusSystem(body.bonusSystem),
-        );
-    }
-
     return notify({
-        type: esOperacionDeBono(operation) ? 'bonus.requested' : 'menu.requested',
+        type: 'menu.requested',
         actor,
         resource: recursoDeAlerta(menu),
         extra,
         meta: {
             menuId: menu?._id ? String(menu._id) : null,
             operation,
-            ...(extra.bonusChanges ? { bonusChanges: extra.bonusChanges } : {}),
-            // La bonificación ANTERIOR viaja con la solicitud: al aprobarla,
-            // días después, es la única forma de contar qué cambió respecto de
-            // lo que había cuando se pidió.
-            ...(menu?.bonusSystem ? { bonusBefore: menu.bonusSystem } : {}),
         },
         request: {
             status: 'pending',
@@ -177,7 +138,7 @@ export const applyMenuRequest = async (payload, approverUserId) => {
             return { ok: true, menu: antes };
         }
 
-        // update y bonus se guardan igual: los dos son una edición parcial. Lo
+        // Lo
         // que los distingue es QUÉ campos traen y con qué familia se avisa.
         const actualizado = await menuLayer.putMenu({ ...body, _id: menuId }, approverUserId);
         return { ok: true, menu: actualizado };
@@ -195,5 +156,5 @@ export const applyMenuRequest = async (payload, approverUserId) => {
 
 /** ¿Esta notificación es una solicitud sobre una alerta? */
 export const isMenuRequest = (notification) =>
-    ['menu', 'bonus'].includes(notification?.family)
+    notification?.family === 'menu'
     && Boolean(notification?.request?.payload?.operation);

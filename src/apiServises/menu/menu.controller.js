@@ -112,17 +112,12 @@ controller.getCategory = async (req, res) => {
 
 controller.putMenu = async (req, res) => {
     try {
-        // Un cambio de bonificación no se lee igual que renombrar un campo: se
-        // avisa con su propia familia y su propio estilo. Se decide por el
-        // CONTENIDO del cuerpo, no por la ruta, para que el cliente no tenga
-        // que elegir a qué endpoint pegarle.
-        const esCambioDeBono = 'bonusSystem' in (req.body || {});
-        const operacion = esCambioDeBono ? MENU_OPERATION.BONUS : MENU_OPERATION.UPDATE;
+        const operacion = MENU_OPERATION.UPDATE;
 
         // Hace falta el estado ANTERIOR para poder contar qué cambió. Después
         // de guardar ya no hay con qué comparar.
         const antes = req.body?._id
-            ? await MenuModel.findById(req.body._id).select('es en bonusSystem').lean()
+            ? await MenuModel.findById(req.body._id).select('es en').lean()
             : null;
 
         // El usuario super propone; el administrador aplica. Ver la nota en
@@ -137,9 +132,7 @@ controller.putMenu = async (req, res) => {
             });
             return res.status(202).json({
                 status: 202, applied: false, request: notificacion,
-                message: esCambioDeBono
-                    ? 'El cambio de bonificación quedó pendiente de aprobación por un administrador.'
-                    : 'El cambio quedó pendiente de aprobación por un administrador.',
+                message: 'El cambio quedó pendiente de aprobación por un administrador.',
             });
         }
 
@@ -151,7 +144,6 @@ controller.putMenu = async (req, res) => {
             actor: actorFromSession(req),
             operation: operacion,
             body: req.body,
-            bonusBefore: antes?.bonusSystem || null,
         });
 
         return res.json(update);

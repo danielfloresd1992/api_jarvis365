@@ -74,26 +74,6 @@ const menuSchema = yup.object({
     car: yup.boolean().required(),
 
     
-    // --- Sistema de bonificación ---
-    // Opcional: una alerta puede crearse sin bonificación y configurarse
-    // despues. Lo que SI se valida es que, si viene, los numeros tengan
-    // sentido: la acumulacion es divisor en el corte y un 0 daria infinito.
-    bonusSystem: yup.object({
-        isEnabled: yup.bool().default(false),
-        defaultRule: yup.object({
-            bonifies: yup.bool().default(true),
-            bonusWorth: yup.number().min(0).default(1),
-            accumulationRequired: yup.number().min(1).default(1),
-            pointValue: yup.object({
-                day: yup.number().min(0).default(0.20),
-                night: yup.number().min(0).default(0.30),
-            }),
-        }),
-        franchiseExceptions: yup.array(),
-        localExceptions: yup.array(),
-        regulationCode: yup.string().default(''),
-    }).notRequired().default(undefined),
-
     // --- Configuración de Reportes ---
     useOnlyForTheReportingDocument: yup.boolean().default(false),
     useOfLiveAlertForTheCustomer: yup.boolean().default(false),
