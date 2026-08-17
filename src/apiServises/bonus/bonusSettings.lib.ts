@@ -1,11 +1,11 @@
-import BonusSettingsModel from './bonusSettings.model.js';
+import BonusSettingsModel, { BonusActor, BonusSettingsDoc } from './bonusSettings.model.js';
+import type { HydratedDocument } from 'mongoose';
 
 /*
- * Acceso al valor del bono, aparte de las rutas.
+ * Acceso a los valores globales, aparte de las rutas.
  *
- * Vive suelto porque lo necesita el sellado de novedades
- * (libs/bonus/bonusSeal.lib.js), y ese camino no debería tener que importar un
- * router de Express para leer un número.
+ * Vive suelto porque lo necesita el sellado de novedades, y ese camino no debería
+ * tener que importar un router de Express para leer un número.
  */
 
 /** Lo que dice el reglamento cuando todavía nadie configuró nada. */
@@ -15,14 +15,22 @@ export const DEFAULT_POINT_VALUE = 0.20;
 export const DEFAULT_EXCHANGE_RATE = 0;
 
 
+/** Los dos números, siempre presentes. */
+export interface BonusSettingsValues {
+    pointValue: number;
+    exchangeRate: number;
+}
+
+
 /**
  * Las dos variables globales del sistema de bonificación.
  *
  * Nunca falla ni devuelve null: si no hay documento, o si la consulta se cae,
- * responde los valores por defecto. Sellar una novedad no puede quedar
- * bloqueado porque falte una configuración.
+ * responde los valores por defecto. Sellar una novedad no puede quedar bloqueado
+ * porque falte una configuración — y por eso el tipo de retorno no lleva
+ * `| null`: quien la llame no tiene que defenderse de un caso que no ocurre.
  */
-export const getBonusSettings = async () => {
+export const getBonusSettings = async (): Promise<BonusSettingsValues> => {
     try {
         const ajustes = await BonusSettingsModel.findOne().select('pointValue exchangeRate').lean();
 
@@ -41,22 +49,31 @@ export const getBonusSettings = async () => {
 
 
 /** Solo el valor del bono. Es lo único que necesita el sellado de novedades. */
-export const getBonusPointValue = async () => (await getBonusSettings()).pointValue;
+export const getBonusPointValue = async (): Promise<number> =>
+    (await getBonusSettings()).pointValue;
+
+
+/** Un cambio parcial: mandar solo la tasa deja el valor del bono como estaba. */
+export interface BonusSettingsPatch {
+    pointValue?: number;
+    exchangeRate?: number;
+}
 
 
 /**
  * Cambia una o las dos variables y archiva las anteriores.
  *
- * Hay un solo documento: si no existe se crea, y si existe se actualiza
- * empujando el par viejo al historial.
+ * Hay un solo documento: si no existe se crea, y si existe se actualiza empujando
+ * el par viejo al historial.
  *
- * Acepta cambios parciales: mandar solo la tasa deja el valor del bono como
- * estaba. Es lo habitual, porque la tasa cambia mucho más seguido.
- *
- * @param {{pointValue?: number, exchangeRate?: number}} cambios
- * @param {{nameUser: string, _id: string}} usuario  quién los hizo
+ * @param cambios  parciales. Un campo ausente es "no lo toques".
+ * @param usuario  quién los hizo.
  */
-export const saveBonusSettings = async (cambios, usuario) => {
+export const saveBonusSettings = async (
+    cambios: BonusSettingsPatch,
+    usuario: BonusActor,
+): Promise<HydratedDocument<BonusSettingsDoc>> => {
+
     const ajustes = await BonusSettingsModel.findOne();
 
     const nuevoValor = Number.isFinite(Number(cambios?.pointValue)) ? Number(cambios.pointValue) : undefined;
@@ -74,8 +91,8 @@ export const saveBonusSettings = async (cambios, usuario) => {
     const cambiaValor = nuevoValor !== undefined && nuevoValor !== ajustes.pointValue;
     const cambiaTasa = nuevaTasa !== undefined && nuevaTasa !== ajustes.exchangeRate;
 
-    // Se archiva el PAR completo, no solo lo que cambió: al revisar un corte
-    // hace falta saber con qué dos números se calculó, y reconstruirlo cruzando
+    // Se archiva el PAR completo, no solo lo que cambió: al revisar un corte hace
+    // falta saber con qué dos números se calculó, y reconstruirlo cruzando
     // historiales separados es la clase de cuenta que sale mal.
     if (cambiaValor || cambiaTasa) {
         ajustes.history.push({
