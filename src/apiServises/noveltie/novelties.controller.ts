@@ -6,6 +6,7 @@ import LocalModel from '../local/local.model.js';
 import { commentYupSchema } from './novelty.squema.js';
 
 import MenuModel from '../menu/menu.model.js';
+import { buildBonusSeal } from '../bonus/bonusSeal.lib.js';
 import FileNoveltieModel from './fileNoveltie.model.js';
 import { join } from 'path';
 import fs, { readFileSync } from 'fs';
@@ -548,6 +549,32 @@ export default class ControllerNovelty {
             }
 
 
+            // ══════════════════════════════════════════════════════════
+            // SELLADO DE LA BONIFICACIÓN
+            // ══════════════════════════════════════════════════════════
+            // Solo al APROBAR, y solo la primera vez.
+            //
+            // AL APROBAR: antes de eso no hay nada que evaluar —el corte descarta
+            // las no aprobadas— y un RECHAZO no debe sellar. Un rechazo se puede
+            // revertir, y con `applies: null` no hay que decidir después si el
+            // sello se sobrescribe. Ojo con la diferencia: `applies: false` NO es
+            // "la rechazaron", es "la aprobaron y esta alerta no bonifica".
+            //
+            // LA PRIMERA VEZ: sin esa guarda, cada edición posterior volvería a
+            // resolver con el valor del bono de HOY, que es exactamente lo que
+            // congelar existe para evitar.
+            const seVaAAprobar = body?.validationResult?.isApproved === true;
+            const yaEstaSellada = findNovelty.bonus?.applies !== null
+                && findNovelty.bonus?.applies !== undefined;
+
+            if (seVaAAprobar && !yaEstaSellada) {
+                const sello = await buildBonusSeal(findNovelty);
+
+                // `null` = no se pudo resolver. Se deja sin sellar a propósito:
+                // `applies: null` significa "no se evaluó" y se puede reprocesar,
+                // mientras que un sello a medias queda congelado y mintiendo.
+                if (sello) body.bonus = sello;
+            }
 
 
             const updateDocument = await NoveltieModel.findOneAndUpdate({ _id: id }, body, { new: true, runValidators: true }).populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id establishment');

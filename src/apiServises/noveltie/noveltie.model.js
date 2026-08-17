@@ -231,6 +231,20 @@ const Novelties = new Schema({
 
         applies: { type: Boolean, default: null },
 
+        // POR QUÉ no bonificó, cuando `applies` es false. Solo se llena en ese
+        // caso: si bonificó, no hay nada que explicar.
+        //
+        //   'sin-regla'        la alerta no tiene regla asignada
+        //   'regla-inactiva'   tenía regla, pero está desactivada
+        //   'fuera-de-alcance' la regla no aplica en ese establecimiento
+        //
+        // Los tres significan cosas muy distintas y solo uno es un problema: el
+        // del medio es una alerta que DEJÓ DE PAGAR sin que nadie la tocara y
+        // sin que salte ningún error. Sin este campo los tres se guardan
+        // idénticos —`{ applies: false }`— y sobre una novedad ya sellada no
+        // queda forma de distinguirlos.
+        reason: { type: String, default: null },
+
         // ── De la regla ───────────────────────────────────────────────
         // De cuál salió. Es rastro, no fuente: los números de abajo son los que
         // mandan. Sirve para responder "¿de qué regla vino esto?" sin adivinar.

@@ -141,7 +141,22 @@ export interface ResolveBonusParams {
     menu?: MenuLike | null;
     establishment?: EstablishmentLike | null;
     settings?: { pointValue?: number | null } | null;
+
+    /**
+     * CUÁNDO OCURRIÓ el hecho. Con esta fecha se busca el turno en el horario,
+     * así que tiene que ser la del reporte y no la de ahora: una novedad del
+     * sábado validada el lunes tiene que resolver el sábado.
+     */
     at?: Date;
+
+    /**
+     * CUÁNDO SE DECIDIÓ. Es otra fecha, y por eso es otro parámetro.
+     *
+     * Estuvieron juntas y era un error esperando: el llamador natural pasa la
+     * fecha del reporte en `at`, y el sello quedaba fechado el día del hecho en
+     * vez del día en que alguien lo aprobó. Se ve plausible y no salta.
+     */
+    frozenAt?: Date;
 }
 
 
@@ -262,10 +277,10 @@ const numero = (valor: unknown, porDefecto: number): number => {
  * El sello de una novedad que no bonifica. Se guarda igual: "no bonifica" es una
  * decisión, y verse igual que "nunca se selló" borra esa diferencia.
  */
-const noBonifica = (motivo: SkipReason, ahora: Date): BonusSkipped => ({
+const noBonifica = (motivo: SkipReason, sellado: Date): BonusSkipped => ({
     applies: false,
     reason: motivo,
-    frozenAt: ahora,
+    frozenAt: sellado,
 });
 
 
@@ -284,6 +299,7 @@ export const resolveBonusForNovelty = ({
     establishment,
     settings = {},
     at = new Date(),
+    frozenAt = new Date(),
 }: ResolveBonusParams): BonusSeal => {
 
     const rule = menu?.bonusRule;
@@ -291,13 +307,13 @@ export const resolveBonusForNovelty = ({
     // Sin regla la alerta no bonifica. Ojo: eso NO es lo mismo que "nadie la
     // revisó todavía" — esa diferencia la lleva Menu.bonusReviewed.
     if (!rule || typeof rule !== 'object' || !('scope' in rule || 'alertsRequired' in rule || 'active' in rule)) {
-        return noBonifica('sin-regla', at);
+        return noBonifica('sin-regla', frozenAt);
     }
 
     const regla = rule as ResolvableRule;
 
-    if (regla.active === false) return noBonifica('regla-inactiva', at);
-    if (!isInScope(regla, establishment)) return noBonifica('fuera-de-alcance', at);
+    if (regla.active === false) return noBonifica('regla-inactiva', frozenAt);
+    if (!isInScope(regla, establishment)) return noBonifica('fuera-de-alcance', frozenAt);
 
     // El turno decide CUÁNTOS bonos otorga, y es el del operador.
     const { workShift, shiftSource } = resolveWorkShift(user, attendance, at);
@@ -331,6 +347,6 @@ export const resolveBonusForNovelty = ({
 
         pointValue: settings?.pointValue ?? null,
 
-        frozenAt: at,
+        frozenAt,
     };
 };
