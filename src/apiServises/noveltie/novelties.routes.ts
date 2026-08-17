@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction, Express, Router } from 'express';
+import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { spawn } from 'child_process';
 import ControllerNovelty from './novelties.controller';
 import { uploadNoveltie } from '../../util/multer';
@@ -198,40 +199,25 @@ routerNoveltie.put(`${nameApi}/novelties/id=:id`, extendSession, validateSession
 
 
 
-routerNoveltie.post(`${nameApi}/noventy/imageToasdPos`, extendSession, validateSession, uploadNoveltie.fields([{ name: 'img', maxCount: 1 }]), async (req: any, res: Response): Promise<void> => {
-    try {
-        const { id } = req.query;
-        if (!mongoose.Types.ObjectId.isValid(id)) res.status(400).json({ error: 'the id is not valid' });
-        if(!req.files) res.status(400).json({ error: 'Bad request', status: 400, message: 'img is undefined' }); 
+routerNoveltie.post(`${nameApi}/noventy/imageToasdPos`, extendSession, validateSession, uploadNoveltie.fields([{ name: 'img', maxCount: 1 }]), asyncHandler(async (req: any, res: Response): Promise<void> => {
+    const { id } = req.query;
+    if (!mongoose.Types.ObjectId.isValid(id)) res.status(400).json({ error: 'the id is not valid' });
+    if(!req.files) res.status(400).json({ error: 'Bad request', status: 400, message: 'img is undefined' }); 
    
-        const file = req.files.img[0];
+    const file = req.files.img[0];
 
-        const fileImgToadPos = new FileImgToadPos({
-            idEstablishment: id,
-            submittedByUser: req.session.name,
-            path: file.path,
-            url: process.env.NODE_ENV === 'development' ? `https://amazona365.ddns.net:3006${nameApi}/novelty/img=${file.filename}` : `https://amazona365.ddns.net${nameApi}/novelty/img=${file.filename}`,
-        });
-        const fileSaved = await fileImgToadPos.save();
+    const fileImgToadPos = new FileImgToadPos({
+        idEstablishment: id,
+        submittedByUser: req.session.name,
+        path: file.path,
+        url: process.env.NODE_ENV === 'development' ? `https://amazona365.ddns.net:3006${nameApi}/novelty/img=${file.filename}` : `https://amazona365.ddns.net${nameApi}/novelty/img=${file.filename}`,
+    });
+    const fileSaved = await fileImgToadPos.save();
 
-        if(typeof io !== 'undefined') io.emit('fileLoader', fileSaved);
+    if(typeof io !== 'undefined') io.emit('fileLoader', fileSaved);
 
-        res.status(200).json(fileSaved);
-    } 
-    catch(error:any){
-        if (error instanceof multer.MulterError){
-            console.log('Multer error:', error); 
-            res.status(400).json({ error: 'Multer error', status: 400, message: error.message }); 
-        } 
-        else if(error.name === 'ValidationError'){
-            res.status(400).json({ error: 'Bad request', status: 400, message: error.message }); 
-        }
-        else {
-            console.log('General error:', error);
-            res.status(500).json({ error: 'Error server internal', status: 500, message: error });
-        }
-    }
-});
+    res.status(200).json(fileSaved);
+}));
 
 
 

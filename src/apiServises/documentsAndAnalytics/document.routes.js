@@ -1,4 +1,5 @@
 import express from 'express';
+import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { Types } from 'mongoose';
 import DocumentDiaryModel from './document.model.js';
 import documentConfigModel from './document.config.model.js';
@@ -188,50 +189,43 @@ routerDocument.get(`${nameApi}/document/analytics/daily-summary`, validateSessio
 
 
 
-routerDocument.post(`${nameApi}/document`, validateSession, async (req, res) => {
-    try {
-        const bodyValidate = await documentSchema.validate(req.body, { stripUnknown: true });
+routerDocument.post(`${nameApi}/document`, validateSession, asyncHandler(async (req, res) => {
+    const bodyValidate = await documentSchema.validate(req.body, { stripUnknown: true });
 
-        const existTask = await SMU_MODEL.findOne({ idUser: req.session.userId });
+    const existTask = await SMU_MODEL.findOne({ idUser: req.session.userId });
 
-        if (existTask) return res.status(409).json({ status: 409, message: 'the user is already in a task', error: 'conflict', data: existTask.SMU });
+    if (existTask) return res.status(409).json({ status: 409, message: 'the user is already in a task', error: 'conflict', data: existTask.SMU });
 
-        const findConfig = await documentConfigModel.findOne({ idEstablesment: bodyValidate.establishmentId });
+    const findConfig = await documentConfigModel.findOne({ idEstablesment: bodyValidate.establishmentId });
 
-        const isExistsDocument = await DocumentModel.exists({ bodyValidate });
+    const isExistsDocument = await DocumentModel.exists({ bodyValidate });
 
-        const Document = new DocumentModel({
-            ...bodyValidate,
-            createdDocument: {
-                nameUser: `${req.session.dataUser.name} ${req.session.dataUser.surName}`,
-                _id: req.session.userId
-            },
-            pages: []
-        });
+    const Document = new DocumentModel({
+        ...bodyValidate,
+        createdDocument: {
+            nameUser: `${req.session.dataUser.name} ${req.session.dataUser.surName}`,
+            _id: req.session.userId
+        },
+        pages: []
+    });
 
-        const document = await Document.save();
+    const document = await Document.save();
 
-        const Task = new SMU_MODEL({
-            idUser: req.session.userId,
-            idDocument: document._id,
-            SMU: bodyValidate
-        });
-
-
-        const task = await Task.save();
-        req.session.dataUser.activity = task;
-
-        io.emit('jarvis365reporte-alert-receive', { title: 'Reporte iniciado', description: `${req.session.name} ha iniciado un reporte en ${Task?.SMU?.establishmentName || Task?.SMU?.franchiseName}, ${Task?.SMU?.date}, turno: ${Task?.SMU?.shift}` });
+    const Task = new SMU_MODEL({
+        idUser: req.session.userId,
+        idDocument: document._id,
+        SMU: bodyValidate
+    });
 
 
-        return res.status(200).json({ Document, task });
-    }
-    catch (error) {
-        console.log(error);
-        if (error?.name === 'ValidationError') return res.status(400).json({ status: 400, error, 'Bad request': error.message });
-        return res.status(500).json({ status: 500, error: error, message: 'Error server internal' });
-    }
-});
+    const task = await Task.save();
+    req.session.dataUser.activity = task;
+
+    io.emit('jarvis365reporte-alert-receive', { title: 'Reporte iniciado', description: `${req.session.name} ha iniciado un reporte en ${Task?.SMU?.establishmentName || Task?.SMU?.franchiseName}, ${Task?.SMU?.date}, turno: ${Task?.SMU?.shift}` });
+
+
+    return res.status(200).json({ Document, task });
+}));
 
 
 
@@ -379,53 +373,35 @@ routerDocument.put(`${nameApi}/document`, validateSession, async (req, res) => {
 // documentSchemaComplete
 
 
-routerDocument.put(`${nameApi}/document/update/:id`, validateSession, async (req, res) => {  //default
-    try {
-        const { id } = req.params;
-        if (!id) return res.status(400).json({ error: 400, error: 'Bad request', message: 'id is undefined' });
-        if (!Types.ObjectId.isValid(id)) return res.status(400).json({ status: 400, error: 'Bad request', message: 'Id invalid' });
-        const exists = await DocumentDiaryModel.exists({ _id: id });
-        if (!exists) return res.status(404).json({ error: 'Document not found', status: 404, message: `There is no document associated with the ${id} _id` });
-        const validateData = await documentSchemaComplete.validate(req.body, { stripUnknown: true });
-        if (validateData._id) delete validateData._id;
-        const updateDocument = await DocumentDiaryModel.findByIdAndUpdate(id, validateData);
+routerDocument.put(`${nameApi}/document/update/:id`, validateSession, asyncHandler(async (req, res) => {  //default
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ error: 400, error: 'Bad request', message: 'id is undefined' });
+    if (!Types.ObjectId.isValid(id)) return res.status(400).json({ status: 400, error: 'Bad request', message: 'Id invalid' });
+    const exists = await DocumentDiaryModel.exists({ _id: id });
+    if (!exists) return res.status(404).json({ error: 'Document not found', status: 404, message: `There is no document associated with the ${id} _id` });
+    const validateData = await documentSchemaComplete.validate(req.body, { stripUnknown: true });
+    if (validateData._id) delete validateData._id;
+    const updateDocument = await DocumentDiaryModel.findByIdAndUpdate(id, validateData);
 
-        return res.status(200).json({ updateDocument });
-    }
-    catch (error) {
-        console.log(error)
-        if (error.name === 'ValidationError') {
-            return res.status(400).json({ error: 'Bad request', status: 400, message: error.message })
-        }
-        return res.status(500).json({ status: 500, error: error, message: 'Error server internal' });
-    }
-});
+    return res.status(200).json({ updateDocument });
+}));
 
 
 
 
-routerDocument.patch(`${nameApi}/document/update/:id`, validateSession, async (req, res) => {  //default
-    try {
-        const { id } = req.params;
-        if (!id) return res.status(400).json({ error: 400, error: 'Bad request', message: 'id is undefined' });
-        if (!Types.ObjectId.isValid(id)) return res.status(400).json({ status: 400, error: 'Bad request', message: 'Id invalid' });
-        const exists = await DocumentDiaryModel.exists({ _id: id });
-        if (!exists) return res.status(404).json({ error: 'Document not found', status: 404, message: `There is no document associated with the ${id} _id` });
+routerDocument.patch(`${nameApi}/document/update/:id`, validateSession, asyncHandler(async (req, res) => {  //default
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ error: 400, error: 'Bad request', message: 'id is undefined' });
+    if (!Types.ObjectId.isValid(id)) return res.status(400).json({ status: 400, error: 'Bad request', message: 'Id invalid' });
+    const exists = await DocumentDiaryModel.exists({ _id: id });
+    if (!exists) return res.status(404).json({ error: 'Document not found', status: 404, message: `There is no document associated with the ${id} _id` });
 
-        const validateData = await documentSchemaPartial.validate(req.body, { stripUnknown: true });
-        if (validateData._id) delete validateData._id;
+    const validateData = await documentSchemaPartial.validate(req.body, { stripUnknown: true });
+    if (validateData._id) delete validateData._id;
 
-        const updateDocument = await DocumentDiaryModel.findByIdAndUpdate(id, { $set: validateData }, { new: true, runValidators: true });
-        return res.status(200).json({ updateDocument, validateData });
-    }
-    catch (error) {
-        console.log(error)
-        if (error.name === 'ValidationError') {
-            return res.status(400).json({ error: 'Bad request', status: 400, message: error.message })
-        }
-        return res.status(500).json({ status: 500, error: error, message: 'Error server internal' });
-    }
-});
+    const updateDocument = await DocumentDiaryModel.findByIdAndUpdate(id, { $set: validateData }, { new: true, runValidators: true });
+    return res.status(200).json({ updateDocument, validateData });
+}));
 
 
 

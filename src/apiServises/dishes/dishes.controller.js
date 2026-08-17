@@ -1,4 +1,5 @@
 import DishesSchema from './dishes.model.js';
+import { asyncHandler } from '../../middleware/asyncHandler.js';
 import LocalModel from '../local/local.model.js';
 import { dishesSchema } from '../../libs/schema/dish.js';
 import { Types } from 'mongoose';
@@ -8,36 +9,29 @@ const controller = {};
 
 
 
-controller.setDishe = async (req, res) => {
-  try {
-        const idLocaLQuery = req.query.id;
+controller.setDishe = asyncHandler(async (req, res) => {
+    const idLocaLQuery = req.query.id;
 
-        const bodyValidate = await dishesSchema.validate(req.body, {
-        abortEarly: false
-        });
+    const bodyValidate = await dishesSchema.validate(req.body, {
+    abortEarly: false
+    });
 
-        const createDish = new DishesSchema(bodyValidate);
-        await createDish.save();
-
-
-        const establishment = await LocalModel.findById(idLocaLQuery);
-        establishment.dishes ? establishment.dishes.push(createDish.id) : establishment.dishes = [createDish.id];
-
-        const establishmentUpdate = await establishment.save();
-        return res.status(200).json({
-        message: 'The resource was successfully create',
-        newDish: createDish,
-        establishment: establishmentUpdate
-        });
+    const createDish = new DishesSchema(bodyValidate);
+    await createDish.save();
 
 
-    } 
-    catch (error) {
-        if (error.name === 'ValidationError') return res.status(400).json({errors: error.errors}) 
-        if(error.code === 11000) return res.status(409).json({ error: error.message });
-        return res.status(500).send('Error server internal');
-    }
-}, 
+    const establishment = await LocalModel.findById(idLocaLQuery);
+    establishment.dishes ? establishment.dishes.push(createDish.id) : establishment.dishes = [createDish.id];
+
+    const establishmentUpdate = await establishment.save();
+    return res.status(200).json({
+    message: 'The resource was successfully create',
+    newDish: createDish,
+    establishment: establishmentUpdate
+    });
+
+
+}), 
 
 
 
@@ -81,29 +75,23 @@ controller.getDishById = async (req, res) => {
 
 
 
-controller.putDish = async (req, res) => {
-    try {
-        const { id } = req.params;
+controller.putDish = asyncHandler(async (req, res) => {
+    const { id } = req.params;
 
-        if (!Types.ObjectId.isValid(id)) return res.status(400).json({
-            error: 'The objectId of the dish parameter is invalid'
-        });
+    if (!Types.ObjectId.isValid(id)) return res.status(400).json({
+        error: 'The objectId of the dish parameter is invalid'
+    });
 
 
-        const dataValidate = await dishesSchema.validate(req.body, {
-            abortEarly: false
-        });
+    const dataValidate = await dishesSchema.validate(req.body, {
+        abortEarly: false
+    });
 
-        const result = await DishesSchema.findByIdAndUpdate(id, dataValidate);
+    const result = await DishesSchema.findByIdAndUpdate(id, dataValidate);
 
-        if(!result) return res.json({ data: result,status: 200 });
-        return res.status(404).json({error: 'Document not found',status: 404});
-    } 
-    catch(error){
-        if(error.name === 'ValidationError') return res.status(400).json({errors: error.errors});
-        return res.status(500).json({ error: error});
-    }
-}, 
+    if(!result) return res.json({ data: result,status: 200 });
+    return res.status(404).json({error: 'Document not found',status: 404});
+}), 
 
 
 

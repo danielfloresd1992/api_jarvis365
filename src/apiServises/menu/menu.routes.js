@@ -1,4 +1,5 @@
 import controller from './menu.controller.js';
+import { asyncHandler } from '../../middleware/asyncHandler.js';
 import bonusCategoryController from './bonusCategory.controller.js';
 import express from 'express';
 import menuSchema from './menu.schema.js'
@@ -64,46 +65,38 @@ routerMenu.get(`${nameApi}/menu/id=:id`, extendSession, validateSession, control
 // "quedó pendiente". Sin ese dato, la pantalla mostraría "guardado" sobre un
 // cambio que todavía no ocurrió.
 
-routerMenu.post(`${nameApi}/menu`, extendSession, validateSuperUser, async ( req, res ) => {
-    try{
-        const body = req.body;
-        const menuValiate = await menuSchema.validate(body);
+routerMenu.post(`${nameApi}/menu`, extendSession, validateSuperUser, asyncHandler(async ( req, res ) => {
+    const body = req.body;
+    const menuValiate = await menuSchema.validate(body);
 
-        if (req.session.admin !== true) {
-            const notificacion = await requestMenuChange({
-                menu: null,
-                actor: actorFromSession(req),
-                operation: MENU_OPERATION.CREATE,
-                body: menuValiate,
-                requesterId: req.session.userId,
-            });
-            return res.status(202).json({
-                status: 202, applied: false, request: notificacion,
-                message: 'La alerta quedó pendiente de aprobación por un administrador.',
-            });
-        }
-
-        // El autor sale de la sesión (nunca del body). Docs antiguos sin createdBy.
-        const menu = new MenuModel({ ...menuValiate, createdBy: req.session.userId });
-        await menu.save();
-        await menu.populate('createdBy', 'name surName img');
-
-        await notifyMenuApplied({
-            menu,
+    if (req.session.admin !== true) {
+        const notificacion = await requestMenuChange({
+            menu: null,
             actor: actorFromSession(req),
             operation: MENU_OPERATION.CREATE,
             body: menuValiate,
+            requesterId: req.session.userId,
         });
+        return res.status(202).json({
+            status: 202, applied: false, request: notificacion,
+            message: 'La alerta quedó pendiente de aprobación por un administrador.',
+        });
+    }
 
-        return res.json(menu);
-    }
-    catch(error){
-        console.log(error.name)
-        if(error.name === 'ValidationError') return res.status(400).json({ error: 'Bad reques', status:400, message: error.errors});
-        if(error.name === 'MongoServerError') return res.status(400).json({ error: 'Bad reques', status:400, message: error});
-        return res.status(500).send(error);
-    }
-});
+    // El autor sale de la sesión (nunca del body). Docs antiguos sin createdBy.
+    const menu = new MenuModel({ ...menuValiate, createdBy: req.session.userId });
+    await menu.save();
+    await menu.populate('createdBy', 'name surName img');
+
+    await notifyMenuApplied({
+        menu,
+        actor: actorFromSession(req),
+        operation: MENU_OPERATION.CREATE,
+        body: menuValiate,
+    });
+
+    return res.json(menu);
+}));
 
 
 

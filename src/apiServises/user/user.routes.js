@@ -1,4 +1,5 @@
 import express from 'express';
+import { asyncHandler } from '../../middleware/asyncHandler.js';
 const routerUser = express.Router();
 import { join, basename } from 'path';
 import sharp from 'sharp';
@@ -256,47 +257,40 @@ routerUser.get(`${nameApi}/user/list`, validateSession, async (req, res) => {
 });
 
 
-routerUser.put(`${nameApi}/user/:id`, validateAdminUser, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const idUserQuiery = req.session.userId;
+routerUser.put(`${nameApi}/user/:id`, validateAdminUser, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const idUserQuiery = req.session.userId;
 
-        if (!ObjectId.isValid(id)) return res.status(400).json({ error: 'Bad request', status: 400, message: 'ID is not valid' });
+    if (!ObjectId.isValid(id)) return res.status(400).json({ error: 'Bad request', status: 400, message: 'ID is not valid' });
 
-        const body = req.body;
-        const dataValidate = await userUpdateSchema.validate(body);
+    const body = req.body;
+    const dataValidate = await userUpdateSchema.validate(body);
 
-        // Persistir SOLO las claves que el cliente envió realmente.
-        // yup inyecta defaults (dni:null, img:null, workSchedule con solo los
-        // flags, jobInformation:{detail:null}) para claves ausentes; hacer $set
-        // con esos defaults borraría datos reales en actualizaciones parciales.
-        const partialUpdate = {};
-        for (const key of Object.keys(dataValidate)) {
-            if (Object.prototype.hasOwnProperty.call(body, key)) partialUpdate[key] = dataValidate[key];
-        }
-
-        const changedKeys = Object.keys(partialUpdate);
-        if (changedKeys.length === 0) {
-            return res.status(400).json({ error: 'Bad request', status: 400, message: 'No valid fields to update.' });
-        }
-
-        // El historial registra únicamente los campos realmente modificados
-        const dataUserChange = { idRef: idUserQuiery, change: changedKeys }
-
-        const userUpdate = await UserModel.findByIdAndUpdate(id, { $set: partialUpdate, $push: { updateByUser: dataUserChange } }, { new: true, runValidators: true })
-            .select('+updateByUser')
-            .populate('updateByUser.idRef', 'name surName');
-
-        if (!userUpdate) return res.status(404).json({ error: 'Not found', status: 404, mmesage: 'The user does not exist.' })
-
-        return res.json({ userUpdate });
+    // Persistir SOLO las claves que el cliente envió realmente.
+    // yup inyecta defaults (dni:null, img:null, workSchedule con solo los
+    // flags, jobInformation:{detail:null}) para claves ausentes; hacer $set
+    // con esos defaults borraría datos reales en actualizaciones parciales.
+    const partialUpdate = {};
+    for (const key of Object.keys(dataValidate)) {
+        if (Object.prototype.hasOwnProperty.call(body, key)) partialUpdate[key] = dataValidate[key];
     }
-    catch (error) {
-        console.log(error);
-        if (error.name === 'ValidationError') return res.status(400).json({ error: 'Bad request', status: 400, message: error.errors })
-        return res.status(500).json({ error: 'Error server internal', status: 500, error: error });
+
+    const changedKeys = Object.keys(partialUpdate);
+    if (changedKeys.length === 0) {
+        return res.status(400).json({ error: 'Bad request', status: 400, message: 'No valid fields to update.' });
     }
-});
+
+    // El historial registra únicamente los campos realmente modificados
+    const dataUserChange = { idRef: idUserQuiery, change: changedKeys }
+
+    const userUpdate = await UserModel.findByIdAndUpdate(id, { $set: partialUpdate, $push: { updateByUser: dataUserChange } }, { new: true, runValidators: true })
+        .select('+updateByUser')
+        .populate('updateByUser.idRef', 'name surName');
+
+    if (!userUpdate) return res.status(404).json({ error: 'Not found', status: 404, mmesage: 'The user does not exist.' })
+
+    return res.json({ userUpdate });
+}));
 
 //https://amazona365.ddns.net/api_jarvis/v1/user/multimedia/WhatsAppImage2026-02-08at1.07.11PM.jpeg
 
@@ -1676,319 +1670,75 @@ routerUser.post(`${nameApi}/user/attendance/comment`, validateSuperUser, async (
 
 
 
-routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
-    try {
-        const dni = req.params?.dni;
-        const body = req.body;
+routerUser.post(`${nameApi}/user/attendance/machine/:dni`, asyncHandler(async (req, res) => {
+    const dni = req.params?.dni;
+    const body = req.body;
 
-        await attendanceMachineValidationSchema.validate(body, { abortEarly: false, stripUnknown: true });
+    await attendanceMachineValidationSchema.validate(body, { abortEarly: false, stripUnknown: true });
 
-        const user = await UserModel.findOne({ dni });
-        if (!user) return res.status(404).json({ message: 'User not found' });
+    const user = await UserModel.findOne({ dni });
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
-        const now = new Date();
-        const nowInAttendanceTz = getZonedDateParts(now);
-        const todayMidnight = toUtcMidnightFromZonedParts(nowInAttendanceTz);
-        const nowMinutes = (nowInAttendanceTz.hour * 60) + nowInAttendanceTz.minute;
+    const now = new Date();
+    const nowInAttendanceTz = getZonedDateParts(now);
+    const todayMidnight = toUtcMidnightFromZonedParts(nowInAttendanceTz);
+    const nowMinutes = (nowInAttendanceTz.hour * 60) + nowInAttendanceTz.minute;
 
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // PASO 1 — PRIORIDAD ABSOLUTA: salida de turno nocturno abierto de ayer
-        // Se evalúa ANTES que cualquier validación del día de hoy,
-        // porque hoy puede ser descanso/libre y el empleado igual debe
-        // poder cerrar su jornada de anoche.
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        const yesterdayMidnight = new Date(todayMidnight);
-        yesterdayMidnight.setUTCDate(yesterdayMidnight.getUTCDate() - 1);
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // PASO 1 — PRIORIDAD ABSOLUTA: salida de turno nocturno abierto de ayer
+    // Se evalúa ANTES que cualquier validación del día de hoy,
+    // porque hoy puede ser descanso/libre y el empleado igual debe
+    // poder cerrar su jornada de anoche.
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    const yesterdayMidnight = new Date(todayMidnight);
+    yesterdayMidnight.setUTCDate(yesterdayMidnight.getUTCDate() - 1);
 
-        const openYesterdayRecord = await AttendanceModel.findOne({
-            userId: user._id,
-            date: yesterdayMidnight,
-            checkOut: null
-        });
+    const openYesterdayRecord = await AttendanceModel.findOne({
+        userId: user._id,
+        date: yesterdayMidnight,
+        checkOut: null
+    });
 
-        if (openYesterdayRecord) {
-            // Resolver el horario efectivo de AYER (no de hoy)
-            const yesterdayOverride = openYesterdayRecord?.scheduleOverride;
-            const hasYesterdayOverride = yesterdayOverride?.workType;
+    if (openYesterdayRecord) {
+        // Resolver el horario efectivo de AYER (no de hoy)
+        const yesterdayOverride = openYesterdayRecord?.scheduleOverride;
+        const hasYesterdayOverride = yesterdayOverride?.workType;
 
-            const yesterdayDayNumber = yesterdayMidnight.getUTCDay();
-            const scheduleByDayMap = user?.workSchedule?.scheduleByDay;
-            const yesterdayDayRule = scheduleByDayMap?.get?.(String(yesterdayDayNumber))
-                || scheduleByDayMap?.[String(yesterdayDayNumber)]
-                || null;
-
-            const yesterdayShiftType = (hasYesterdayOverride && yesterdayOverride.shift)
-                || yesterdayDayRule?.shift
-                || user?.workSchedule?.shiftType
-                || 'Diurno';
-
-            // Solo aplicar lógica nocturna si el registro abierto es de un turno nocturno
-            if (yesterdayShiftType === 'Nocturno') {
-                const yesterdayEndTime = (hasYesterdayOverride && yesterdayOverride.endTime)
-                    || yesterdayDayRule?.endTime
-                    || null;
-
-                if (!yesterdayEndTime) {
-                    return res.status(400).json({
-                        status: 400,
-                        message: 'El turno nocturno de ayer no tiene hora de salida configurada.',
-                        error: 'Bad request'
-                    });
-                }
-
-                // Límite fijo: el personal nocturno puede marcar su salida hasta
-                // las 10:00 AM (hora Venezuela), sin importar a qué hora termine su
-                // turno. 600 = 10 horas × 60 min contados desde la medianoche.
-                const NOCTURNAL_CHECKOUT_LIMIT_MINUTES = 10 * 60;
-                const checkoutLimitMinutes = NOCTURNAL_CHECKOUT_LIMIT_MINUTES;
-
-                if (nowMinutes <= checkoutLimitMinutes) {
-                    // ✅ Estamos dentro de la ventana de salida → cerrar turno
-                    const finalRecord = await AttendanceModel.findOneAndUpdate(
-                        { _id: openYesterdayRecord._id },
-                        {
-                            $set: { checkOut: now, updatedAt: now, ...overtimeOnCheckout(user) },
-                            $push: { imageReference: body.imageReference }
-                        },
-                        { new: true }
-                    );
-
-                    await publishAttendanceMark({
-                        record: finalRecord,
-                        user,
-                        kind: 'checkOut',
-                        schedule: { shift: 'Nocturno', endTime: yesterdayEndTime, startTime: yesterdayDayRule?.startTime || null },
-                    });
-
-                    // Fin de jornada: los frontends cierran la sesión del usuario
-                    emitCloseSessionForUser(user._id);
-
-                    return res.status(200).json({
-                        finalRecord,
-                        user,
-                        message: '¡Fin de la jornada nocturna!🌙'
-                    });
-                }
-
-                // Fuera de la ventana de tolerancia → el turno de ayer quedó sin cerrar
-                // pero ya no se puede cerrar. Continúa con la lógica del día de hoy.
-            }
-        }
-
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // PASO 2 — Resolver horario efectivo de HOY
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        const preExistingRecord = await AttendanceModel.findOne({
-            userId: user._id,
-            date: todayMidnight
-        });
-
-        const override = preExistingRecord?.scheduleOverride;
-        const hasOverride = override?.workType;
-
-        const currentDayNumber = todayMidnight.getUTCDay();
+        const yesterdayDayNumber = yesterdayMidnight.getUTCDay();
         const scheduleByDayMap = user?.workSchedule?.scheduleByDay;
-        const dayRule = scheduleByDayMap?.get?.(String(currentDayNumber))
-            || scheduleByDayMap?.[String(currentDayNumber)]
+        const yesterdayDayRule = scheduleByDayMap?.get?.(String(yesterdayDayNumber))
+            || scheduleByDayMap?.[String(yesterdayDayNumber)]
             || null;
 
-        const effectiveShiftType = (hasOverride && override.shift)
-            || dayRule?.shift
+        const yesterdayShiftType = (hasYesterdayOverride && yesterdayOverride.shift)
+            || yesterdayDayRule?.shift
             || user?.workSchedule?.shiftType
             || 'Diurno';
-        const isNocturno = effectiveShiftType === 'Nocturno';
 
-        // ── Validaciones de descanso (ahora seguras porque ya resolvimos la salida nocturna) ──
-        if (hasOverride && override.workType === 'descanso') {
-            return res.status(400).json({
-                status: 400,
-                message: 'Este día fue asignado como descanso por el administrador. No se requiere marcar asistencia.',
-                error: 'Bad request'
-            });
-        }
+        // Solo aplicar lógica nocturna si el registro abierto es de un turno nocturno
+        if (yesterdayShiftType === 'Nocturno') {
+            const yesterdayEndTime = (hasYesterdayOverride && yesterdayOverride.endTime)
+                || yesterdayDayRule?.endTime
+                || null;
 
-        if (!hasOverride && dayRule?.workType === 'descanso') {
-            return res.status(400).json({
-                status: 400,
-                message: 'Este día está configurado como descanso en tu horario. No se requiere marcar asistencia.',
-                error: 'Bad request'
-            });
-        }
-
-        // ── Horarios efectivos de hoy ──
-        const effectiveStartTime = (hasOverride && override.startTime) || dayRule?.startTime || null;
-        const effectiveEndTime = (hasOverride && override.endTime) || dayRule?.endTime || null;
-
-        if (!effectiveStartTime) {
-            return res.status(400).json({
-                status: 400,
-                message: 'No hay horario de entrada configurado para hoy.',
-                error: 'Bad request'
-            });
-        }
-        if (!effectiveEndTime) {
-            return res.status(400).json({
-                status: 400,
-                message: 'No hay horario de salida configurado para hoy.',
-                error: 'Bad request'
-            });
-        }
-
-        const [startH, startM] = effectiveStartTime.split(':');
-        const [endH, endM] = effectiveEndTime.split(':');
-        const startHourNumber = Number(startH);
-        const startMinuteNumber = Number(startM);
-        const endHourNumber = Number(endH);
-        const endMinuteNumber = Number(endM);
-
-        if (
-            Number.isNaN(startHourNumber) || Number.isNaN(startMinuteNumber) ||
-            Number.isNaN(endHourNumber) || Number.isNaN(endMinuteNumber)
-        ) {
-            return res.status(400).json({
-                status: 400,
-                message: 'El horario del usuario tiene un formato inválido.',
-                error: 'Bad request'
-            });
-        }
-
-        const startMinutes = (startHourNumber * 60) + startMinuteNumber;
-        const isExtraDayResolved = (hasOverride && override.workType === 'extra')
-            || (!hasOverride && dayRule?.workType === 'extra');
-
-        const LATE_GRACE_MINUTES = 8;
-
-        // Su PRIMER día no se le cobra. A quien se acaba de dar de alta se le
-        // arma el horario el mismo día, muchas veces cuando ya empezó a
-        // trabajar: cobrarle un retardo contra una hora pautada que hace un
-        // rato no existía es cobrarle un error de captura. Ver newEmployee.lib.
-        const esNuevoHoy = esAltaDeHoy(user, now);
-
-        const shouldCheckLate = esNuevoHoy
-            ? false
-            : (hasOverride ? true : user?.workSchedule?.lateArrivalControl);
-        const realIsLate = shouldCheckLate
-            ? nowMinutes > (startMinutes + LATE_GRACE_MINUTES)
-            : false;
-
-        // Unidades a descontar por el retardo (1 por bloque de 20 min pasada
-        // la tolerancia), persistidas en el documento al marcar la entrada.
-        //
-        // `minutesLate` se sigue calculando aunque sea su primer día: sirve
-        // para el aviso —"entraste 40 minutos después de tu hora"— sin que eso
-        // se convierta en descuento, porque `realIsLate` ya es false.
-        const minutesLate = Math.max(0, nowMinutes - startMinutes);
-        const discountUnits = realIsLate ? computeDiscountUnits(minutesLate) : 0;
-
-        // Detalle del retardo que viaja en la respuesta para que el cliente de
-        // marcado (bioJarvis) se lo muestre al empleado en el momento.
-        const lateInfo = realIsLate
-            ? { minutesLate, discountUnits, graceMinutes: LATE_GRACE_MINUTES, startTime: effectiveStartTime }
-            : null;
-
-        // Horario efectivo de hoy, para la notificación privada del marcaje.
-        // `minutesLate` va acá porque es lo único del retardo que NO se
-        // persiste en el documento: se calcula al vuelo contra la hora pautada.
-        const marcajeSchedule = {
-            startTime: effectiveStartTime,
-            endTime: effectiveEndTime,
-            shift: effectiveShiftType,
-            minutesLate: realIsLate ? minutesLate : 0,
-        };
-
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // PASO 3 — ENTRADA de turno nocturno de hoy
-        // (la salida ya fue manejada en el PASO 1)
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        if (isNocturno) {
-            const earlyToleranceMinutes = 120;
-            if (nowMinutes < (startMinutes - earlyToleranceMinutes)) {
+            if (!yesterdayEndTime) {
                 return res.status(400).json({
                     status: 400,
-                    message: `El turno nocturno inicia a las ${effectiveStartTime}. Puedes marcar desde 1 hora antes.`,
+                    message: 'El turno nocturno de ayer no tiene hora de salida configurada.',
                     error: 'Bad request'
                 });
             }
 
-            const todayRecord = preExistingRecord;
+            // Límite fijo: el personal nocturno puede marcar su salida hasta
+            // las 10:00 AM (hora Venezuela), sin importar a qué hora termine su
+            // turno. 600 = 10 horas × 60 min contados desde la medianoche.
+            const NOCTURNAL_CHECKOUT_LIMIT_MINUTES = 10 * 60;
+            const checkoutLimitMinutes = NOCTURNAL_CHECKOUT_LIMIT_MINUTES;
 
-            if (todayRecord) {
-                if (todayRecord.checkIn && todayRecord.checkOut) {
-                    return res.status(409).json({
-                        status: 409,
-                        message: 'La jornada nocturna de hoy ya fue cerrada previamente.',
-                        data: todayRecord
-                    });
-                }
-                if (todayRecord.checkIn) {
-                    return res.status(409).json({
-                        status: 409,
-                        message: 'Ya se registró la entrada nocturna de hoy. La salida se marcará en la madrugada.',
-                        data: todayRecord
-                    });
-                }
-            }
-
-            let finalRecord;
-            if (todayRecord && !todayRecord.checkIn) {
-                finalRecord = await AttendanceModel.findOneAndUpdate(
-                    { _id: todayRecord._id },
-                    {
-                        $set: {
-                            checkIn: now,
-                            isLate: realIsLate,
-                            discountUnits,
-                            isExtraDay: isExtraDayResolved,
-                            status: isExtraDayResolved ? 'franco-trabajado' : 'presente',
-                            updatedAt: now
-                        },
-                        $push: { imageReference: body.imageReference }
-                    },
-                    { new: true }
-                );
-            } else {
-                finalRecord = await AttendanceModel.create({
-                    userId: user._id,
-                    date: todayMidnight,
-                    checkIn: now,
-                    isLate: realIsLate,
-                    discountUnits,
-                    isExtraDay: isExtraDayResolved,
-                    status: isExtraDayResolved ? 'franco-trabajado' : 'presente',
-                    imageReference: [body.imageReference],
-                    // Auditoría: el empleado origina su propio registro al marcar
-                    createdBy: user._id
-                });
-                await finalRecord.populate('createdBy', 'name surName img');
-            }
-
-            await publishAttendanceMark({ record: finalRecord, user, kind: 'checkIn', schedule: marcajeSchedule });
-
-            return res.json({
-                finalRecord,
-                user,
-                lateInfo,
-                message: realIsLate ? 'Entrada nocturna con retardo😥' : 'Entrada nocturna registrada🌙'
-            });
-        }
-
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // PASO 4 — Turno DIURNO
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        const documentExist = preExistingRecord;
-
-        if (documentExist) {
-            if (documentExist.checkIn && documentExist.checkOut) {
-                return res.status(409).json({
-                    status: 409,
-                    message: 'La jornada diurna de hoy ya fue cerrada previamente.',
-                    data: documentExist
-                });
-            }
-
-            if (documentExist.checkIn && !documentExist.checkOut) {
+            if (nowMinutes <= checkoutLimitMinutes) {
+                // ✅ Estamos dentro de la ventana de salida → cerrar turno
                 const finalRecord = await AttendanceModel.findOneAndUpdate(
-                    { _id: documentExist._id },
+                    { _id: openYesterdayRecord._id },
                     {
                         $set: { checkOut: now, updatedAt: now, ...overtimeOnCheckout(user) },
                         $push: { imageReference: body.imageReference }
@@ -1996,17 +1746,186 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                     { new: true }
                 );
 
-                await publishAttendanceMark({ record: finalRecord, user, kind: 'checkOut', schedule: marcajeSchedule });
+                await publishAttendanceMark({
+                    record: finalRecord,
+                    user,
+                    kind: 'checkOut',
+                    schedule: { shift: 'Nocturno', endTime: yesterdayEndTime, startTime: yesterdayDayRule?.startTime || null },
+                });
 
                 // Fin de jornada: los frontends cierran la sesión del usuario
                 emitCloseSessionForUser(user._id);
 
-                return res.status(200).json({ finalRecord, user, message: '¡Fin de la jornada diaria!🥳🥳🥳' });
+                return res.status(200).json({
+                    finalRecord,
+                    user,
+                    message: '¡Fin de la jornada nocturna!🌙'
+                });
             }
 
-            // Documento pre-creado por admin sin checkIn
-            const finalRecord = await AttendanceModel.findOneAndUpdate(
-                { _id: documentExist._id },
+            // Fuera de la ventana de tolerancia → el turno de ayer quedó sin cerrar
+            // pero ya no se puede cerrar. Continúa con la lógica del día de hoy.
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // PASO 2 — Resolver horario efectivo de HOY
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    const preExistingRecord = await AttendanceModel.findOne({
+        userId: user._id,
+        date: todayMidnight
+    });
+
+    const override = preExistingRecord?.scheduleOverride;
+    const hasOverride = override?.workType;
+
+    const currentDayNumber = todayMidnight.getUTCDay();
+    const scheduleByDayMap = user?.workSchedule?.scheduleByDay;
+    const dayRule = scheduleByDayMap?.get?.(String(currentDayNumber))
+        || scheduleByDayMap?.[String(currentDayNumber)]
+        || null;
+
+    const effectiveShiftType = (hasOverride && override.shift)
+        || dayRule?.shift
+        || user?.workSchedule?.shiftType
+        || 'Diurno';
+    const isNocturno = effectiveShiftType === 'Nocturno';
+
+    // ── Validaciones de descanso (ahora seguras porque ya resolvimos la salida nocturna) ──
+    if (hasOverride && override.workType === 'descanso') {
+        return res.status(400).json({
+            status: 400,
+            message: 'Este día fue asignado como descanso por el administrador. No se requiere marcar asistencia.',
+            error: 'Bad request'
+        });
+    }
+
+    if (!hasOverride && dayRule?.workType === 'descanso') {
+        return res.status(400).json({
+            status: 400,
+            message: 'Este día está configurado como descanso en tu horario. No se requiere marcar asistencia.',
+            error: 'Bad request'
+        });
+    }
+
+    // ── Horarios efectivos de hoy ──
+    const effectiveStartTime = (hasOverride && override.startTime) || dayRule?.startTime || null;
+    const effectiveEndTime = (hasOverride && override.endTime) || dayRule?.endTime || null;
+
+    if (!effectiveStartTime) {
+        return res.status(400).json({
+            status: 400,
+            message: 'No hay horario de entrada configurado para hoy.',
+            error: 'Bad request'
+        });
+    }
+    if (!effectiveEndTime) {
+        return res.status(400).json({
+            status: 400,
+            message: 'No hay horario de salida configurado para hoy.',
+            error: 'Bad request'
+        });
+    }
+
+    const [startH, startM] = effectiveStartTime.split(':');
+    const [endH, endM] = effectiveEndTime.split(':');
+    const startHourNumber = Number(startH);
+    const startMinuteNumber = Number(startM);
+    const endHourNumber = Number(endH);
+    const endMinuteNumber = Number(endM);
+
+    if (
+        Number.isNaN(startHourNumber) || Number.isNaN(startMinuteNumber) ||
+        Number.isNaN(endHourNumber) || Number.isNaN(endMinuteNumber)
+    ) {
+        return res.status(400).json({
+            status: 400,
+            message: 'El horario del usuario tiene un formato inválido.',
+            error: 'Bad request'
+        });
+    }
+
+    const startMinutes = (startHourNumber * 60) + startMinuteNumber;
+    const isExtraDayResolved = (hasOverride && override.workType === 'extra')
+        || (!hasOverride && dayRule?.workType === 'extra');
+
+    const LATE_GRACE_MINUTES = 8;
+
+    // Su PRIMER día no se le cobra. A quien se acaba de dar de alta se le
+    // arma el horario el mismo día, muchas veces cuando ya empezó a
+    // trabajar: cobrarle un retardo contra una hora pautada que hace un
+    // rato no existía es cobrarle un error de captura. Ver newEmployee.lib.
+    const esNuevoHoy = esAltaDeHoy(user, now);
+
+    const shouldCheckLate = esNuevoHoy
+        ? false
+        : (hasOverride ? true : user?.workSchedule?.lateArrivalControl);
+    const realIsLate = shouldCheckLate
+        ? nowMinutes > (startMinutes + LATE_GRACE_MINUTES)
+        : false;
+
+    // Unidades a descontar por el retardo (1 por bloque de 20 min pasada
+    // la tolerancia), persistidas en el documento al marcar la entrada.
+    //
+    // `minutesLate` se sigue calculando aunque sea su primer día: sirve
+    // para el aviso —"entraste 40 minutos después de tu hora"— sin que eso
+    // se convierta en descuento, porque `realIsLate` ya es false.
+    const minutesLate = Math.max(0, nowMinutes - startMinutes);
+    const discountUnits = realIsLate ? computeDiscountUnits(minutesLate) : 0;
+
+    // Detalle del retardo que viaja en la respuesta para que el cliente de
+    // marcado (bioJarvis) se lo muestre al empleado en el momento.
+    const lateInfo = realIsLate
+        ? { minutesLate, discountUnits, graceMinutes: LATE_GRACE_MINUTES, startTime: effectiveStartTime }
+        : null;
+
+    // Horario efectivo de hoy, para la notificación privada del marcaje.
+    // `minutesLate` va acá porque es lo único del retardo que NO se
+    // persiste en el documento: se calcula al vuelo contra la hora pautada.
+    const marcajeSchedule = {
+        startTime: effectiveStartTime,
+        endTime: effectiveEndTime,
+        shift: effectiveShiftType,
+        minutesLate: realIsLate ? minutesLate : 0,
+    };
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // PASO 3 — ENTRADA de turno nocturno de hoy
+    // (la salida ya fue manejada en el PASO 1)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    if (isNocturno) {
+        const earlyToleranceMinutes = 120;
+        if (nowMinutes < (startMinutes - earlyToleranceMinutes)) {
+            return res.status(400).json({
+                status: 400,
+                message: `El turno nocturno inicia a las ${effectiveStartTime}. Puedes marcar desde 1 hora antes.`,
+                error: 'Bad request'
+            });
+        }
+
+        const todayRecord = preExistingRecord;
+
+        if (todayRecord) {
+            if (todayRecord.checkIn && todayRecord.checkOut) {
+                return res.status(409).json({
+                    status: 409,
+                    message: 'La jornada nocturna de hoy ya fue cerrada previamente.',
+                    data: todayRecord
+                });
+            }
+            if (todayRecord.checkIn) {
+                return res.status(409).json({
+                    status: 409,
+                    message: 'Ya se registró la entrada nocturna de hoy. La salida se marcará en la madrugada.',
+                    data: todayRecord
+                });
+            }
+        }
+
+        let finalRecord;
+        if (todayRecord && !todayRecord.checkIn) {
+            finalRecord = await AttendanceModel.findOneAndUpdate(
+                { _id: todayRecord._id },
                 {
                     $set: {
                         checkIn: now,
@@ -2020,31 +1939,80 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
                 },
                 { new: true }
             );
+        } else {
+            finalRecord = await AttendanceModel.create({
+                userId: user._id,
+                date: todayMidnight,
+                checkIn: now,
+                isLate: realIsLate,
+                discountUnits,
+                isExtraDay: isExtraDayResolved,
+                status: isExtraDayResolved ? 'franco-trabajado' : 'presente',
+                imageReference: [body.imageReference],
+                // Auditoría: el empleado origina su propio registro al marcar
+                createdBy: user._id
+            });
+            await finalRecord.populate('createdBy', 'name surName img');
+        }
 
-            await publishAttendanceMark({ record: finalRecord, user, kind: 'checkIn', schedule: marcajeSchedule });
+        await publishAttendanceMark({ record: finalRecord, user, kind: 'checkIn', schedule: marcajeSchedule });
 
-            return res.json({
-                finalRecord,
-                user,
-                lateInfo,
-                message: realIsLate ? 'Registro exitoso con retardo😥' : 'Registro exitoso🕗'
+        return res.json({
+            finalRecord,
+            user,
+            lateInfo,
+            message: realIsLate ? 'Entrada nocturna con retardo😥' : 'Entrada nocturna registrada🌙'
+        });
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // PASO 4 — Turno DIURNO
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    const documentExist = preExistingRecord;
+
+    if (documentExist) {
+        if (documentExist.checkIn && documentExist.checkOut) {
+            return res.status(409).json({
+                status: 409,
+                message: 'La jornada diurna de hoy ya fue cerrada previamente.',
+                data: documentExist
             });
         }
 
-        // No existe registro hoy → nueva entrada diurna
-        const finalRecord = await AttendanceModel.create({
-            userId: user._id,
-            date: todayMidnight,
-            checkIn: now,
-            isLate: realIsLate,
-            discountUnits,
-            isExtraDay: isExtraDayResolved,
-            status: isExtraDayResolved ? 'franco-trabajado' : 'presente',
-            imageReference: [body.imageReference],
-            // Auditoría: el empleado origina su propio registro al marcar
-            createdBy: user._id
-        });
-        await finalRecord.populate('createdBy', 'name surName img');
+        if (documentExist.checkIn && !documentExist.checkOut) {
+            const finalRecord = await AttendanceModel.findOneAndUpdate(
+                { _id: documentExist._id },
+                {
+                    $set: { checkOut: now, updatedAt: now, ...overtimeOnCheckout(user) },
+                    $push: { imageReference: body.imageReference }
+                },
+                { new: true }
+            );
+
+            await publishAttendanceMark({ record: finalRecord, user, kind: 'checkOut', schedule: marcajeSchedule });
+
+            // Fin de jornada: los frontends cierran la sesión del usuario
+            emitCloseSessionForUser(user._id);
+
+            return res.status(200).json({ finalRecord, user, message: '¡Fin de la jornada diaria!🥳🥳🥳' });
+        }
+
+        // Documento pre-creado por admin sin checkIn
+        const finalRecord = await AttendanceModel.findOneAndUpdate(
+            { _id: documentExist._id },
+            {
+                $set: {
+                    checkIn: now,
+                    isLate: realIsLate,
+                    discountUnits,
+                    isExtraDay: isExtraDayResolved,
+                    status: isExtraDayResolved ? 'franco-trabajado' : 'presente',
+                    updatedAt: now
+                },
+                $push: { imageReference: body.imageReference }
+            },
+            { new: true }
+        );
 
         await publishAttendanceMark({ record: finalRecord, user, kind: 'checkIn', schedule: marcajeSchedule });
 
@@ -2054,22 +2022,33 @@ routerUser.post(`${nameApi}/user/attendance/machine/:dni`, async (req, res) => {
             lateInfo,
             message: realIsLate ? 'Registro exitoso con retardo😥' : 'Registro exitoso🕗'
         });
-
-    } catch (error) {
-        console.log(error);
-        if (error.name === 'ValidationError') {
-            return res.status(400).json({
-                status: 400,
-                message: 'Datos de asistencia inválidos',
-                error: error.errors || error.message
-            });
-        }
-        if (error.name === 'CastError') {
-            return res.status(400).json({ error, status: 400, message: 'Bad request' });
-        }
-        return res.status(500).json({ status: 500, message: 'Error server internal', error: error.message });
     }
-});
+
+    // No existe registro hoy → nueva entrada diurna
+    const finalRecord = await AttendanceModel.create({
+        userId: user._id,
+        date: todayMidnight,
+        checkIn: now,
+        isLate: realIsLate,
+        discountUnits,
+        isExtraDay: isExtraDayResolved,
+        status: isExtraDayResolved ? 'franco-trabajado' : 'presente',
+        imageReference: [body.imageReference],
+        // Auditoría: el empleado origina su propio registro al marcar
+        createdBy: user._id
+    });
+    await finalRecord.populate('createdBy', 'name surName img');
+
+    await publishAttendanceMark({ record: finalRecord, user, kind: 'checkIn', schedule: marcajeSchedule });
+
+    return res.json({
+        finalRecord,
+        user,
+        lateInfo,
+        message: realIsLate ? 'Registro exitoso con retardo😥' : 'Registro exitoso🕗'
+    });
+
+}));
 
 
 

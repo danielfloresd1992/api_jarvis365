@@ -1,4 +1,5 @@
 import colors from 'colors';
+import { asyncHandler } from '../../middleware/asyncHandler.js';
 import os from 'os';
 import NoveltieModel, { CommentSchema } from './noveltie.model.js';
 import LocalModel from '../local/local.model.js';
@@ -548,6 +549,7 @@ export default class ControllerNovelty {
 
 
 
+
             const updateDocument = await NoveltieModel.findOneAndUpdate({ _id: id }, body, { new: true, runValidators: true }).populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id establishment');
 
 
@@ -600,35 +602,28 @@ export default class ControllerNovelty {
 
 
 
-    setComment = async (req: any, res: Response) => {
-        try {
-            const id: string | undefined = req.query?.id;
+    setComment = asyncHandler(async (req: any, res: Response) => {
+        const id: string | undefined = req.query?.id;
 
-            if (!id) return res.status(400).json({ status: 400, error: 'Bad request', message: 'Id is undefined' });
-            if (!Types.ObjectId.isValid(id)) return res.status(400).json({ status: 400, error: 'Bad request', message: 'Id is invalid' });
+        if (!id) return res.status(400).json({ status: 400, error: 'Bad request', message: 'Id is undefined' });
+        if (!Types.ObjectId.isValid(id)) return res.status(400).json({ status: 400, error: 'Bad request', message: 'Id is invalid' });
 
-            const body = req.body;
-            body.user = req.session?.userId;
+        const body = req.body;
+        body.user = req.session?.userId;
 
-            const bodyValidate = await commentYupSchema.validate(body);
+        const bodyValidate = await commentYupSchema.validate(body);
 
-            const alertFound = await NoveltieModel.findById(id);
+        const alertFound = await NoveltieModel.findById(id);
 
-            return res.json(alertFound);
+        return res.json(alertFound);
 
 
-            const novelty = await NoveltieModel.findByIdAndUpdate(id, { $push: { commentSystem: bodyValidate } }, { new: true, runValidators: true });
+        const novelty = await NoveltieModel.findByIdAndUpdate(id, { $push: { commentSystem: bodyValidate } }, { new: true, runValidators: true });
 
-            if (!novelty) return res.status(404).json({ status: 404, error: 'Document not found', message: `T he document with the following ID does not exist, ${id}` });
+        if (!novelty) return res.status(404).json({ status: 404, error: 'Document not found', message: `T he document with the following ID does not exist, ${id}` });
 
-            console.log(bodyValidate);
-            return res.json(novelty);
+        console.log(bodyValidate);
+        return res.json(novelty);
 
-        }
-        catch (error: any) {
-            console.log(error)
-            if (error.name === 'ValidationError') return res.status(400).json({ status: 400, error: error.errors, message: 'Bad request' });
-            return res.status(500).json({ massege: 'Error erver internal', status: 500, error: error })
-        }
-    };
+    });
 };
