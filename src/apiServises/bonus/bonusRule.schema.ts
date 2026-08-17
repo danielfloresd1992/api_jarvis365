@@ -56,6 +56,30 @@ const cuantoOtorga = () => ({
 });
 
 
+/**
+ * Dónde aplica una regla.
+ *
+ * Se define aparte del resto porque se valida en dos lugares: dentro de la regla
+ * completa, y solo, en el PATCH que cambia únicamente el alcance.
+ */
+export const scopeSchema = yup.object({
+    mode: yup.string()
+        .oneOf(['all', 'only', 'except'], 'El alcance debe ser all, only o except')
+        .default('all'),
+
+    franchises: yup.array().of(objectId('La marca')).default([]),
+    locals: yup.array().of(objectId('El establecimiento')).default([]),
+})
+    .test(
+        'only-necesita-lista',
+        'Con el alcance en "only" hay que indicar al menos una marca o un establecimiento',
+        // 'only' sin nada listado es una regla que NO aplica en ningún lado: se
+        // guardaría sin error y no pagaría nunca. 'except' vacío no tiene ese
+        // problema — equivale a "en todos", que es inofensivo.
+        v => v?.mode !== 'only' || Boolean(v.franchises?.length || v.locals?.length),
+    );
+
+
 const bonusRuleSchema = yup.object({
 
     // ── Identificación ────────────────────────────────────────────────
@@ -68,28 +92,17 @@ const bonusRuleSchema = yup.object({
     // El ítem del reglamento: "1.1", "R2.6". Permite cotejar con el PDF.
     regulationCode: yup.string().trim().default(''),
 
+    // El `value` del catálogo de categorías. `null` = sin categoría, que es un
+    // estado válido: la regla bonifica igual, solo no agrupa en los cortes.
+    bonusCategory: yup.string().trim().nullable().default(null),
+
 
     // ── Cuánto otorga ─────────────────────────────────────────────────
     ...cuantoOtorga(),
 
 
     // ── Dónde aplica ──────────────────────────────────────────────────
-    scope: yup.object({
-        mode: yup.string()
-            .oneOf(['all', 'only', 'except'], 'El alcance debe ser all, only o except')
-            .default('all'),
-
-        franchises: yup.array().of(objectId('La marca')).default([]),
-        locals: yup.array().of(objectId('El establecimiento')).default([]),
-    })
-        .test(
-            'only-necesita-lista',
-            'Con el alcance en "only" hay que indicar al menos una marca o un establecimiento',
-            // 'only' sin nada listado es una regla que NO aplica en ningún lado:
-            // se guardaría sin error y no pagaría nunca. 'except' vacío no tiene
-            // ese problema — equivale a "en todos", que es inofensivo.
-            v => v?.mode !== 'only' || Boolean(v.franchises?.length || v.locals?.length),
-        ),
+    scope: scopeSchema,
 
 
     // ── Excepciones ───────────────────────────────────────────────────

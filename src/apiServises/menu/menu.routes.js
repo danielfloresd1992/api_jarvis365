@@ -1,6 +1,5 @@
 import controller from './menu.controller.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
-import bonusCategoryController from './bonusCategory.controller.js';
 import express from 'express';
 import menuSchema from './menu.schema.js'
 import MenuModel from './menu.model.js';
@@ -24,16 +23,8 @@ const routerMenu = express.Router();
 // Jarvis-express365 la leen con nombres escritos a mano. Ver la nota en
 // menu.model.js. Acá solo se administran las de bonificación.
 //
-// La lista la puede ver cualquier sesión (se necesita para elegirla al crear
-// una alerta); crear, editar y borrar es solo de super usuario.
-
-routerMenu.get(`${nameApi}/menu/bonus-categories`, extendSession, validateSession, bonusCategoryController.getBonusCategories);
-
-routerMenu.post(`${nameApi}/menu/bonus-categories`, extendSession, validateSuperUser, bonusCategoryController.createBonusCategory);
-
-routerMenu.put(`${nameApi}/menu/bonus-categories/id=:id`, extendSession, validateSuperUser, bonusCategoryController.updateBonusCategory);
-
-routerMenu.delete(`${nameApi}/menu/bonus-categories/id=:id`, extendSession, validateSuperUser, bonusCategoryController.deleteBonusCategory);
+// Las categorías de bonificación se mudaron a /bonus/categories, junto con el
+// resto del sistema: ahora categorizan la REGLA, no la alerta.
 
 
 

@@ -1,6 +1,7 @@
 import moment from 'moment-timezone';
 import mongoose from 'mongoose';
 import Noveltie from '../../apiServises/noveltie/noveltie.model.js';
+import BonusRuleModel from '../../apiServises/bonus/bonusRule.model.js';
 import MenuModel from '../../apiServises/menu/menu.model.js';
 import LocalModel from '../../apiServises/local/local.model.js';
 import Schedules from '../../apiServises/schedules/schedule.model.js';
@@ -156,15 +157,23 @@ export async function buildNoveltyCountReport({ isFinal = false, at, category, b
     // Las categorías no viven en la novedad sino en su alerta (`Menu`), así que
     // primero se resuelve QUÉ alertas entran y después se filtra por `menuRef`.
     //
-    // Se hace en dos pasos y no con un $lookup porque el catálogo de alertas es
+    // Se hace en pasos y no con un $lookup porque el catálogo de alertas es
     // chico y estable: una consulta que devuelve ids sale mucho más barata que
     // cruzar toda la colección de novedades del día.
+    //
+    // La de BONIFICACIÓN suma un salto: dejó de colgar de la alerta y ahora
+    // cuelga de su regla, así que va `BonusRule → Menu → Noveltie`. Sigue siendo
+    // barato por lo mismo — son dos colecciones chicas — y evita duplicar la
+    // categoría en cada alerta, que era de dónde venía el problema.
     let menuFilter = null;
     if (category || bonusCategory) {
-        const criterio = {
-            ...(category ? { category } : {}),
-            ...(bonusCategory ? { bonusCategory } : {}),
-        };
+        const criterio = { ...(category ? { category } : {}) };
+
+        if (bonusCategory) {
+            const reglas = await BonusRuleModel.find({ bonusCategory }).select('_id').lean();
+            criterio.bonusRule = { $in: reglas.map(r => r._id) };
+        }
+
         const menus = await MenuModel.find(criterio).select('_id').lean();
 
         // Con la lista vacía el $in no matchea nada, que es lo correcto: el

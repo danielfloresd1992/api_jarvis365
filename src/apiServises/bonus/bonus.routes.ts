@@ -5,10 +5,12 @@ import { validateSession, validateAdminUser } from '../../middleware/validateSes
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import BonusSettingsModel from './bonusSettings.model.js';
 import BonusRuleModel from './bonusRule.model.js';
+import BonusCategoryModel from './bonusCategory.model.js';
 import MenuModel from '../menu/menu.model.js';
 import { getBonusPointValue, saveBonusSettings, DEFAULT_POINT_VALUE, DEFAULT_EXCHANGE_RATE } from './bonusSettings.lib.js';
 import bonusSettingsSchema from './bonusSettings.schema.js';
-import bonusRuleSchema, { menuBonusRuleSchema } from './bonusRule.schema.js';
+import bonusRuleSchema, { menuBonusRuleSchema, scopeSchema } from './bonusRule.schema.js';
+import bonusCategorySchema from './bonusCategory.schema.js';
 
 const routerBonus = express.Router();
 
@@ -184,6 +186,40 @@ routerBonus.put(`${nameApi}/bonus/rules/id=:id`, validateSession, validateAdminU
 
 
 /**
+ * PATCH /bonus/rules/id=:id/scope — cambia SOLO dónde aplica.
+ *
+ * Existe como endpoint aparte por una razón concreta: el PUT de arriba
+ * REEMPLAZA la regla entera y rellena con valores por defecto lo que no venga.
+ * Un cliente que quisiera mover el alcance y mandara `{ name, scope }` dejaría
+ * `alertsRequired` en 1, `bonusAwarded` en 1/1, la categoría en null y las
+ * excepciones vacías — sin un solo error, y la regla pasaría a pagar otra cosa.
+ *
+ * Acá eso no puede pasar: se valida el alcance solo y se escribe el alcance
+ * solo. El mapa lo usa al soltar un cable, que es el gesto más frecuente de la
+ * pantalla y el que menos debería poder romper nada.
+ */
+routerBonus.patch(`${nameApi}/bonus/rules/id=:id/scope`, validateSession, validateAdminUser, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ status: 400, error: 'Bad request', message: 'Id inválido' });
+    }
+
+    const scope = await scopeSchema.validate(req.body, OPCIONES_VALIDACION);
+
+    const regla = await BonusRuleModel.findByIdAndUpdate(
+        id,
+        { scope, updatedBy: req.session.userId },
+        { new: true, runValidators: true },
+    ).lean();
+
+    if (!regla) return res.status(404).json({ status: 404, error: 'Not found', message: 'La regla no existe' });
+
+    const enUso = await alertasQueLaUsan(id);
+    return res.status(200).json({ status: 200, message: 'ok', rule: { ...regla, inUse: enUso } });
+}));
+
+
+/**
  * DELETE /bonus/rules/id=:id
  *
  * Una regla EN USO no se borra. Borrarla dejaría a sus alertas apuntando a un
@@ -247,6 +283,147 @@ routerBonus.put(`${nameApi}/bonus/menu/id=:id`, validateSession, validateAdminUs
     if (!alerta) return res.status(404).json({ status: 404, error: 'Not found', message: 'La alerta no existe' });
 
     return res.status(200).json({ status: 200, message: 'ok', menu: alerta });
+}));
+
+
+// ══════════════════════════════════════════════════════════════════════
+// LAS CATEGORÍAS
+// ══════════════════════════════════════════════════════════════════════
+// El catálogo con el que se agrupan las REGLAS en los cortes.
+//
+// Vivía en /menu/bonus-categories y categorizaba la alerta. Se mudó acá con el
+// resto del sistema: ahora categoriza la regla, que es donde el criterio de
+// bonificación ya estaba definido.
+
+
+/**
+ * Un texto convertido en clave.
+ *
+ * Sin esto, "Servicio" y "servicio " serían dos categorías distintas a la vista
+ * iguales, y se repartirían las reglas entre ambas.
+ */
+const aClave = (texto = '') => texto
+    // NFD separa cada acento de su letra y \p{M} se lleva esas marcas. Se usa la
+    // clase Unicode y no un rango escrito a mano: un rango de combinantes queda
+    // como caracteres invisibles y cualquier editor puede comérselos.
+    .normalize('NFD').replace(/\p{M}/gu, '')
+    .toLowerCase().trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+
+/** Escapa lo que en una expresión regular significaría otra cosa. */
+const escaparRegex = (texto: string) => texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+
+/** Cuántas reglas usan esta categoría. Es lo que decide si se puede borrar. */
+const reglasQueLaUsan = (value: string) => BonusRuleModel.countDocuments({ bonusCategory: value });
+
+
+/**
+ * GET /bonus/categories?includeInactive=true
+ *
+ * Por defecto solo las activas, que es lo que necesita el selector al crear una
+ * regla. La pantalla de gestión pide también las inactivas para reactivarlas.
+ *
+ * Cada una viene con `inUse`: cuántas reglas la tienen. Pedirlo aparte por fila
+ * serían tantas consultas como categorías.
+ */
+routerBonus.get(`${nameApi}/bonus/categories`, validateSession, asyncHandler(async (req, res) => {
+    const filtro = req.query.includeInactive === 'true' ? {} : { active: true };
+
+    const categorias = await BonusCategoryModel.find(filtro)
+        .sort({ order: 1, es: 1 })
+        .populate('createdBy updatedBy', 'name surName img')
+        .lean();
+
+    const usos: { _id: string; total: number }[] = await BonusRuleModel.aggregate([
+        { $match: { bonusCategory: { $ne: null } } },
+        { $group: { _id: '$bonusCategory', total: { $sum: 1 } } },
+    ]);
+    const porValue = new Map(usos.map(u => [u._id, u.total]));
+
+    return res.status(200).json({
+        status: 200,
+        categories: categorias.map(c => ({ ...c, inUse: porValue.get(c.value) || 0 })),
+    });
+}));
+
+
+/** POST /bonus/categories — la clave se deriva de la etiqueta en español. */
+routerBonus.post(`${nameApi}/bonus/categories`, validateSession, validateAdminUser, asyncHandler(async (req, res) => {
+    const datos = await bonusCategorySchema.validate(req.body, OPCIONES_VALIDACION);
+    const value = aClave(datos.es);
+
+    if (!value) {
+        return res.status(400).json({ status: 400, error: 'Bad request', message: 'El nombre no deja armar una clave usable' });
+    }
+
+    // Sin distinguir mayúsculas: el índice único sí las distingue, así que sin
+    // esto podrían convivir 'Servicio' y 'servicio'.
+    const repetida = await BonusCategoryModel.findOne({ value: new RegExp(`^${escaparRegex(value)}$`, 'i') }).lean();
+    if (repetida) {
+        return res.status(409).json({ status: 409, error: 'conflict', message: `Ya existe la categoría "${repetida.es}"` });
+    }
+
+    const categoria = await BonusCategoryModel.create({ ...datos, value, createdBy: req.session.userId });
+    return res.status(201).json({ status: 201, message: 'ok', category: { ...categoria.toObject(), inUse: 0 } });
+}));
+
+
+/**
+ * PUT /bonus/categories/id=:id
+ *
+ * `value` NO se puede cambiar y el esquema lo descarta aunque llegue: las reglas
+ * guardan esa cadena, y cambiarla las dejaría apuntando a una clave que no
+ * existe — saldrían de los cortes sin dar ningún error.
+ */
+routerBonus.put(`${nameApi}/bonus/categories/id=:id`, validateSession, validateAdminUser, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ status: 400, error: 'Bad request', message: 'Id inválido' });
+    }
+
+    // `value` no viene en el esquema, así que no hay forma de que un PUT lo
+    // cambie ni por accidente ni a propósito.
+    const datos = await bonusCategorySchema.validate(req.body, OPCIONES_VALIDACION);
+
+    const categoria = await BonusCategoryModel.findByIdAndUpdate(
+        id, { ...datos, updatedBy: req.session.userId }, { new: true, runValidators: true },
+    ).lean();
+
+    if (!categoria) return res.status(404).json({ status: 404, error: 'Not found', message: 'La categoría no existe' });
+
+    const enUso = await reglasQueLaUsan(categoria.value);
+    return res.status(200).json({ status: 200, message: 'ok', category: { ...categoria, inUse: enUso } });
+}));
+
+
+/**
+ * DELETE /bonus/categories/id=:id
+ *
+ * Una categoría EN USO no se borra: se desactiva. Borrarla dejaría a sus reglas
+ * agrupando por una clave inexistente y desaparecerían del corte sin avisar.
+ */
+routerBonus.delete(`${nameApi}/bonus/categories/id=:id`, validateSession, validateAdminUser, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ status: 400, error: 'Bad request', message: 'Id inválido' });
+    }
+
+    const categoria = await BonusCategoryModel.findById(id).lean();
+    if (!categoria) return res.status(404).json({ status: 404, error: 'Not found', message: 'La categoría no existe' });
+
+    const enUso = await reglasQueLaUsan(categoria.value);
+    if (enUso > 0) {
+        return res.status(409).json({
+            status: 409, error: 'conflict', inUse: enUso,
+            message: `La usan ${enUso} regla(s). Desactivala en lugar de borrarla: deja de ofrecerse pero las que ya la tienen no cambian.`,
+        });
+    }
+
+    await BonusCategoryModel.findByIdAndDelete(id);
+    return res.status(200).json({ status: 200, message: 'ok' });
 }));
 
 

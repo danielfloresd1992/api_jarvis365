@@ -66,7 +66,6 @@ const menuSchema = yup.object({
     // Categoría de BONIFICACIÓN: con qué criterio agrupa esta alerta en los
     // cortes de bono. Opcional a propósito — las alertas que ya existen no
     // tienen ninguna y se siguen guardando sin problema.
-    bonusCategory: yup.string().nullable().optional(),
 
 
     isArea: yup.boolean().required(),

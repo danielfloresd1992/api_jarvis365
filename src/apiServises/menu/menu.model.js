@@ -132,24 +132,14 @@ const Menu = new Schema({
         require: true,
     },
 
-    // ══════════════════════════════════════════════════════════════════
-    // CATEGORÍA DE BONIFICACIÓN — administrable
-    // ══════════════════════════════════════════════════════════════════
-    // Con qué criterio se agrupa esta alerta para los cortes de bonificación.
-    // Es independiente de la operativa: dos alertas de categorías distintas
-    // pueden bonificar por el mismo concepto, y al revés.
+    // NOTA: la categoría de bonificación ya NO vive acá. Se mudó a
+    // `BonusRule.bonusCategory` — la regla ya define un criterio de
+    // bonificación, y que quince alertas de una misma regla pudieran declarar
+    // quince categorías distintas era una contradicción que nada impedía.
     //
-    // Guarda el `value` del catálogo (BonusCategory) como CADENA y no como
-    // referencia, por el mismo motivo que `category`: convertirla en ref
-    // obligaría a migrar todo lo ya cargado.
-    //
-    // Es OPCIONAL: las alertas que ya existen no tienen ninguna y siguen
-    // funcionando igual.
-    bonusCategory: {
-        type: String,
-        default: null,
-        trim: true,
-    },
+    // Los valores viejos siguen en los documentos de Mongo: el esquema dejó de
+    // leerlos, pero no se borraron. Se pueden migrar a su regla con una consulta
+    // directa a la colección.
 
     // ══════════════════════════════════════════════════════════════════
     // REGLA DE BONIFICACIÓN

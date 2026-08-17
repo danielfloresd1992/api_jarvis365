@@ -90,6 +90,9 @@ export interface BonusRuleDoc extends BonusAward {
     /** El ítem del reglamento: "1.1", "R2.6", "E4.3". */
     regulationCode?: string;
 
+    /** El `value` de una BonusCategory. Con qué criterio agrupa en los cortes. */
+    bonusCategory?: string | null;
+
     scope: BonusScope;
     overrides: BonusOverride[];
 
@@ -128,6 +131,28 @@ const BonusRule = new Schema<BonusRuleDoc>({
 
     // Permite cotejar la configuración contra el PDF sin traducir nada.
     regulationCode: { type: String, default: '', trim: true },
+
+    // ══════════════════════════════════════════════════════════════════
+    // CATEGORÍA DE BONIFICACIÓN
+    // ══════════════════════════════════════════════════════════════════
+    // Con qué criterio se agrupa esta regla en los cortes.
+    //
+    // Antes colgaba de la alerta (`Menu.bonusCategory`). Se mudó acá porque las
+    // dos cosas decían lo mismo desde distinto lado: la regla ya define un
+    // criterio de bonificación, y que quince alertas de una misma regla
+    // pudieran declarar quince categorías distintas era una contradicción que
+    // nada impedía. Ahora el criterio es uno solo por definición.
+    //
+    // Guarda el `value` del catálogo como CADENA y no como referencia, igual
+    // que antes: convertirla en ref obligaría a migrar, y este sistema se
+    // actualiza a mano.
+    //
+    // OPCIONAL: una regla sin categoría funciona igual, solo no agrupa.
+    bonusCategory: {
+        type: String,
+        default: null,
+        trim: true,
+    },
 
 
     // ── Cuánto otorga, en general ─────────────────────────────────────
