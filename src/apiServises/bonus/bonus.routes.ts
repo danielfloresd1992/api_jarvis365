@@ -9,7 +9,7 @@ import BonusCategoryModel from './bonusCategory.model.js';
 import MenuModel from '../menu/menu.model.js';
 import { getBonusPointValue, saveBonusSettings, DEFAULT_POINT_VALUE, DEFAULT_EXCHANGE_RATE } from './bonusSettings.lib.js';
 import bonusSettingsSchema from './bonusSettings.schema.js';
-import bonusRuleSchema, { menuBonusRuleSchema, scopeSchema } from './bonusRule.schema.js';
+import bonusRuleSchema, { menuBonusRulesSchema } from './bonusRule.schema.js';
 import bonusCategorySchema from './bonusCategory.schema.js';
 
 const routerBonus = express.Router();
@@ -124,7 +124,7 @@ routerBonus.get(`${nameApi}/bonus/settings/history`, validateSession, validateAd
 
 /** Cuántas alertas usan cada regla. Es lo que decide si se puede borrar. */
 const alertasQueLaUsan = (id: string): Promise<number> =>
-    MenuModel.countDocuments({ bonusRule: id });
+    MenuModel.countDocuments({ 'bonusRules.rule': id });
 
 
 /**
@@ -141,9 +141,14 @@ routerBonus.get(`${nameApi}/bonus/rules`, validateSession, asyncHandler(async (r
     // El tipo va escrito a mano porque `MenuModel` todavia es JavaScript sin
     // tipos: un aggregate no puede inferir su forma de salida ni cuando el modelo
     // esta tipado, asi que declararla es lo unico que evita un `any` suelto.
+    //
+    // Se desenrolla el array de asignaciones y se cuenta por ALERTA distinta:
+    // una alerta que usa la misma regla en dos alcances distintos cuenta una
+    // vez, no dos.
     const uso: { _id: Types.ObjectId; total: number }[] = await MenuModel.aggregate([
-        { $match: { bonusRule: { $ne: null } } },
-        { $group: { _id: '$bonusRule', total: { $sum: 1 } } },
+        { $unwind: '$bonusRules' },
+        { $group: { _id: { rule: '$bonusRules.rule', menu: '$_id' } } },
+        { $group: { _id: '$_id.rule', total: { $sum: 1 } } },
     ]);
     const porRegla = new Map(uso.map(u => [String(u._id), u.total]));
 
@@ -186,40 +191,6 @@ routerBonus.put(`${nameApi}/bonus/rules/id=:id`, validateSession, validateAdminU
 
 
 /**
- * PATCH /bonus/rules/id=:id/scope — cambia SOLO dónde aplica.
- *
- * Existe como endpoint aparte por una razón concreta: el PUT de arriba
- * REEMPLAZA la regla entera y rellena con valores por defecto lo que no venga.
- * Un cliente que quisiera mover el alcance y mandara `{ name, scope }` dejaría
- * `alertsRequired` en 1, `bonusAwarded` en 1/1, la categoría en null y las
- * excepciones vacías — sin un solo error, y la regla pasaría a pagar otra cosa.
- *
- * Acá eso no puede pasar: se valida el alcance solo y se escribe el alcance
- * solo. El mapa lo usa al soltar un cable, que es el gesto más frecuente de la
- * pantalla y el que menos debería poder romper nada.
- */
-routerBonus.patch(`${nameApi}/bonus/rules/id=:id/scope`, validateSession, validateAdminUser, asyncHandler(async (req, res) => {
-    const { id } = req.params;
-    if (!Types.ObjectId.isValid(id)) {
-        return res.status(400).json({ status: 400, error: 'Bad request', message: 'Id inválido' });
-    }
-
-    const scope = await scopeSchema.validate(req.body, OPCIONES_VALIDACION);
-
-    const regla = await BonusRuleModel.findByIdAndUpdate(
-        id,
-        { scope, updatedBy: req.session.userId },
-        { new: true, runValidators: true },
-    ).lean();
-
-    if (!regla) return res.status(404).json({ status: 404, error: 'Not found', message: 'La regla no existe' });
-
-    const enUso = await alertasQueLaUsan(id);
-    return res.status(200).json({ status: 200, message: 'ok', rule: { ...regla, inUse: enUso } });
-}));
-
-
-/**
  * DELETE /bonus/rules/id=:id
  *
  * Una regla EN USO no se borra. Borrarla dejaría a sus alertas apuntando a un
@@ -250,13 +221,21 @@ routerBonus.delete(`${nameApi}/bonus/rules/id=:id`, validateSession, validateAdm
 
 
 /**
- * PUT /bonus/menu/id=:id — le asigna (o le quita) la regla a una alerta.
+ * PUT /bonus/menu/id=:id — escribe las asignaciones de una alerta.
+ *
+ * Recibe la lista COMPLETA de sus asignaciones: cada una con su regla y su
+ * alcance. La misma alerta puede ir con reglas distintas según el
+ * establecimiento —"3 por bono" en las Franciscas, "1 por bono" en los
+ * Mister—, y por eso es una lista y por eso lleva el alcance de su lado.
+ *
+ * Es la lista completa y no un delta para que el conjunto se pueda validar
+ * junto: dos asignaciones generales serían ambiguas, y eso solo se ve mirando
+ * todas. Lista vacía es válida: "esta alerta no bonifica".
  *
  * Vive acá y no en el router de menú porque es administración de bonos: aquel
- * exige SUPER usuario y esto lo hace un administrador, además de que manda la
- * alerta entera cuando acá solo cambian dos campos.
+ * exige SUPER usuario y esto lo hace un administrador.
  *
- * `bonusReviewed` se marca siempre: aunque se deje sin regla, alguien ya decidió
+ * `bonusReviewed` se marca siempre: aunque quede vacía, alguien ya decidió
  * sobre esta alerta. Sin eso, "no bonifica" y "nadie la miró" serían el mismo
  * dato.
  */
@@ -266,19 +245,25 @@ routerBonus.put(`${nameApi}/bonus/menu/id=:id`, validateSession, validateAdminUs
         return res.status(400).json({ status: 400, error: 'Bad request', message: 'Id inválido' });
     }
 
-    // `bonusRule: null` es válido y significa "esta alerta no bonifica".
-    const { bonusRule } = await menuBonusRuleSchema.validate(req.body, OPCIONES_VALIDACION);
+    const { bonusRules } = await menuBonusRulesSchema.validate(req.body, OPCIONES_VALIDACION);
 
-    if (bonusRule) {
-        const existe = await BonusRuleModel.exists({ _id: bonusRule });
-        if (!existe) return res.status(404).json({ status: 404, error: 'Not found', message: 'La regla no existe' });
+    // Todas las reglas referidas tienen que existir. Se comprueba antes de
+    // escribir: una asignación a una regla inexistente pasaría el esquema
+    // —el id tiene forma válida— y dejaría la alerta apuntando a la nada, que
+    // saldría del corte sin dar ningún error.
+    const idsDeRegla = [...new Set(bonusRules.map(a => a.rule))];
+    if (idsDeRegla.length) {
+        const existentes = await BonusRuleModel.countDocuments({ _id: { $in: idsDeRegla } });
+        if (existentes !== idsDeRegla.length) {
+            return res.status(404).json({ status: 404, error: 'Not found', message: 'Alguna de las reglas no existe' });
+        }
     }
 
     const alerta = await MenuModel.findByIdAndUpdate(
         id,
-        { bonusRule, bonusReviewed: true },
-        { new: true },
-    ).select('es en category bonusRule bonusReviewed').lean();
+        { bonusRules, bonusReviewed: true },
+        { new: true, runValidators: true },
+    ).select('es en category bonusRules bonusReviewed').lean();
 
     if (!alerta) return res.status(404).json({ status: 404, error: 'Not found', message: 'La alerta no existe' });
 

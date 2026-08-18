@@ -74,11 +74,12 @@ export const buildBonusSeal = async (noveltie: SealableNovelty): Promise<BonusSe
 
         const [alerta, operador, asistencia, establecimiento] = await Promise.all([
 
-            // La regla POPULADA. Sin esto llega un ObjectId, la función pura lo
-            // ve como "no es un objeto" y devuelve 'sin-regla' con el sistema
-            // perfectamente configurado — y como el sello se congela, ese cero
-            // queda grabado. Es el error más caro de este archivo.
-            MenuModel.findById(noveltie.menuRef).populate('bonusRule').lean(),
+            // Las reglas de las asignaciones, POPULADAS. Es un populate
+            // ANIDADO —`bonusRules.rule`— porque cada asignación lleva su
+            // regla y su alcance. Sin esto llega un ObjectId, la función pura
+            // devuelve 'regla-sin-popular' y como el sello se congela, ese
+            // resultado queda grabado. Es el error más caro de este archivo.
+            MenuModel.findById(noveltie.menuRef).populate('bonusRules.rule').lean(),
 
             operadorId
                 ? UserModel.findById(operadorId).select('workSchedule').lean()

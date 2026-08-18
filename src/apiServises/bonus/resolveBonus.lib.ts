@@ -51,8 +51,17 @@ export type AppliedFrom = typeof APPLIED_FROM[keyof typeof APPLIED_FROM];
 export type ShiftSource = 'override' | 'regla' | 'shiftType' | 'default';
 
 
-/** Por qué una novedad aprobada no bonificó. */
-export type SkipReason = 'sin-regla' | 'regla-inactiva' | 'fuera-de-alcance';
+/**
+ * Por qué una novedad aprobada no bonificó.
+ *
+ *   'sin-regla'          la alerta no tiene ninguna asignación
+ *   'fuera-de-alcance'   tiene, pero ninguna aplica en ese establecimiento
+ *   'regla-inactiva'     la que aplica está desactivada
+ *   'regla-sin-popular'  la asignación trae un ObjectId, no la regla — es un
+ *                        error de quien llamó, no una decisión, y se distingue
+ *                        para que no se confunda con "no bonifica"
+ */
+export type SkipReason = 'sin-regla' | 'regla-inactiva' | 'fuera-de-alcance' | 'regla-sin-popular';
 
 
 // ── Lo que la función necesita leer ───────────────────────────────────
@@ -82,13 +91,18 @@ export interface EstablishmentLike {
 export interface ResolvableRule extends Partial<BonusAward> {
     _id?: Types.ObjectId | null;
     active?: boolean;
-    scope?: Partial<BonusScope> | null;
     overrides?: BonusOverride[] | null;
 }
 
-/** La alerta, con su regla POPULADA. */
+/** Una asignación de la alerta: qué regla (POPULADA) y dónde. */
+export interface AssignmentLike {
+    rule?: ResolvableRule | Types.ObjectId | string | null;
+    scope?: Partial<BonusScope> | null;
+}
+
+/** La alerta, con sus asignaciones y las reglas de éstas POPULADAS. */
 export interface MenuLike {
-    bonusRule?: ResolvableRule | Types.ObjectId | string | null;
+    bonusRules?: AssignmentLike[] | null;
 }
 
 
@@ -229,8 +243,7 @@ export const resolveWorkShift = (
  * Lauderdale"—, y con uno solo el segundo obliga a mantener a mano la lista de
  * todos los demás.
  */
-export const isInScope = (rule?: ResolvableRule | null, establishment?: EstablishmentLike | null): boolean => {
-    const alcance = rule?.scope;
+export const isInScope = (alcance?: Partial<BonusScope> | null, establishment?: EstablishmentLike | null): boolean => {
     if (!alcance || !alcance.mode || alcance.mode === 'all') return true;
 
     const idLocal = comoTexto(establishment?._id ?? establishment);
@@ -241,6 +254,53 @@ export const isInScope = (rule?: ResolvableRule | null, establishment?: Establis
         || (alcance.franchises || []).some(f => comoTexto(f) === idMarca && Boolean(idMarca));
 
     return alcance.mode === 'only' ? estaListado : !estaListado;
+};
+
+
+/**
+ * Cuán específico es un alcance para este establecimiento.
+ *
+ *   3  lo nombra por LOCAL
+ *   2  lo nombra por MARCA
+ *   1  es general ('all')
+ *   0  no aplica acá
+ *
+ * Con esto se elige la asignación cuando una alerta tiene varias: gana la más
+ * específica. Un 'except' que no lo excluye cuenta como general —aplica, pero
+ * no lo nombra— y por eso pierde contra un 'only' que sí lo nombre.
+ */
+const especificidad = (alcance: Partial<BonusScope> | null | undefined, establishment?: EstablishmentLike | null): number => {
+    if (!isInScope(alcance, establishment)) return 0;
+    if (!alcance || !alcance.mode || alcance.mode === 'all' || alcance.mode === 'except') return 1;
+
+    const idLocal = comoTexto(establishment?._id ?? establishment);
+    const idMarca = comoTexto(establishment?.franchiseReference?.franchise);
+
+    if ((alcance.locals || []).some(l => comoTexto(l) === idLocal && Boolean(idLocal))) return 3;
+    if ((alcance.franchises || []).some(f => comoTexto(f) === idMarca && Boolean(idMarca))) return 2;
+    return 1;
+};
+
+
+/**
+ * De las asignaciones de la alerta, la que aplica en este establecimiento.
+ *
+ * Gana la MÁS ESPECÍFICA. Sin esa prioridad, una alerta con una asignación
+ * general y otra por local dependería del orden en que se cargaron — que es lo
+ * peor posible cuando decide un pago. Devuelve null si ninguna aplica.
+ */
+export const pickAssignment = (
+    asignaciones?: AssignmentLike[] | null,
+    establishment?: EstablishmentLike | null,
+): AssignmentLike | null => {
+    let mejor: AssignmentLike | null = null;
+    let mejorPeso = 0;
+
+    for (const a of asignaciones || []) {
+        const peso = especificidad(a?.scope, establishment);
+        if (peso > mejorPeso) { mejor = a; mejorPeso = peso; }
+    }
+    return mejor;
 };
 
 
@@ -287,10 +347,12 @@ const noBonifica = (motivo: SkipReason, sellado: Date): BonusSkipped => ({
 /**
  * Resuelve la bonificación de una novedad.
  *
- * @param params.menu  la alerta, con `bonusRule` POPULADA. Sin popular llega un
- *                     ObjectId y el resultado es 'sin-regla' aunque todo esté
- *                     bien configurado — y como el sello se congela, ese cero
- *                     queda grabado.
+ * @param params.menu  la alerta, con las reglas de sus asignaciones POPULADAS
+ *                     (`bonusRules.rule`). Sin popular llega un ObjectId, y el
+ *                     resultado es 'regla-sin-popular' — se distingue de
+ *                     'sin-regla' a propósito: uno es un error de quien llamó y
+ *                     el otro una decisión, y como el sello se congela conviene
+ *                     que no se confundan.
  */
 export const resolveBonusForNovelty = ({
     user,
@@ -302,18 +364,23 @@ export const resolveBonusForNovelty = ({
     frozenAt = new Date(),
 }: ResolveBonusParams): BonusSeal => {
 
-    const rule = menu?.bonusRule;
+    // Sin asignaciones la alerta no bonifica. Ojo: eso NO es lo mismo que
+    // "nadie la revisó todavía" — esa diferencia la lleva Menu.bonusReviewed.
+    const asignaciones = menu?.bonusRules || [];
+    if (asignaciones.length === 0) return noBonifica('sin-regla', frozenAt);
 
-    // Sin regla la alerta no bonifica. Ojo: eso NO es lo mismo que "nadie la
-    // revisó todavía" — esa diferencia la lleva Menu.bonusReviewed.
-    if (!rule || typeof rule !== 'object' || !('scope' in rule || 'alertsRequired' in rule || 'active' in rule)) {
-        return noBonifica('sin-regla', frozenAt);
+    // De todas, la que aplica ACÁ. La misma alerta puede ir con reglas
+    // distintas según el establecimiento, y ésta es la que manda en éste.
+    const asignacion = pickAssignment(asignaciones, establishment);
+    if (!asignacion) return noBonifica('fuera-de-alcance', frozenAt);
+
+    const rule = asignacion.rule;
+    if (!rule || typeof rule !== 'object' || !('alertsRequired' in rule || 'active' in rule || 'bonusAwarded' in rule)) {
+        return noBonifica('regla-sin-popular', frozenAt);
     }
 
     const regla = rule as ResolvableRule;
-
     if (regla.active === false) return noBonifica('regla-inactiva', frozenAt);
-    if (!isInScope(regla, establishment)) return noBonifica('fuera-de-alcance', frozenAt);
 
     // El turno decide CUÁNTOS bonos otorga, y es el del operador.
     const { workShift, shiftSource } = resolveWorkShift(user, attendance, at);

@@ -4,6 +4,7 @@ import {
     resolveBonusForNovelty,
     resolveWorkShift,
     isInScope,
+    pickAssignment,
 } from '../src/apiServises/bonus/resolveBonus.lib.ts';
 
 // ══════════════════════════════════════════════════════════════════════
@@ -36,9 +37,22 @@ const regla = (extra: Record<string, unknown> = {}) => ({
     alertsRequired: 1,
     bonusAwarded: { day: 1, night: 1 },
     active: true,
-    scope: { mode: 'all', franchises: [], locals: [] },
     overrides: [],
     ...extra,
+});
+
+/** Un alcance. Sin argumentos es "en todos". */
+const alcance = (mode = 'all', extra: Record<string, unknown> = {}) => ({
+    mode, franchises: [], locals: [], ...extra,
+});
+
+/**
+ * Una alerta con UNA asignación: esa regla, con ese alcance. Es la forma más
+ * común y por eso tiene atajo; los casos con varias asignaciones las arman a
+ * mano para que se lea qué se está probando.
+ */
+const asignada = (r: Record<string, unknown> = regla(), scope = alcance()) => ({
+    bonusRules: [{ rule: r, scope }],
 });
 
 /** El establecimiento donde ocurrió, con su marca. */
@@ -55,7 +69,7 @@ const operador = (turno: string | null) => ({
 /** Resuelve con valores por defecto razonables. */
 const resolver = (extra: Record<string, unknown> = {}) => resolveBonusForNovelty({
     user: operador('diurno'),
-    menu: { bonusRule: regla() },
+    menu: asignada(),
     establishment: establecimiento(),
     settings: { pointValue: 0.20 },
     ...extra,
@@ -66,20 +80,20 @@ const resolver = (extra: Record<string, unknown> = {}) => resolveBonusForNovelty
 test('los tres casos que escribe el reglamento', async (t) => {
 
     await t.test('1x1 — una alerta vale un bono', () => {
-        const r = resolver({ menu: { bonusRule: regla() } });
+        const r = resolver({ menu: asignada(regla()) });
         assert.equal(r.applies, true);
         assert.equal(r.applies && r.bonusPerAlert, 1);
     });
 
     await t.test('4x1 — hacen falta cuatro, cada una vale 0,25', () => {
-        const r = resolver({ menu: { bonusRule: regla({ alertsRequired: 4 }) } });
+        const r = resolver({ menu: asignada(regla({ alertsRequired: 4 })) });
         assert.equal(r.applies && r.bonusPerAlert, 0.25);
         assert.equal(r.applies && r.alertsRequired, 4);
         assert.equal(r.applies && r.bonusAwarded, 1);
     });
 
     await t.test('1x5 — una alerta vale cinco bonos', () => {
-        const r = resolver({ menu: { bonusRule: regla({ bonusAwarded: { day: 5, night: 5 } }) } });
+        const r = resolver({ menu: asignada(regla({ bonusAwarded: { day: 5, night: 5 } })) });
         assert.equal(r.applies && r.bonusPerAlert, 5);
     });
 });
@@ -88,7 +102,7 @@ test('los tres casos que escribe el reglamento', async (t) => {
 test('las alertas suman y el resto NO se pierde', async (t) => {
     // Es la regla que más confusión genera: si hacen falta 4 y hay 6, las dos
     // que sobran del grupo aportan su parte igual.
-    const cuatroPorBono = { menu: { bonusRule: regla({ alertsRequired: 4 }) } };
+    const cuatroPorBono = { menu: asignada(regla({ alertsRequired: 4 })) };
     const porAlerta = (resolver(cuatroPorBono) as { bonusPerAlert: number }).bonusPerAlert;
 
     await t.test('6 alertas de una regla 4x1 son 1,5 bonos — no 1', () => {
@@ -110,13 +124,13 @@ test('el turno decide cuántos bonos otorga, y es el del OPERADOR', async (t) =>
     const distintoPorTurno = regla({ bonusAwarded: { day: 1, night: 1.5 } });
 
     await t.test('un operador nocturno cobra el valor nocturno', () => {
-        const r = resolver({ user: operador('nocturno'), menu: { bonusRule: distintoPorTurno } });
+        const r = resolver({ user: operador('nocturno'), menu: asignada(distintoPorTurno) });
         assert.equal(r.applies && r.workShift, 'night');
         assert.equal(r.applies && r.bonusPerAlert, 1.5);
     });
 
     await t.test('un operador diurno cobra el diurno', () => {
-        const r = resolver({ user: operador('diurno'), menu: { bonusRule: distintoPorTurno } });
+        const r = resolver({ user: operador('diurno'), menu: asignada(distintoPorTurno) });
         assert.equal(r.applies && r.workShift, 'day');
         assert.equal(r.applies && r.bonusPerAlert, 1);
     });
@@ -124,7 +138,7 @@ test('el turno decide cuántos bonos otorga, y es el del OPERADOR', async (t) =>
     await t.test('con 4x1 nocturno a 5, cada alerta vale 1,25', () => {
         const r = resolver({
             user: operador('nocturno'),
-            menu: { bonusRule: regla({ alertsRequired: 4, bonusAwarded: { day: 4, night: 5 } }) },
+            menu: asignada(regla({ alertsRequired: 4, bonusAwarded: { day: 4, night: 5 } })),
         });
         assert.equal(r.applies && r.bonusPerAlert, 1.25);
     });
@@ -174,30 +188,93 @@ test('de qué capa del horario salió el turno', async (t) => {
 });
 
 
-test('dónde aplica la regla', async (t) => {
+test('dónde aplica una asignación', async (t) => {
 
     await t.test("'all' aplica en todos lados", () => {
-        assert.equal(isInScope(regla() as never, establecimiento() as never), true);
+        assert.equal(isInScope(alcance() as never, establecimiento() as never), true);
     });
 
     await t.test("'only' aplica solo en los listados — por local", () => {
-        const r = regla({ scope: { mode: 'only', franchises: [], locals: [LOCAL] } });
-        assert.equal(isInScope(r as never, establecimiento(LOCAL) as never), true);
-        assert.equal(isInScope(r as never, establecimiento(OTRO_LOCAL) as never), false);
+        const s = alcance('only', { locals: [LOCAL] });
+        assert.equal(isInScope(s as never, establecimiento(LOCAL) as never), true);
+        assert.equal(isInScope(s as never, establecimiento(OTRO_LOCAL) as never), false);
     });
 
     await t.test("'only' por MARCA cubre a los locales de esa marca", () => {
         // Es lo que hace que una Francisca nueva quede cubierta sin que nadie
         // la agregue a mano.
-        const r = regla({ scope: { mode: 'only', franchises: [MARCA], locals: [] } });
-        assert.equal(isInScope(r as never, establecimiento(OTRO_LOCAL, MARCA) as never), true);
-        assert.equal(isInScope(r as never, establecimiento(OTRO_LOCAL, OTRA_MARCA) as never), false);
+        const s = alcance('only', { franchises: [MARCA] });
+        assert.equal(isInScope(s as never, establecimiento(OTRO_LOCAL, MARCA) as never), true);
+        assert.equal(isInScope(s as never, establecimiento(OTRO_LOCAL, OTRA_MARCA) as never), false);
     });
 
     await t.test("'except' aplica en todos MENOS los listados", () => {
-        const r = regla({ scope: { mode: 'except', franchises: [], locals: [LOCAL] } });
-        assert.equal(isInScope(r as never, establecimiento(LOCAL) as never), false);
-        assert.equal(isInScope(r as never, establecimiento(OTRO_LOCAL) as never), true);
+        const s = alcance('except', { locals: [LOCAL] });
+        assert.equal(isInScope(s as never, establecimiento(LOCAL) as never), false);
+        assert.equal(isInScope(s as never, establecimiento(OTRO_LOCAL) as never), true);
+    });
+});
+
+
+test('la misma alerta con reglas DISTINTAS según el establecimiento', async (t) => {
+    // Es la razón de que la asignación sea una lista con alcance: en las
+    // Franciscas la alerta va con "3 por bono" y en los Mister con "1 por bono".
+    // Con una sola referencia eso no se podía decir.
+
+    const tresPorBono = regla({ _id: 'r-francisca', alertsRequired: 3 });
+    const unoPorUno = regla({ _id: 'r-general', alertsRequired: 1 });
+
+    const menu = {
+        bonusRules: [
+            { rule: unoPorUno, scope: alcance() },
+            { rule: tresPorBono, scope: alcance('only', { franchises: [MARCA] }) },
+        ],
+    };
+
+    await t.test('en la marca listada gana la asignación por marca', () => {
+        const r = resolver({ menu, establishment: establecimiento(LOCAL, MARCA) });
+        assert.equal(r.applies && r.rule, 'r-francisca');
+        assert.equal(r.applies && r.bonusPerAlert, 1 / 3);
+    });
+
+    await t.test('en otra marca cae a la general', () => {
+        const r = resolver({ menu, establishment: establecimiento(OTRO_LOCAL, OTRA_MARCA) });
+        assert.equal(r.applies && r.rule, 'r-general');
+        assert.equal(r.applies && r.bonusPerAlert, 1);
+    });
+
+    await t.test('la más específica gana: local > marca > general', () => {
+        // Sin esa prioridad, el resultado dependería del orden en que se
+        // cargaron las asignaciones — que es lo peor cuando decide un pago.
+        const porLocal = regla({ _id: 'r-local' });
+        const porMarca = regla({ _id: 'r-marca' });
+        const general = regla({ _id: 'r-todos' });
+
+        // Cargadas en el orden MENOS conveniente a propósito.
+        const asignaciones = [
+            { rule: general, scope: alcance() },
+            { rule: porMarca, scope: alcance('only', { franchises: [MARCA] }) },
+            { rule: porLocal, scope: alcance('only', { locals: [LOCAL] }) },
+        ];
+        const elegida = pickAssignment(asignaciones as never, establecimiento(LOCAL, MARCA) as never);
+        assert.equal((elegida?.rule as { _id: string })._id, 'r-local');
+    });
+
+    await t.test("un 'except' que no excluye vale como general y pierde contra un 'only'", () => {
+        const enTodosMenosOtro = regla({ _id: 'r-except' });
+        const soloAca = regla({ _id: 'r-only' });
+        const asignaciones = [
+            { rule: enTodosMenosOtro, scope: alcance('except', { locals: [OTRO_LOCAL] }) },
+            { rule: soloAca, scope: alcance('only', { locals: [LOCAL] }) },
+        ];
+        const elegida = pickAssignment(asignaciones as never, establecimiento(LOCAL) as never);
+        assert.equal((elegida?.rule as { _id: string })._id, 'r-only');
+    });
+
+    await t.test('si ninguna aplica, no bonifica por fuera de alcance', () => {
+        const soloMiami = { bonusRules: [{ rule: regla(), scope: alcance('only', { locals: [OTRO_LOCAL] }) }] };
+        const r = resolver({ menu: soloMiami, establishment: establecimiento(LOCAL) });
+        assert.equal(!r.applies && r.reason, 'fuera-de-alcance');
     });
 });
 
@@ -206,9 +283,9 @@ test('las excepciones — gana la más específica', async (t) => {
 
     await t.test('una excepción del local pisa el valor general', () => {
         const r = resolver({
-            menu: { bonusRule: regla({
+            menu: asignada(regla({
                 overrides: [{ local: LOCAL, franchise: null, alertsRequired: 1, bonusAwarded: { day: 5, night: 5 }, note: '' }],
-            }) },
+            })),
             establishment: establecimiento(LOCAL),
         });
         assert.equal(r.applies && r.bonusPerAlert, 5);
@@ -219,12 +296,12 @@ test('las excepciones — gana la más específica', async (t) => {
         // Sin esta prioridad, el resultado dependería del orden de carga — que
         // es lo peor posible cuando decide un pago.
         const r = resolver({
-            menu: { bonusRule: regla({
+            menu: asignada(regla({
                 overrides: [
                     { local: null, franchise: MARCA, alertsRequired: 1, bonusAwarded: { day: 2, night: 2 }, note: '' },
                     { local: LOCAL, franchise: null, alertsRequired: 1, bonusAwarded: { day: 9, night: 9 }, note: '' },
                 ],
-            }) },
+            })),
             establishment: establecimiento(LOCAL, MARCA),
         });
         assert.equal(r.applies && r.bonusPerAlert, 9);
@@ -232,9 +309,9 @@ test('las excepciones — gana la más específica', async (t) => {
 
     await t.test('una excepción de otro local no afecta', () => {
         const r = resolver({
-            menu: { bonusRule: regla({
+            menu: asignada(regla({
                 overrides: [{ local: OTRO_LOCAL, franchise: null, alertsRequired: 1, bonusAwarded: { day: 5, night: 5 }, note: '' }],
-            }) },
+            })),
             establishment: establecimiento(LOCAL),
         });
         assert.equal(r.applies && r.bonusPerAlert, 1);
@@ -248,29 +325,30 @@ test('cuándo NO bonifica, y por qué', async (t) => {
     // tres se guardan idénticos y sobre una novedad ya sellada no hay forma de
     // saber cuál fue.
 
-    await t.test('sin regla asignada', () => {
-        const r = resolver({ menu: { bonusRule: null } });
+    await t.test('sin ninguna asignación', () => {
+        const r = resolver({ menu: { bonusRules: [] } });
         assert.equal(r.applies, false);
         assert.equal(!r.applies && r.reason, 'sin-regla');
     });
 
-    await t.test('la regla llega SIN popular — se trata como sin regla', () => {
-        // El error más caro del sellado: un `bonusRule` sin popular es un
-        // ObjectId, y el cero que produce queda congelado.
-        const r = resolver({ menu: { bonusRule: 'aaaaaaaaaaaaaaaaaaaaaaaa' } });
-        assert.equal(!r.applies && r.reason, 'sin-regla');
+    await t.test('la regla llega SIN popular — se distingue de "sin regla"', () => {
+        // El error más caro del sellado: un `rule` sin popular es un ObjectId.
+        // Se distingue a propósito: uno es un error de quien llamó y el otro
+        // una decisión, y como el sello se congela conviene no confundirlos.
+        const r = resolver({ menu: { bonusRules: [{ rule: 'aaaaaaaaaaaaaaaaaaaaaaaa', scope: alcance() }] } });
+        assert.equal(!r.applies && r.reason, 'regla-sin-popular');
     });
 
     await t.test('la regla está desactivada', () => {
         // Éste es el que importa: son alertas que DEJARON de pagar sin que
         // nadie las tocara y sin que salte ningún error.
-        const r = resolver({ menu: { bonusRule: regla({ active: false }) } });
+        const r = resolver({ menu: asignada(regla({ active: false })) });
         assert.equal(!r.applies && r.reason, 'regla-inactiva');
     });
 
     await t.test('el establecimiento queda fuera del alcance', () => {
         const r = resolver({
-            menu: { bonusRule: regla({ scope: { mode: 'only', franchises: [], locals: [OTRO_LOCAL] } }) },
+            menu: asignada(regla(), alcance('only', { locals: [OTRO_LOCAL] })),
             establishment: establecimiento(LOCAL),
         });
         assert.equal(!r.applies && r.reason, 'fuera-de-alcance');
@@ -279,7 +357,7 @@ test('cuándo NO bonifica, y por qué', async (t) => {
     await t.test('aun sin bonificar, el sello queda fechado', () => {
         // "No bonifica" es una DECISIÓN. Verse igual que "nunca se selló"
         // borraría esa diferencia.
-        const r = resolver({ menu: { bonusRule: null } });
+        const r = resolver({ menu: { bonusRules: [] } });
         assert.ok(r.frozenAt instanceof Date);
     });
 });
@@ -332,7 +410,7 @@ test('`at` y `frozenAt` son fechas distintas', async (t) => {
     });
 
     await t.test('también en el sello de "no bonifica"', () => {
-        const r = resolver({ menu: { bonusRule: null }, at: sabado, frozenAt: lunes });
+        const r = resolver({ menu: { bonusRules: [] }, at: sabado, frozenAt: lunes });
         assert.equal(r.frozenAt.toISOString(), lunes.toISOString());
     });
 });
@@ -343,7 +421,7 @@ test('es una función pura', async (t) => {
     await t.test('no modifica lo que recibe', () => {
         const entrada = {
             user: operador('diurno'),
-            menu: { bonusRule: regla({ alertsRequired: 4 }) },
+            menu: asignada(regla({ alertsRequired: 4 })),
             establishment: establecimiento(),
             settings: { pointValue: 0.20 },
         };
@@ -357,7 +435,7 @@ test('es una función pura', async (t) => {
     await t.test('con la misma entrada devuelve lo mismo', () => {
         const args = {
             user: operador('nocturno'),
-            menu: { bonusRule: regla({ alertsRequired: 3, bonusAwarded: { day: 1, night: 1.5 } }) },
+            menu: asignada(regla({ alertsRequired: 3, bonusAwarded: { day: 1, night: 1.5 } })),
             establishment: establecimiento(),
             settings: { pointValue: 0.20 },
             at: new Date('2026-08-15T12:00:00Z'),

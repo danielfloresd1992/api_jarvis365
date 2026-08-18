@@ -25,6 +25,12 @@ import { Schema, model, Types } from 'mongoose';
 //
 // El TOTAL. Una alerta suelta no tiene un total: el total se cuenta al corte,
 // sumando lo que aportó cada novedad aprobada.
+//
+// DÓNDE APLICA. Eso lo decide la ALERTA, en cada una de sus asignaciones
+// (Menu.bonusRules[].scope). La misma alerta puede ir con reglas distintas
+// según el establecimiento, y para eso el alcance tiene que estar del lado de
+// la alerta: en la regla obligaba a duplicar reglas idénticas solo para
+// cambiarles el lugar.
 
 
 /**
@@ -68,10 +74,23 @@ export interface BonusAward {
 export type BonusScopeMode = 'all' | 'only' | 'except';
 
 
+/**
+ * Dónde aplica una asignación.
+ *
+ * Vive acá y no en menu.model porque el que lo LEE es resolveBonus, y ése
+ * trabaja con los tipos de este módulo. Menu solo lo guarda.
+ */
 export interface BonusScope {
     mode: BonusScopeMode;
     franchises: Types.ObjectId[];
     locals: Types.ObjectId[];
+}
+
+
+/** Una de las asignaciones de una alerta: qué regla, y dónde. */
+export interface BonusAssignment {
+    rule: Types.ObjectId | BonusRuleDoc;
+    scope: BonusScope;
 }
 
 
@@ -93,7 +112,6 @@ export interface BonusRuleDoc extends BonusAward {
     /** El `value` de una BonusCategory. Con qué criterio agrupa en los cortes. */
     bonusCategory?: string | null;
 
-    scope: BonusScope;
     overrides: BonusOverride[];
 
     active: boolean;
@@ -157,32 +175,6 @@ const BonusRule = new Schema<BonusRuleDoc>({
 
     // ── Cuánto otorga, en general ─────────────────────────────────────
     ...cuantoOtorga(),
-
-
-    // ══════════════════════════════════════════════════════════════════
-    // DÓNDE APLICA
-    // ══════════════════════════════════════════════════════════════════
-    // Casi todo el reglamento lleva alcance: "SOLO FRANCISCAS", "SOLO
-    // NACIONALES", "Todos los Mister excepto Fort Lauderdale". Es la dimensión
-    // más frecuente, no un caso de borde.
-    scope: {
-        // Hacen falta los dos sentidos y no solo la inclusión: "todos los Mister
-        // excepto Fort Lauderdale" con `only` obliga a enumerar cada Mister y a
-        // mantener esa lista; con `except` son dos datos y el local que abra
-        // mañana entra solo.
-        mode: {
-            type: String,
-            enum: ['all', 'only', 'except'],
-            default: 'all',
-        },
-
-        // Por MARCA. Es como está escrito casi todo el reglamento, y es lo que
-        // hace que una Francisca nueva quede cubierta sin que nadie la agregue.
-        franchises: [{ type: Schema.Types.ObjectId, ref: 'Franchise' }],
-
-        // Por establecimiento concreto: "FRANCISCA MIAMI", "SOLO LLANO GRANDE".
-        locals: [{ type: Schema.Types.ObjectId, ref: 'Local' }],
-    },
 
 
     // ══════════════════════════════════════════════════════════════════

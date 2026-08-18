@@ -142,31 +142,55 @@ const Menu = new Schema({
     // directa a la colección.
 
     // ══════════════════════════════════════════════════════════════════
-    // REGLA DE BONIFICACIÓN
+    // REGLAS DE BONIFICACIÓN — una por alcance
     // ══════════════════════════════════════════════════════════════════
-    // Cuánto bonifica esta alerta, dónde y cuántas hacen falta. Vive en su
-    // propio documento (BonusRule) porque el reglamento repite las mismas
-    // condiciones en decenas de alertas: se define una vez y se reutiliza.
+    // Con qué regla bonifica esta alerta, Y DÓNDE. Es una LISTA porque la misma
+    // alerta puede ir con reglas distintas según el establecimiento: en las
+    // Franciscas "3 por bono", en los Mister "1 por bono". Con una sola
+    // referencia eso no se podía decir.
     //
-    // Acá SÍ es una referencia, a diferencia de `category` y `bonusCategory`,
-    // que guardan cadenas. El motivo es distinto en cada caso: aquellas son
-    // etiquetas que ya estaban cargadas y convertirlas obligaría a migrar; ésta
-    // nace ahora y no tiene nada que migrar. Y como referencia, corregir una
-    // regla corrige todas sus alertas de una vez, que es justo lo que se busca.
+    // Cada asignación lleva su alcance. Al resolver una novedad se elige la
+    // asignación que aplica en ese establecimiento, y gana la MÁS ESPECÍFICA:
+    // una por local le gana a una por marca, y ésa a una general. Sin esa
+    // prioridad, el resultado dependería del orden de carga — que es lo peor
+    // posible cuando decide un pago.
     //
-    // OPCIONAL. `null` significa que esta alerta NO bonifica —y eso se ve igual
-    // que una que todavía nadie revisó, así que conviene mirar `bonusReviewed`
-    // para distinguirlas.
-    bonusRule: {
-        type: Schema.Types.ObjectId,
-        ref: 'BonusRule',
-        default: null,
+    // El alcance vive ACÁ y no en la regla, a propósito. Una regla es "cuánto y
+    // cada cuántas"; dónde se aplica es una decisión de la alerta. Ponerlo en la
+    // regla obligaba a duplicar reglas idénticas solo para cambiarles el lugar.
+    //
+    // La regla sigue siendo una referencia: corregirla corrige todas las alertas
+    // que la usan de una vez, que es justo lo que se busca.
+    //
+    // Lista VACÍA significa que esta alerta NO bonifica —y eso se ve igual que
+    // una que todavía nadie revisó, así que conviene mirar `bonusReviewed` para
+    // distinguirlas.
+    bonusRules: {
+        type: [{
+            rule: {
+                type: Schema.Types.ObjectId,
+                ref: 'BonusRule',
+                required: true,
+            },
+
+            // 'all'    en todos lados. Es lo normal y por eso es el default.
+            // 'only'   solo en los que se listan.
+            // 'except' en todos MENOS los que se listan.
+            scope: {
+                mode: { type: String, enum: ['all', 'only', 'except'], default: 'all' },
+                franchises: [{ type: Schema.Types.ObjectId, ref: 'Franchise' }],
+                locals: [{ type: Schema.Types.ObjectId, ref: 'Local' }],
+            },
+
+            _id: false,
+        }],
+        default: [],
     },
 
     // Si alguien ya decidió sobre la bonificación de esta alerta.
     //
     // Sin esto, "no bonifica" y "nadie la miró todavía" son el mismo dato
-    // (`bonusRule: null`), y con cientos de alertas no habría forma de saber
+    // (`bonusRules: []`), y con cientos de alertas no habría forma de saber
     // cuánto falta por revisar.
     bonusReviewed: {
         type: Boolean,

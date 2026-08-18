@@ -57,10 +57,10 @@ const cuantoOtorga = () => ({
 
 
 /**
- * Dónde aplica una regla.
+ * Dónde aplica una asignación.
  *
- * Se define aparte del resto porque se valida en dos lugares: dentro de la regla
- * completa, y solo, en el PATCH que cambia únicamente el alcance.
+ * Ya no es parte de la regla: es parte de cada asignación en Menu.bonusRules. Se
+ * valida en el PUT que escribe esas asignaciones.
  */
 export const scopeSchema = yup.object({
     mode: yup.string()
@@ -101,10 +101,6 @@ const bonusRuleSchema = yup.object({
     ...cuantoOtorga(),
 
 
-    // ── Dónde aplica ──────────────────────────────────────────────────
-    scope: scopeSchema,
-
-
     // ── Excepciones ───────────────────────────────────────────────────
     overrides: yup.array().of(
         yup.object({
@@ -140,15 +136,32 @@ const bonusRuleSchema = yup.object({
 
 
 /**
- * Lo que acepta la asignación de una regla a una alerta.
+ * Lo que acepta la asignación de reglas a una alerta: la lista COMPLETA de sus
+ * asignaciones, cada una con su regla y su alcance.
  *
- * `null` es un valor VÁLIDO acá y significa "esta alerta no bonifica": es una
- * decisión tomada, no un campo sin llenar. Por eso `.default(null)` — ausente y
- * null llegan iguales y el endpoint los trata igual, marcando la alerta como
+ * Es la lista completa y no un delta porque así el servidor puede validar el
+ * conjunto: dos asignaciones generales serían ambiguas, y eso solo se ve
+ * mirando todas juntas.
+ *
+ * Lista VACÍA es un valor VÁLIDO y significa "esta alerta no bonifica": es una
+ * decisión tomada, no un campo sin llenar. El endpoint marca la alerta como
  * revisada en los dos casos.
  */
-export const menuBonusRuleSchema = yup.object({
-    bonusRule: objectId('La regla').nullable().default(null),
+export const menuBonusRulesSchema = yup.object({
+    bonusRules: yup.array().of(
+        yup.object({
+            rule: objectId('La regla').required('Cada asignación necesita una regla'),
+            scope: scopeSchema,
+        }),
+    )
+        .default([])
+        .test(
+            'una-general-como-mucho',
+            'Solo puede haber una asignación general ("en todos"): con dos no habría forma de saber cuál aplica',
+            // Dos 'all' para la misma alerta es una ambigüedad que la resolución
+            // resolvería por orden de carga — que es lo peor cuando decide un pago.
+            lista => (lista || []).filter(a => a?.scope?.mode === 'all').length <= 1,
+        ),
 }).noUnknown();
 
 
@@ -156,8 +169,8 @@ export const menuBonusRuleSchema = yup.object({
  *  la validacion no pueden separarse. */
 export type BonusRuleInput = yup.InferType<typeof bonusRuleSchema>;
 
-/** La asignacion ya validada. */
-export type MenuBonusRuleInput = yup.InferType<typeof menuBonusRuleSchema>;
+/** Las asignaciones ya validadas. */
+export type MenuBonusRulesInput = yup.InferType<typeof menuBonusRulesSchema>;
 
 
 export default bonusRuleSchema;

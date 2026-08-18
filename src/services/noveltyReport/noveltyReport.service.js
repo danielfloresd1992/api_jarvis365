@@ -171,7 +171,9 @@ export async function buildNoveltyCountReport({ isFinal = false, at, category, b
 
         if (bonusCategory) {
             const reglas = await BonusRuleModel.find({ bonusCategory }).select('_id').lean();
-            criterio.bonusRule = { $in: reglas.map(r => r._id) };
+            // Dentro del array de asignaciones: basta con que UNA apunte a una
+            // regla de esa categoría para que la alerta entre.
+            criterio['bonusRules.rule'] = { $in: reglas.map(r => r._id) };
         }
 
         const menus = await MenuModel.find(criterio).select('_id').lean();
