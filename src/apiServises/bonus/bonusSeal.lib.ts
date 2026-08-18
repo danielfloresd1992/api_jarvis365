@@ -1,29 +1,26 @@
-import { Types } from 'mongoose';
+import type { Types } from 'mongoose';
 import MenuModel from '../menu/menu.model.js';
 import UserModel from '../user/user.model.js';
 import AttendanceModel from '../user/attendance.model.js';
 import LocalModel from '../local/local.model.js';
 import { getBonusSettings } from './bonusSettings.lib.js';
 import { resolveBonusForNovelty } from './resolveBonus.lib.js';
-import type { BonusSeal } from './resolveBonus.lib.js';
+import type { BonusSeal } from './bonus.types.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // ARMAR EL SELLO DE UNA NOVEDAD
 // ══════════════════════════════════════════════════════════════════════
-// La contracara impura de `resolveBonus.lib.ts`: junta de la base todo lo que la
-// función pura necesita, la llama, y devuelve lo que se guarda en
-// `Noveltie.bonus`.
+// La mitad IMPURA del sellado: va a la base, junta lo que la resolución
+// necesita, la llama, y devuelve lo que se guarda en `Noveltie.bonus`.
 //
-// Están separadas a propósito, y no es orden por el orden: `resolveBonusForNovelty`
-// no toca la base ni el reloj, y por eso se puede probar con objetos planos y sin
-// Mongo. Meterle adentro los `findById` y el `populate` mataría esa propiedad, que
-// es la que importa cuando el resultado es dinero.
+// Está separada de resolveBonus.lib.ts a propósito: aquélla no toca la base ni
+// el reloj y por eso se prueba sin Mongo. Los errores de acá son de
+// RECOLECCIÓN —un populate que falta, la fecha equivocada—, no de cálculo.
 //
-// La división también separa dónde puede fallar cada cosa: los errores de acá son
-// de RECOLECCIÓN —un populate que falta, la fecha equivocada—, no de cálculo.
+// No decide CUÁNDO sellar: eso es del PUT de novedades.
 
 
-/** Lo mínimo que hace falta de la novedad para poder sellarla. */
+/** Lo mínimo que hace falta de la novedad para sellarla. */
 export interface SealableNovelty {
     _id?: Types.ObjectId | string;
     menuRef?: Types.ObjectId | string | null;
@@ -36,67 +33,45 @@ export interface SealableNovelty {
 }
 
 
-/**
- * El día civil a las 00:00 UTC, que es como `Attendance` guarda su `date`.
- *
- * Se calcula con los componentes UTC de la fecha para que coincida con lo que
- * escribe `dayRoster.service.js`. Buscar la asistencia con la fecha-hora cruda no
- * encontraría nada nunca, y el turno caería silenciosamente a la capa siguiente
- * de la cascada.
- */
-const diaCivil = (fecha: Date): Date => new Date(Date.UTC(
-    fecha.getUTCFullYear(),
-    fecha.getUTCMonth(),
-    fecha.getUTCDate(),
-));
+/** El día a las 00:00 UTC — así guarda `Attendance.date`. Con la hora cruda no matchea nunca. */
+const diaCivil = (fecha: Date): Date =>
+    new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate()));
 
 
 /**
- * Resuelve y arma el sello de bonificación de una novedad.
+ * Arma el sello de bonificación de una novedad.
  *
- * Devuelve `null` si no se pudo resolver —le falta la alerta, o la consulta se
- * cayó—. Quien llame debe tratar ese `null` como "no sellar": dejar
- * `bonus.applies` en `null` significa "no se evaluó" y se puede reprocesar,
- * mientras que un sello a medias queda congelado y mintiendo.
+ * Recibe la novedad y busca en la base:
+ *   Menu        la alerta, con `bonusRules.rule` POPULADA
+ *   User        el operador que reportó, con su horario
+ *   Attendance  su asistencia del día en que ocurrió
+ *   Local       el establecimiento, con su marca
+ *   Settings    cuánto vale un bono hoy
  *
- * NO decide CUÁNDO sellar. Eso es de la máquina de estados de la validación y
- * vive en el PUT: acá solo se arma el sello de la novedad que se pida.
+ * Devuelve el sello, o `null` si no se pudo armar. Ese `null` significa
+ * "no sellar": la novedad queda en `applies: null` y se puede reprocesar. Un
+ * sello a medias quedaría congelado y mintiendo.
  */
 export const buildBonusSeal = async (noveltie: SealableNovelty): Promise<BonusSeal | null> => {
     try {
         if (!noveltie?.menuRef) return null;
 
-        // CUÁNDO OCURRIÓ, no cuándo se valida. Con esta fecha se busca el turno
-        // en el horario: una novedad del sábado validada el lunes tiene que
-        // resolver el sábado.
+        // Cuándo OCURRIÓ, no cuándo se valida: con esta fecha se busca el turno.
+        // Una novedad del sábado validada el lunes tiene que resolver el sábado.
         const cuando = noveltie.sharedByUser?.createdAt ?? noveltie.createdAt ?? new Date();
         const operadorId = noveltie.sharedByUser?.user?.id ?? null;
 
-        const [alerta, operador, asistencia, establecimiento] = await Promise.all([
-
-            // Las reglas de las asignaciones, POPULADAS. Es un populate
-            // ANIDADO —`bonusRules.rule`— porque cada asignación lleva su
-            // regla y su alcance. Sin esto llega un ObjectId, la función pura
-            // devuelve 'regla-sin-popular' y como el sello se congela, ese
-            // resultado queda grabado. Es el error más caro de este archivo.
+        const [alerta, operador, asistencia, establecimiento, settings] = await Promise.all([
+            // Populate ANIDADO. Sin él llega un ObjectId y la resolución devuelve
+            // 'regla-sin-popular' — y el sello se congela con eso.
             MenuModel.findById(noveltie.menuRef).populate('bonusRules.rule').lean(),
-
-            operadorId
-                ? UserModel.findById(operadorId).select('workSchedule').lean()
-                : null,
-
-            operadorId
-                ? AttendanceModel.findOne({ userId: operadorId, date: diaCivil(cuando) }).lean()
-                : null,
-
-            noveltie.establishment
-                ? LocalModel.findById(noveltie.establishment).select('franchiseReference').lean()
-                : null,
+            operadorId ? UserModel.findById(operadorId).select('workSchedule').lean() : null,
+            operadorId ? AttendanceModel.findOne({ userId: operadorId, date: diaCivil(cuando) }).lean() : null,
+            noveltie.establishment ? LocalModel.findById(noveltie.establishment).select('franchiseReference').lean() : null,
+            getBonusSettings(),
         ]);
 
         if (!alerta) return null;
-
-        const settings = await getBonusSettings();
 
         return resolveBonusForNovelty({
             user: operador as never,
@@ -104,15 +79,13 @@ export const buildBonusSeal = async (noveltie: SealableNovelty): Promise<BonusSe
             menu: alerta as never,
             establishment: establecimiento as never,
             settings,
-
-            at: cuando,          // cuándo ocurrió → con esto se busca el turno
-            frozenAt: new Date() // cuándo se decidió → queda en el sello
+            at: cuando,           // cuándo ocurrió → el turno
+            frozenAt: new Date(), // cuándo se decidió → el sello
         });
     }
     catch (error) {
-        // La bonificación NUNCA puede tumbar una validación. Sin sello la novedad
-        // queda en `applies: null`, que significa "no se evaluó" y se puede
-        // reprocesar; con la validación caída, el operador no puede trabajar.
+        // La bonificación NUNCA tumba una validación: sin sello se reprocesa;
+        // con la validación caída, el operador no puede trabajar.
         console.log('No se pudo armar el sello de bonificación:', (error as Error)?.message);
         return null;
     }
