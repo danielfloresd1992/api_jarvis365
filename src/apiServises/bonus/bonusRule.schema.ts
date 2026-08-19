@@ -148,6 +148,10 @@ const bonusRuleSchema = yup.object({
  * revisada en los dos casos.
  */
 export const menuBonusRulesSchema = yup.object({
+    // El interruptor. `null` = no se decidió, y es lo que traen las alertas
+    // anteriores a este campo: no bloquea nada.
+    bonifies: yup.boolean().nullable().default(null),
+
     bonusRules: yup.array().of(
         yup.object({
             rule: objectId('La regla').required('Cada asignación necesita una regla'),

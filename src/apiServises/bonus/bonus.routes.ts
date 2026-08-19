@@ -245,7 +245,7 @@ routerBonus.put(`${nameApi}/bonus/menu/id=:id`, validateSession, validateAdminUs
         return res.status(400).json({ status: 400, error: 'Bad request', message: 'Id inválido' });
     }
 
-    const { bonusRules } = await menuBonusRulesSchema.validate(req.body, OPCIONES_VALIDACION);
+    const { bonifies, bonusRules } = await menuBonusRulesSchema.validate(req.body, OPCIONES_VALIDACION);
 
     // Todas las reglas referidas tienen que existir. Se comprueba antes de
     // escribir: una asignación a una regla inexistente pasaría el esquema
@@ -261,9 +261,9 @@ routerBonus.put(`${nameApi}/bonus/menu/id=:id`, validateSession, validateAdminUs
 
     const alerta = await MenuModel.findByIdAndUpdate(
         id,
-        { bonusRules, bonusReviewed: true },
+        { bonifies, bonusRules, bonusReviewed: true },
         { new: true, runValidators: true },
-    ).select('es en category bonusRules bonusReviewed').lean();
+    ).select('es en category bonifies bonusRules bonusReviewed').lean();
 
     if (!alerta) return res.status(404).json({ status: 404, error: 'Not found', message: 'La alerta no existe' });
 

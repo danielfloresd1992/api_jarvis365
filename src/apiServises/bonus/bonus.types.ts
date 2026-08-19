@@ -47,8 +47,10 @@ export interface AssignmentLike {
     scope?: Partial<BonusScope> | null;
 }
 
-/** La alerta, con sus asignaciones. */
+/** La alerta, con su interruptor y sus asignaciones. */
 export interface MenuLike {
+    /** `false` corta antes de mirar reglas. `null` = nunca se decidió. */
+    bonifies?: boolean | null;
     bonusRules?: AssignmentLike[] | null;
 }
 
@@ -82,13 +84,16 @@ export type ShiftSource = 'override' | 'regla' | 'shiftType' | 'default';
 /**
  * Por qué una novedad aprobada NO bonificó.
  *
- *   sin-regla           la alerta no tiene asignaciones
+ *   no-bonifica         la alerta tiene el interruptor en false: es una
+ *                       decisión tomada, no falta de configuración
+ *   sin-regla           bonifica, pero todavía no tiene asignaciones
  *   fuera-de-alcance    tiene, pero ninguna aplica en ese establecimiento
  *   regla-inactiva      la que aplica está desactivada
  *   regla-sin-popular   llegó un ObjectId en vez de la regla — error de quien
  *                       llamó, no una decisión; se distingue para no confundirlos
  */
-export type SkipReason = 'sin-regla' | 'fuera-de-alcance' | 'regla-inactiva' | 'regla-sin-popular';
+export type SkipReason =
+    | 'no-bonifica' | 'sin-regla' | 'fuera-de-alcance' | 'regla-inactiva' | 'regla-sin-popular';
 
 /**
  * Bonificó. `applies: true` es el discriminante: para leer `bonusPerAlert` hay

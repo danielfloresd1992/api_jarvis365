@@ -197,6 +197,33 @@ const Menu = new Schema({
         default: false,
     },
 
+    // ══════════════════════════════════════════════════════════════════
+    // ¿ESTA ALERTA BONIFICA?
+    // ══════════════════════════════════════════════════════════════════
+    // El interruptor, independiente de si sus asignaciones ya están armadas.
+    //
+    // Hace falta porque configurar una alerta lleva varios pasos —decidir que
+    // bonifica, elegir dónde, elegir con qué regla— y sin esto el estado
+    // intermedio (`bonusRules: []`) se ve igual que "se decidió que no
+    // bonifica". Con el interruptor, una alerta a medio armar se distingue de
+    // una descartada.
+    //
+    // TRES ESTADOS, como `Noveltie.bonus.applies`:
+    //
+    //     true   bonifica — sus asignaciones dicen cuánto y dónde
+    //     false  NO bonifica, y fue una decisión: corta antes de mirar reglas
+    //     null   nunca se decidió. Es el default y el valor de todo lo que ya
+    //            estaba cargado: NO bloquea, y la resolución sigue saliendo de
+    //            las asignaciones como siempre.
+    //
+    // Ese `null` es lo que hace que este campo se pueda agregar sin migrar
+    // nada: un `false` por defecto habría dejado de pagar en silencio a todas
+    // las alertas ya configuradas.
+    bonifies: {
+        type: Boolean,
+        default: null,
+    },
+
     // NOTA: el campo 'especial' completo está definido arriba (líneas 38-49).
     // La línea duplicada 'especial: {}' fue eliminada porque sobreescribía
     // la definición estructurada con un objeto vacío, perdiendo todos los sub-campos.

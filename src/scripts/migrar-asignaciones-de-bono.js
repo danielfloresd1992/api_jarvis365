@@ -60,7 +60,21 @@ async function main() {
         { $unset: { bonusRule: '' } },
     );
 
+    // El interruptor `bonifies` se deja explícito donde ya hay una decisión
+    // tomada. No es obligatorio —`null` no bloquea nada— pero deja el dato
+    // dicho en vez de deducido, que es lo que permite distinguir después una
+    // alerta a medio configurar de una descartada.
+    const { modifiedCount: encendidas } = await menus.updateMany(
+        { bonusRules: { $exists: true, $ne: [] }, bonifies: { $in: [null, undefined] } },
+        { $set: { bonifies: true } },
+    );
+    const { modifiedCount: apagadas } = await menus.updateMany(
+        { bonusReviewed: true, $or: [{ bonusRules: { $size: 0 } }, { bonusRules: { $exists: false } }], bonifies: { $in: [null, undefined] } },
+        { $set: { bonifies: false } },
+    );
+
     console.log(`Migradas: ${migradas} · Limpiadas (eran null): ${limpiadas}`);
+    console.log(`Interruptor: ${encendidas} en true (tenían reglas) · ${apagadas} en false (revisadas y sin reglas)`);
     await mongoose.disconnect();
 }
 

@@ -320,6 +320,42 @@ test('las excepciones — gana la más específica', async (t) => {
 });
 
 
+test('el interruptor de la alerta', async (t) => {
+    // `bonifies` separa "se decidió que no bonifica" de "todavía no se
+    // configuró". Sin él, una alerta a medio armar se ve igual que una
+    // descartada.
+
+    await t.test('en false corta antes de mirar las reglas', () => {
+        const r = resolver({ menu: { ...asignada(), bonifies: false } });
+        assert.equal(r.applies, false);
+        assert.equal(!r.applies && r.reason, 'no-bonifica');
+    });
+
+    await t.test('en true bonifica normalmente', () => {
+        const r = resolver({ menu: { ...asignada(), bonifies: true } });
+        assert.equal(r.applies, true);
+    });
+
+    await t.test('en true pero sin asignaciones: falta configurarla', () => {
+        // No es lo mismo que "no bonifica": alguien dijo que sí y quedó a medias.
+        const r = resolver({ menu: { bonifies: true, bonusRules: [] } });
+        assert.equal(!r.applies && r.reason, 'sin-regla');
+    });
+
+    await t.test('en null NO bloquea — es lo que traen las alertas viejas', () => {
+        // Un `false` por defecto habría dejado de pagar en silencio a todo lo
+        // ya configurado. Por eso el default es null.
+        const r = resolver({ menu: { ...asignada(), bonifies: null } });
+        assert.equal(r.applies, true);
+    });
+
+    await t.test('ausente tampoco bloquea', () => {
+        const r = resolver({ menu: asignada() });
+        assert.equal(r.applies, true);
+    });
+});
+
+
 test('cuándo NO bonifica, y por qué', async (t) => {
     // Los tres motivos son distintos y solo uno es un problema. Sin `reason` los
     // tres se guardan idénticos y sobre una novedad ya sellada no hay forma de

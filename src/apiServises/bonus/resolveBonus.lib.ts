@@ -158,22 +158,27 @@ export const resolveBonusForNovelty = ({
     at = new Date(), frozenAt = new Date(),
 }: ResolveBonusParams): BonusSeal => {
 
-    // 1. Qué asignación aplica en este establecimiento.
+    // 1. El interruptor de la alerta. Solo un `false` EXPLÍCITO corta: `null`
+    //    es lo que traen las alertas anteriores a este campo, y ésas se siguen
+    //    resolviendo por sus asignaciones.
+    if (menu?.bonifies === false) return noBonifica('no-bonifica', frozenAt);
+
+    // 2. Qué asignación aplica en este establecimiento.
     const asignaciones = menu?.bonusRules || [];
     if (!asignaciones.length) return noBonifica('sin-regla', frozenAt);
 
     const asignacion = pickAssignment(asignaciones, establishment);
     if (!asignacion) return noBonifica('fuera-de-alcance', frozenAt);
 
-    // 2. Su regla, y que esté viva.
+    // 3. Su regla, y que esté viva.
     const regla = asignacion.rule;
     if (!esRegla(regla)) return noBonifica('regla-sin-popular', frozenAt);
     if (regla.active === false) return noBonifica('regla-inactiva', frozenAt);
 
-    // 3. El turno decide CUÁNTOS bonos, y es el del operador.
+    // 4. El turno decide CUÁNTOS bonos, y es el del operador.
     const { workShift, shiftSource } = resolveWorkShift(user, attendance, at);
 
-    // 4. La excepción del local, si la hay, pisa la regla — solo en lo que declara.
+    // 5. La excepción del local, si la hay, pisa la regla — solo en lo que declara.
     const override = findOverride(regla, establishment);
     const alertsRequired = Math.max(1, numero(override?.alertsRequired, numero(regla.alertsRequired, 1)));
     const bonusAwarded = numero(override?.bonusAwarded?.[workShift], numero(regla.bonusAwarded?.[workShift], 1));
