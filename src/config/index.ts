@@ -19,6 +19,11 @@ const PROD_PORT = Number(process.env.PROD_PORT || 443);
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/Cortes365';
 const SECRET_SERVER = process.env.SECRET_SERVER || '.bfdpSeth#FCEWG0"80435*';
 const REDIS_URL = process.env.REDIS_URL || '';
+
+// Tamaño máximo del cuerpo JSON aceptado. body-parser aplica '100kb' cuando no
+// se le pasa nada, y una página de reporte con sus novedades embebidas cruza ese
+// umbral a partir de unas 29 alertas. Se mide sobre bytes YA descomprimidos.
+const BODY_LIMIT = process.env.BODY_LIMIT || '10mb';
 const CORS_ORIGINS = (process.env.CORS_ORIGINS || '')
     .split(',')
     .map((s) => s.trim())
@@ -32,6 +37,7 @@ export interface Config {
     REDIS_URL?: string;
     CORS_ORIGINS: string[];
     COOKIE_SECURE: boolean;
+    BODY_LIMIT: string;
 }
 
 const config: Config = {
@@ -42,6 +48,7 @@ const config: Config = {
     REDIS_URL: REDIS_URL || undefined,
     CORS_ORIGINS,
     COOKIE_SECURE: NODE_ENV === 'production',
+    BODY_LIMIT,
 };
 
 export default config;
