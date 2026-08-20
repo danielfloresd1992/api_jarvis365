@@ -1,6 +1,28 @@
 import * as yup from 'yup';
-import { objectId } from './bonusRule.schema.js';
-import { MAX_DIAS } from './bonusLedger.lib.js';
+
+/**
+ * SIN IMPORTS DE VALOR DESDE `src`, A PROPÓSITO.
+ *
+ * Los tests corren con `node --test` sobre los .ts, y ahí un
+ * `import { x } from './otro.js'` no resuelve: el .js todavía no existe, lo
+ * emite Babel al compilar. Los `import type` sí, porque el stripper los borra.
+ * Un esquema que dependa de otro módulo de src queda sin poder probarse, y las
+ * validaciones son justo lo que hay que probar.
+ *
+ * Por eso el tope de días y la lista de columnas viven acá: es donde se hacen
+ * cumplir. El pipeline y la ruta los leen de este archivo.
+ */
+
+/** Ningún rango más largo que esto. Tres meses y un poco de aire. */
+export const MAX_DIAS = 92;
+
+/** Por qué columnas se puede agrupar. Lista cerrada: entran al $group. */
+export const DIMENSIONES = ['dia', 'turno', 'local', 'operador', 'alerta'] as const;
+
+export type Dimension = typeof DIMENSIONES[number];
+
+const objectId = (nombre: string) => yup.string()
+    .matches(/^[0-9a-fA-F]{24}$/, `${nombre} no es un identificador válido`);
 
 /**
  * La consulta del libro de bonos.
@@ -34,6 +56,25 @@ export const bonusLedgerQuerySchema = yup.object({
 
     // Tres estados como en el resto del sistema: true, false, y "todas".
     aprobadas: yup.boolean().nullable().default(null),
+
+    /**
+     * Por qué columnas agrupar, separadas por coma: `operador`, `alerta`,
+     * `dia,operador`… Vacío devuelve el detalle completo.
+     *
+     * Se valida contra la lista cerrada porque los nombres entran al `$group`
+     * de Mongo. Aceptar cualquier texto sería dejar que quien llama arme
+     * pedazos del pipeline.
+     */
+    agrupadoPor: yup.array()
+        .transform((valor, original) => (typeof original === 'string'
+            ? original.split(',').map(s => s.trim()).filter(Boolean)
+            : valor))
+        .of(yup.string().oneOf(
+            [...DIMENSIONES],
+            ({ value }) => `«${value}» no es una columna agrupable. Las que hay: ${DIMENSIONES.join(', ')}`,
+        ))
+        .nullable()
+        .default(null),
 })
     .noUnknown()
     .test('orden', 'La fecha inicial tiene que ser anterior a la final',

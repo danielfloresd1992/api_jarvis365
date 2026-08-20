@@ -22,7 +22,7 @@ import * as yup from 'yup';
  * mal tipeado pasaría la validación y la regla quedaría con un alcance que no es
  * el que se cargó — sin error visible.
  */
-export const objectId = (nombre: string) => yup.string()
+const objectId = (nombre: string) => yup.string()
     .matches(/^[0-9a-fA-F]{24}$/, `${nombre} no es un identificador válido`);
 
 

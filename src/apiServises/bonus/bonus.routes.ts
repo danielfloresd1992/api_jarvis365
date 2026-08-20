@@ -9,12 +9,13 @@ import BonusCategoryModel from './bonusCategory.model.js';
 import MenuModel from '../menu/menu.model.js';
 import UserModel from '../user/user.model.js';
 import LocalModel from '../local/local.model.js';
-import { buildBonusLedger, countNovelties, MAX_DIAS } from './bonusLedger.lib.js';
+import { buildBonusLedger, countNovelties } from './bonusLedger.lib.js';
+import { dimensionesDe } from './bonusLedger.pipeline.js';
 import { getBonusPointValue, saveBonusSettings, DEFAULT_POINT_VALUE, DEFAULT_EXCHANGE_RATE } from './bonusSettings.lib.js';
 import bonusSettingsSchema from './bonusSettings.schema.js';
 import bonusRuleSchema, { menuBonusRulesSchema } from './bonusRule.schema.js';
 import bonusCategorySchema from './bonusCategory.schema.js';
-import bonusLedgerQuerySchema from './bonusLedger.schema.js';
+import bonusLedgerQuerySchema, { MAX_DIAS } from './bonusLedger.schema.js';
 
 const routerBonus = express.Router();
 
@@ -441,10 +442,14 @@ const catalogosDe = async (filas: { local?: unknown; operador?: unknown; alerta?
     const unicos = (clave: 'local' | 'operador' | 'alerta') =>
         [...new Set(filas.map(f => f[clave]).filter(Boolean).map(String))];
 
+    // Sin ids no se consulta: agrupar por operador no necesita el catálogo de
+    // locales, y un `$in: []` es una consulta que igual va y vuelve.
+    const buscar = <T>(ids: string[], consulta: () => Promise<T[]>) => (ids.length ? consulta() : Promise.resolve([]));
+
     const [locales, operadores, alertas] = await Promise.all([
-        LocalModel.find({ _id: { $in: unicos('local') } }).select('name').lean(),
-        UserModel.find({ _id: { $in: unicos('operador') } }).select('name surName').lean(),
-        MenuModel.find({ _id: { $in: unicos('alerta') } }).select('es en category').lean(),
+        buscar(unicos('local'), () => LocalModel.find({ _id: { $in: unicos('local') } }).select('name').lean()),
+        buscar(unicos('operador'), () => UserModel.find({ _id: { $in: unicos('operador') } }).select('name surName').lean()),
+        buscar(unicos('alerta'), () => MenuModel.find({ _id: { $in: unicos('alerta') } }).select('es en category').lean()),
     ]);
 
     const porId = <T extends { _id: unknown }>(lista: T[], texto: (x: T) => unknown) =>
@@ -471,6 +476,13 @@ const catalogosDe = async (filas: { local?: unknown; operador?: unknown; alerta?
  *     &operador=<id>            opcional, para el corte individual
  *     &establecimiento=<id>     opcional
  *     &aprobadas=true           opcional; sin esto vienen todas
+ *     &agrupadoPor=operador     opcional; sin esto viene el detalle completo
+ *
+ * El agrupado decide el tamaño de la respuesta, y por eso está: `operador`
+ * devuelve unas sesenta filas —el resumen general de la hoja—, `alerta` unas
+ * ochenta y cuatro —el top de alertas—, y sin nada el detalle de ~9.000. Pedir
+ * el detalle para sumarlo después en el navegador es mover nueve mil filas
+ * para mostrar sesenta.
  *
  * DEVUELVE EL AGRUPADO, NO LAS NOVEDADES. Tres meses son del orden de cien mil
  * documentos con imágenes y validaciones adentro; agrupados por (día, turno,
@@ -496,10 +508,10 @@ const catalogosDe = async (filas: { local?: unknown; operador?: unknown; alerta?
  */
 routerBonus.get(`${nameApi}/bonus/ledger`, validateSession, asyncHandler(async (req, res) => {
 
-    const { desde, hasta, operador, establecimiento, aprobadas } =
+    const { desde, hasta, operador, establecimiento, aprobadas, agrupadoPor } =
         await bonusLedgerQuerySchema.validate(req.query, OPCIONES_VALIDACION);
 
-    const params = { desde, hasta, operador, establecimiento, aprobadas };
+    const params = { desde, hasta, operador, establecimiento, aprobadas, agrupadoPor };
 
     const novedades = await countNovelties(params);
     if (novedades > TECHO_NOVEDADES) {
@@ -519,6 +531,7 @@ routerBonus.get(`${nameApi}/bonus/ledger`, validateSession, asyncHandler(async (
     return res.status(200).json({
         status: 200,
         rango: { desde, hasta, dias: Math.round((+hasta - +desde) / 86_400_000) + 1, maximoDias: MAX_DIAS },
+        agrupadoPor: dimensionesDe(agrupadoPor as never),
         totales: {
             novedades,
             filas: filas.length,
