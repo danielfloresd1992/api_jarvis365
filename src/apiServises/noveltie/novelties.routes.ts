@@ -115,6 +115,14 @@ routerNoveltie.get(`${nameApi}/noveltie/date=:date/shift=:shift/establishments=:
 
 routerNoveltie.get(`${nameApi}/noveltie/local=:local/since=:since/until=:until/page=:page`, validateSession, controller.getNoveltiesFilter);
 
+
+// El libro de bonos: las novedades de un rango, ya agrupadas. `operador`,
+// `local` y `agrupar` aceptan 0 como "todos".
+routerNoveltie.get(
+    `${nameApi}/noveltie/bonos/since=:since/until=:until/operador=:operador/local=:local/agrupar=:agrupar`,
+    extendSession, validateSession, controller.getBonusLedger,
+);
+
 routerNoveltie.get(`${nameApi}/novelty`, validateSession, controller.getNovelty);
 
 // ══════════════════════════════════════════════════════════════════════

@@ -6,6 +6,7 @@ import LocalModel from '../local/local.model.js';
 import { commentYupSchema } from './novelty.squema.js';
 
 import MenuModel from '../menu/menu.model.js';
+import UserModel from '../user/user.model.js';
 import { buildBonusSeal } from '../bonus/bonusSeal.lib.js';
 import FileNoveltieModel from './fileNoveltie.model.js';
 import { join } from 'path';
@@ -33,6 +34,31 @@ config();
 
 const __dirname: string = url.fileURLToPath(new URL('.', import.meta.url));
 const documentsPath: any = process.env.DEBUG === 'true' ? '\\\\72.68.60.254\\d' : 'D:\\';
+
+
+// ══════════════════════════════════════════════════════════════════════
+// EL LIBRO DE BONOS
+// ══════════════════════════════════════════════════════════════════════
+// Lo que en la hoja de cálculo es `Op_DataBase`, cargado a mano: una fila por
+// día, turno, local, operador y código, con su cantidad.
+
+/** Por qué columnas se puede agrupar, y de dónde sale cada una. */
+const LEDGER_COLUMNAS: any = {
+    dia: { $dateToString: { format: '%Y-%m-%d', date: '$date' } },
+    turno: '$shift',
+    // Los dos lugares donde puede estar el local, según la edad del documento.
+    local: { $ifNull: ['$establishment', '$local.idLocal'] },
+    operador: '$sharedByUser.user.id',
+    alerta: '$menuRef',
+};
+
+/** Ningún rango más largo que esto. Tres meses y un poco de aire. */
+const LEDGER_MAX_DIAS = 92;
+
+/** Cuántas novedades se agrupan sin pensarlo dos veces. */
+const LEDGER_MAX_NOVEDADES = 400000;
+
+const UN_DIA = 24 * 60 * 60 * 1000;
 
 
 export default class ControllerNovelty {
@@ -653,4 +679,246 @@ export default class ControllerNovelty {
         return res.json(novelty);
 
     });
+
+
+    /**
+     * EL LIBRO DE BONOS DE UN RANGO.
+     *
+     *   /noveltie/bonos/since=2026-08-01/until=2026-08-16
+     *                  /operador=0/local=0/agrupar=operador
+     *
+     * Los tres últimos aceptan `0` como "todos", igual que en el resto de las
+     * rutas de este archivo.
+     *
+     *
+     * DEVUELVE EL AGRUPADO, NO LAS NOVEDADES.
+     *
+     * Tres meses son del orden de cien mil documentos con imágenes y
+     * validaciones adentro; agrupados por (día, turno, local, operador,
+     * alerta) quedan unos pocos miles de filas. Mandar los documentos crudos
+     * no es "más flexible": es la forma segura de quedarse sin memoria en el
+     * server y de colgar el navegador después. Mongo hace el trabajo y este
+     * proceso nunca ve una novedad.
+     *
+     * `agrupar` decide el tamaño de la respuesta:
+     *
+     *     agrupar=operador       ~60 filas    el resumen general
+     *     agrupar=alerta         ~84 filas    el top de alertas
+     *     agrupar=dia,operador  ~5.000 filas  la serie del período
+     *     agrupar=0             ~9.000 filas  el detalle completo
+     *
+     * OJO: hace falta un índice sobre `date` en la colección. Sin él este
+     * $match recorre todo y ahí sí se cae el servidor:
+     *
+     *     db.noveltie.createIndex({ date: 1 })
+     *     db.noveltie.createIndex({ 'sharedByUser.user.id': 1, date: 1 })
+     *     db.noveltie.createIndex({ establishment: 1, date: 1 })
+     */
+    getBonusLedger = async (req: Request, res: any): Promise<void> => {
+        try {
+            const { since, until, operador, local, agrupar } = req.params;
+
+            const error = (status: number, error: string, message: string, extra: any = {}) =>
+                res.status(status).json({ status, error, message, ...extra });
+
+
+            // ── 1. El rango ───────────────────────────────────────────
+            // Obligatorio y con tope. Sin tope, un `since` de 2020 recorre la
+            // colección entera y no hay índice que lo salve. Se valida acá,
+            // antes de tocar Mongo: un rango absurdo cuesta un 400 y nada más.
+            const desde = new Date(`${since}T00:00:00`);
+            const hasta = new Date(`${until}T23:59:59.999`);
+
+            if (isNaN(desde.getTime()) || isNaN(hasta.getTime())) {
+                return error(400, 'Bad request', 'Las fechas tienen que venir como AAAA-MM-DD.');
+            }
+
+            if (desde > hasta) {
+                return error(400, 'Bad request', 'La fecha inicial tiene que ser anterior a la final.');
+            }
+
+            const dias = Math.round((hasta.getTime() - desde.getTime()) / UN_DIA) + 1;
+
+            if (dias > LEDGER_MAX_DIAS) {
+                return error(400, 'Bad request', `El rango pide ${dias} días y el máximo es ${LEDGER_MAX_DIAS}.`);
+            }
+
+
+            // ── 2. El filtro ──────────────────────────────────────────
+            // Va primero en la consulta y es lo único que puede usar índice,
+            // así que todo lo que se pueda filtrar acá NO se filtra después.
+            const query: any = { date: { $gte: desde, $lte: hasta } };
+
+            if (operador !== '0') {
+                if (!Types.ObjectId.isValid(operador)) {
+                    return error(400, 'Bad request', `El operador "${operador}" no es un identificador válido.`);
+                }
+                query['sharedByUser.user.id'] = new Types.ObjectId(operador);
+            }
+
+            if (local !== '0') {
+                if (!Types.ObjectId.isValid(local)) {
+                    return error(400, 'Bad request', `El local "${local}" no es un identificador válido.`);
+                }
+                // Los dos lugares donde puede estar, según la edad del documento.
+                query.$or = [
+                    { establishment: new Types.ObjectId(local) },
+                    { 'local.idLocal': new Types.ObjectId(local) },
+                ];
+            }
+
+
+            // ── 3. Las columnas del agrupado ──────────────────────────
+            // Lista cerrada: sus nombres entran al $group, y aceptar texto
+            // libre sería dejar que quien llama arme pedazos de la consulta.
+            const pedidas = agrupar === '0' ? [] : String(agrupar).split(',').map(c => c.trim());
+            const invalida = pedidas.find(c => !LEDGER_COLUMNAS[c]);
+
+            if (invalida) {
+                return error(400, 'Bad request',
+                    `"${invalida}" no es una columna agrupable. Las que hay: ${Object.keys(LEDGER_COLUMNAS).join(', ')}.`);
+            }
+
+            // Sin nada pedido se agrupa por todas, o sea el detalle completo.
+            const columnas = Object.keys(LEDGER_COLUMNAS)
+                .filter(c => pedidas.length === 0 || pedidas.includes(c));
+
+            const claves = (prefijo: string) =>
+                Object.fromEntries(columnas.map(c => [c, `${prefijo}${c}`]));
+
+
+            // ── 4. Contar antes de agrupar ────────────────────────────
+            // El conteo usa el índice y es barato. Si el rango trae una
+            // barbaridad, mejor decirlo con el número que dejar la agregación
+            // corriendo diez minutos para caerse igual.
+            const novedades = await NoveltieModel.countDocuments(query);
+
+            if (novedades > LEDGER_MAX_NOVEDADES) {
+                return error(413, 'Payload too large',
+                    `El rango abarca ${novedades} novedades, más de las que se pueden agrupar de una. `
+                    + 'Achicá el rango o filtrá por operador o establecimiento.',
+                    { novedades, maximo: LEDGER_MAX_NOVEDADES });
+            }
+
+
+            // ── 5. La agregación ──────────────────────────────────────
+            // `allowDiskUse` no es opcional: un $group sobre tres meses pasa
+            // el límite de 100 MB por etapa y tira justo cuando el rango es
+            // grande, que es cuando más se necesita.
+            const filas = await NoveltieModel.aggregate([
+
+                { $match: query },
+
+                // Proyección temprana: de acá en adelante Mongo mueve un
+                // puñado de campos por documento en vez del documento entero,
+                // imágenes incluidas. Y solo las columnas pedidas: agrupar por
+                // operador no necesita la fecha de cien mil documentos.
+                {
+                    $project: {
+                        _id: 0,
+                        ...Object.fromEntries(columnas.map(c => [c, LEDGER_COLUMNAS[c]])),
+                        // `applies` en true es el único caso que paga. Un null
+                        // es "todavía no se evaluó", no "vale cero".
+                        bono: {
+                            $cond: [
+                                { $eq: ['$bonus.applies', true] },
+                                { $ifNull: ['$bonus.bonusPerAlert', 0] },
+                                0,
+                            ],
+                        },
+                        sellada: { $cond: [{ $eq: [{ $type: '$bonus.applies' }, 'bool'] }, 1, 0] },
+                    },
+                },
+
+                {
+                    $group: {
+                        _id: claves('$'),
+                        alertas: { $sum: 1 },
+                        bonos: { $sum: '$bono' },
+                        selladas: { $sum: '$sellada' },
+                    },
+                },
+
+                // El orden se decide acá y no en el cliente: ordenar miles de
+                // filas en el navegador es trabajo que Mongo ya tiene hecho.
+                { $sort: Object.fromEntries(columnas.map(c => [`_id.${c}`, 1])) },
+
+                {
+                    $project: {
+                        _id: 0,
+                        ...claves('$_id.'),
+                        alertas: 1,
+                        bonos: 1,
+                        selladas: 1,
+                    },
+                },
+
+            ]).allowDiskUse(true);
+
+
+            // ── 6. La respuesta ───────────────────────────────────────
+            const catalogos = await this.getLedgerNames(filas);
+
+            res.json({
+                status: 200,
+                rango: { desde, hasta, dias, maximoDias: LEDGER_MAX_DIAS },
+                agrupadoPor: columnas,
+                totales: {
+                    novedades,
+                    filas: filas.length,
+                    bonos: filas.reduce((suma: number, f: any) => suma + (f.bonos || 0), 0),
+                    selladas: filas.reduce((suma: number, f: any) => suma + (f.selladas || 0), 0),
+                },
+                catalogos,
+                filas,
+            });
+        }
+        catch (err) {
+            console.log(err);
+            res.status(500).json({
+                status: 500,
+                error: 'Internal server error',
+                message: 'No se pudo armar el libro de bonos.',
+            });
+        }
+    };
+
+
+
+
+
+
+    /**
+     * Los nombres de los ids que aparecieron, una sola vez cada uno.
+     *
+     * Es la diferencia entre mandar "Bocas Grill Doral" nueve mil veces y
+     * mandarlo una: sobre un resultado así, repetir los nombres en cada fila
+     * más que duplica el JSON. Son tres consultas chicas por `$in`, no un
+     * `$lookup` por fila.
+     */
+    private getLedgerNames = async (filas: any[]): Promise<any> => {
+
+        const idsDe = (columna: string) =>
+            [...new Set(filas.map(f => f[columna]).filter(Boolean).map(String))];
+
+        // Sin ids no se consulta: agrupar por operador no necesita el catálogo
+        // de locales, y un `$in: []` es una consulta que igual va y vuelve.
+        const buscar = (ids: string[], consulta: any) => (ids.length ? consulta : []);
+
+        const [locales, operadores, alertas] = await Promise.all([
+            buscar(idsDe('local'), LocalModel.find({ _id: { $in: idsDe('local') } }).select('name').lean()),
+            buscar(idsDe('operador'), UserModel.find({ _id: { $in: idsDe('operador') } }).select('name surName').lean()),
+            buscar(idsDe('alerta'), MenuModel.find({ _id: { $in: idsDe('alerta') } }).select('es en category').lean()),
+        ]);
+
+        const porId = (lista: any[], nombre: (x: any) => any) =>
+            Object.fromEntries(lista.map(x => [String(x._id), nombre(x)]));
+
+        return {
+            locales: porId(locales as any[], (l: any) => l.name ?? null),
+            operadores: porId(operadores as any[], (u: any) => [u.name, u.surName].filter(Boolean).join(' ') || null),
+            alertas: porId(alertas as any[], (m: any) => ({ es: m.es ?? null, en: m.en ?? null, category: m.category ?? null })),
+        };
+    };
+
 };

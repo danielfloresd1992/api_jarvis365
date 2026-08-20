@@ -7,15 +7,10 @@ import BonusSettingsModel from './bonusSettings.model.js';
 import BonusRuleModel from './bonusRule.model.js';
 import BonusCategoryModel from './bonusCategory.model.js';
 import MenuModel from '../menu/menu.model.js';
-import UserModel from '../user/user.model.js';
-import LocalModel from '../local/local.model.js';
-import { buildBonusLedger, countNovelties } from './bonusLedger.lib.js';
-import { dimensionesDe } from './bonusLedger.pipeline.js';
 import { getBonusPointValue, saveBonusSettings, DEFAULT_POINT_VALUE, DEFAULT_EXCHANGE_RATE } from './bonusSettings.lib.js';
 import bonusSettingsSchema from './bonusSettings.schema.js';
 import bonusRuleSchema, { menuBonusRulesSchema } from './bonusRule.schema.js';
 import bonusCategorySchema from './bonusCategory.schema.js';
-import bonusLedgerQuerySchema, { MAX_DIAS } from './bonusLedger.schema.js';
 
 const routerBonus = express.Router();
 
@@ -417,131 +412,6 @@ routerBonus.delete(`${nameApi}/bonus/categories/id=:id`, validateSession, valida
 }));
 
 
-
-
-// ══════════════════════════════════════════════════════════════════════
-// EL LIBRO DE BONOS
-// ══════════════════════════════════════════════════════════════════════
-// Lo que en la hoja de cálculo es `Op_DataBase`, cargado a mano: una fila por
-// día, turno, local, operador y código, con su cantidad. Acá sale de las
-// novedades ya selladas, sin que nadie escriba nada.
-
-
-/** Cuántas novedades se agrupan sin pensarlo dos veces. */
-const TECHO_NOVEDADES = 400_000;
-
-/**
- * Los nombres de los ids que aparecieron, una sola vez cada uno.
- *
- * Es la diferencia entre mandar "Bocas Grill Doral" nueve mil veces y mandarlo
- * una. Sobre un resultado de ese tamaño, repetir los nombres en cada fila más
- * que duplica el JSON — y son tres consultas chicas por `$in`, no un `$lookup`
- * por fila.
- */
-const catalogosDe = async (filas: { local?: unknown; operador?: unknown; alerta?: unknown }[]) => {
-    const unicos = (clave: 'local' | 'operador' | 'alerta') =>
-        [...new Set(filas.map(f => f[clave]).filter(Boolean).map(String))];
-
-    // Sin ids no se consulta: agrupar por operador no necesita el catálogo de
-    // locales, y un `$in: []` es una consulta que igual va y vuelve.
-    const buscar = <T>(ids: string[], consulta: () => Promise<T[]>) => (ids.length ? consulta() : Promise.resolve([]));
-
-    const [locales, operadores, alertas] = await Promise.all([
-        buscar(unicos('local'), () => LocalModel.find({ _id: { $in: unicos('local') } }).select('name').lean()),
-        buscar(unicos('operador'), () => UserModel.find({ _id: { $in: unicos('operador') } }).select('name surName').lean()),
-        buscar(unicos('alerta'), () => MenuModel.find({ _id: { $in: unicos('alerta') } }).select('es en category').lean()),
-    ]);
-
-    const porId = <T extends { _id: unknown }>(lista: T[], texto: (x: T) => unknown) =>
-        Object.fromEntries(lista.map(x => [String(x._id), texto(x)]));
-
-    return {
-        locales: porId(locales as never[], (l: never) => (l as { name?: string }).name ?? null),
-        operadores: porId(operadores as never[], (u: never) => {
-            const x = u as { name?: string; surName?: string };
-            return [x.name, x.surName].filter(Boolean).join(' ') || null;
-        }),
-        alertas: porId(alertas as never[], (m: never) => {
-            const x = m as { es?: string; en?: string; category?: string };
-            return { es: x.es ?? null, en: x.en ?? null, category: x.category ?? null };
-        }),
-    };
-};
-
-
-/**
- * GET /bonus/ledger — las novedades de un rango, ya agrupadas.
- *
- *     ?desde=2026-08-01&hasta=2026-08-16
- *     &operador=<id>            opcional, para el corte individual
- *     &establecimiento=<id>     opcional
- *     &aprobadas=true           opcional; sin esto vienen todas
- *     &agrupadoPor=operador     opcional; sin esto viene el detalle completo
- *
- * El agrupado decide el tamaño de la respuesta, y por eso está: `operador`
- * devuelve unas sesenta filas —el resumen general de la hoja—, `alerta` unas
- * ochenta y cuatro —el top de alertas—, y sin nada el detalle de ~9.000. Pedir
- * el detalle para sumarlo después en el navegador es mover nueve mil filas
- * para mostrar sesenta.
- *
- * DEVUELVE EL AGRUPADO, NO LAS NOVEDADES. Tres meses son del orden de cien mil
- * documentos con imágenes y validaciones adentro; agrupados por (día, turno,
- * local, operador, alerta) quedan unos pocos miles de filas. Mandar los
- * documentos crudos no es "más flexible": es la forma segura de quedarse sin
- * memoria en el server y de colgar el navegador después.
- *
- * Tres cosas lo mantienen parado:
- *
- *   1. El rango es obligatorio y tope de MAX_DIAS. Se valida con yup antes de
- *      tocar Mongo, así que un rango absurdo cuesta un 400 y cero base.
- *   2. Se CUENTA antes de agrupar. Si el rango trae una barbaridad, responde
- *      413 con el número — mejor que dejar la agregación corriendo diez
- *      minutos para caerse igual.
- *   3. La agregación proyecta seis campos antes de agrupar y corre con
- *      allowDiskUse, así no choca contra el límite de 100 MB por etapa.
- *
- * Los nombres van aparte, en `catalogos`, indexados por id: en las filas van
- * los ids pelados.
- *
- * Lo puede leer cualquier sesión. Es lo mismo que ya se ve novedad por novedad
- * en la aplicación; acá solo está sumado.
- */
-routerBonus.get(`${nameApi}/bonus/ledger`, validateSession, asyncHandler(async (req, res) => {
-
-    const { desde, hasta, operador, establecimiento, aprobadas, agrupadoPor } =
-        await bonusLedgerQuerySchema.validate(req.query, OPCIONES_VALIDACION);
-
-    const params = { desde, hasta, operador, establecimiento, aprobadas, agrupadoPor };
-
-    const novedades = await countNovelties(params);
-    if (novedades > TECHO_NOVEDADES) {
-        return res.status(413).json({
-            status: 413,
-            error: 'Payload too large',
-            message: `El rango abarca ${novedades.toLocaleString('es-VE')} novedades, más de las que se pueden agrupar de una. `
-                + 'Achicá el rango o filtrá por operador o establecimiento.',
-            novedades,
-            maximo: TECHO_NOVEDADES,
-        });
-    }
-
-    const filas = await buildBonusLedger(params);
-    const catalogos = await catalogosDe(filas);
-
-    return res.status(200).json({
-        status: 200,
-        rango: { desde, hasta, dias: Math.round((+hasta - +desde) / 86_400_000) + 1, maximoDias: MAX_DIAS },
-        agrupadoPor: dimensionesDe(agrupadoPor as never),
-        totales: {
-            novedades,
-            filas: filas.length,
-            bonos: filas.reduce((n, f) => n + (f.bonos || 0), 0),
-            selladas: filas.reduce((n, f) => n + (f.selladas || 0), 0),
-        },
-        catalogos,
-        filas,
-    });
-}));
 
 
 export { routerBonus, getBonusPointValue };
