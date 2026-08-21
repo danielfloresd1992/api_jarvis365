@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
     operationalDateOf,
     downtimeMinutesBetween,
+    overlapMinutes,
 } from '../src/apiServises/dvrFailure/dvrFailure.lib.ts';
 
 // ══════════════════════════════════════════════════════════════════════
@@ -137,5 +138,85 @@ test('el tiempo ciego: una fecha inválida da 0 y no NaN', () => {
             new Date('no es una fecha'),
         ),
         0,
+    );
+});
+
+
+// ══════════════════════════════════════════════════════════════════════
+// LO QUE CAE DENTRO DE LA JORNADA
+// ══════════════════════════════════════════════════════════════════════
+// El reporte de novedades no pregunta cuánto duró la caída, sino cuánto tiempo
+// de ESA jornada el establecimiento estuvo ciego. Una caída puede venir de ayer,
+// o cruzar el cierre, y en los dos casos solo cuenta el pedazo que se solapa.
+
+// La jornada del 20: de las 08:00 a las 07:00 del 21, hora Caracas (UTC−4).
+const ABRE = new Date('2026-08-20T12:00:00Z');   // 08:00 local
+const CIERRA = new Date('2026-08-21T11:00:00Z'); // 07:00 local del dia siguiente
+
+test('solapamiento: un episodio entero dentro de la jornada cuenta completo', () => {
+    assert.equal(
+        overlapMinutes(
+            new Date('2026-08-20T14:00:00Z'),
+            new Date('2026-08-20T15:30:00Z'),
+            ABRE, CIERRA,
+        ),
+        90,
+    );
+});
+
+test('solapamiento: una caída que viene de ayer cuenta solo desde que abrió', () => {
+    // Se cayó a las 06:00 locales —dos horas antes de abrir— y volvió a las
+    // 09:00. Estuvo tres horas caída, pero la jornada solo vio una.
+    assert.equal(
+        overlapMinutes(
+            new Date('2026-08-20T10:00:00Z'),
+            new Date('2026-08-20T13:00:00Z'),
+            ABRE, CIERRA,
+        ),
+        60,
+    );
+});
+
+test('solapamiento: una caída que cruza el cierre corta en el cierre', () => {
+    // Se cayó a las 06:00 del 21 y volvió a las 09:00, ya en la jornada
+    // siguiente. Esta jornada solo vio hasta las 07:00.
+    assert.equal(
+        overlapMinutes(
+            new Date('2026-08-21T10:00:00Z'),
+            new Date('2026-08-21T13:00:00Z'),
+            ABRE, CIERRA,
+        ),
+        60,
+    );
+});
+
+test('solapamiento: un episodio todavía ABIERTO cuenta hasta el corte', () => {
+    // Sin restablecimiento, la caída sigue. Cuenta hasta donde llegue la
+    // ventana — que en un corte parcial es "ahora".
+    const corte = new Date('2026-08-20T16:00:00Z');
+    assert.equal(
+        overlapMinutes(new Date('2026-08-20T14:00:00Z'), null, ABRE, corte),
+        120,
+    );
+});
+
+test('solapamiento: una caída de otro día no cuenta nada', () => {
+    // Existió, pero no en esta jornada. Es la diferencia entre "cuánto duró" y
+    // "cuánto de esta jornada estuvo ciego".
+    assert.equal(
+        overlapMinutes(
+            new Date('2026-08-18T14:00:00Z'),
+            new Date('2026-08-18T15:00:00Z'),
+            ABRE, CIERRA,
+        ),
+        0,
+    );
+});
+
+test('solapamiento: una caída que envuelve la jornada entera cuenta la jornada', () => {
+    // Cayó anteayer y sigue abierta: estuvo ciega las 23 horas de la ventana.
+    assert.equal(
+        overlapMinutes(new Date('2026-08-18T14:00:00Z'), null, ABRE, CIERRA),
+        23 * 60,
     );
 });

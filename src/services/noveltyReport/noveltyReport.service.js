@@ -9,6 +9,7 @@ import AttendanceModel from '../../apiServises/user/attendance.model.js';
 import UserModel from '../../apiServises/user/user.model.js';
 import { IsDaylightSavingTimeBoolean } from '../../apiServises/time/time.model.js';
 import { pickSchedule } from '../../apiServises/schedules/schedule.logic.js';
+import { estadoDvrPorLocal, sinFallas } from '../../apiServises/dvrFailure/dvrFailure.report.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // SERVICIO: Conteo de novedades del DÍA OPERATIVO (08:00 → 07:00 del día
@@ -27,6 +28,10 @@ import { pickSchedule } from '../../apiServises/schedules/schedule.logic.js';
 // rangos de monitoreo para el día operativo en su horario vigente (normal o
 // de invierno, según usesUsTimezone + el flag global usWinterActive).
 // La fecha se ancla con el mismo criterio de zona fija del monitoreo.
+//
+// Cada local trae además `dvr` —el estado de sus cámaras en la jornada— y
+// `status`, que dice si reportó, si no reportó, o si no PODÍA reportar por
+// tener el DVR caído. Ver el bloque "QUIÉN NO REPORTÓ, Y QUIÉN NO PODÍA".
 
 const REPORT_TZ = process.env.MONITORING_TZ || 'America/Caracas';
 
@@ -133,6 +138,38 @@ const addCounts = (target, source) => {
     return target;
 };
 
+// ══════════════════════════════════════════════════════════════════════
+// QUIÉN NO REPORTÓ, Y QUIÉN NO PODÍA
+// ══════════════════════════════════════════════════════════════════════
+// Un establecimiento en 0 se venía leyendo como "no reportó". Pero si tiene el
+// DVR caído no es que no haya reportado: es que NO PODÍA. No se monitorean
+// cámaras que no se ven, y contarlo como omisión culpa al operador de un corte
+// de conexión.
+//
+// Por eso los locales se reparten en TRES estados y no en dos:
+//
+//   reportaron    pasó al menos una novedad
+//   sinReportar   está en 0 y el DVR anda — acá sí hay algo que preguntar
+//   sinConexion   tiene el DVR caído AHORA: fuera de la cuenta
+//
+// El criterio para excluir es "caído AHORA", no "se cayó alguna vez hoy".
+// Cuando la conexión vuelve, el local regresa a la cuenta normal en el mismo
+// momento — que es lo que se pidió: al restablecer, vuelve a estar activo.
+//
+// El caso de borde queda A LA VISTA en lugar de escondido: un local que estuvo
+// ciego ocho horas y volvió hace diez minutos cuenta como `sinReportar`, porque
+// ahora sí puede. Para eso cada fila lleva `dvr.downtimeMinutes` — los minutos
+// que estuvo ciego DENTRO de la jornada—: quien lea el reporte ve el 0 y ve al
+// lado por qué, sin que el conteo decida por él.
+const emptyDvrTotals = () => ({
+    downNow: 0,
+    affectedToday: 0,
+    downtimeMinutes: 0,
+    episodes: 0,
+});
+
+const emptyStatus = () => ({ reportaron: 0, sinReportar: 0, sinConexion: 0 });
+
 /**
  * Construye el reporte de conteo de novedades.
  * @param {object} [options]
@@ -221,17 +258,44 @@ export async function buildNoveltyCountReport({ isFinal = false, at, category, b
     ]);
     const countsByLocal = new Map(rows.map(r => [String(r._id), r]));
 
+    // ── Estado del DVR de cada establecimiento ────────────────────────
+    // Se consulta con la MISMA ventana que las novedades, así los minutos
+    // ciegos que se informan son los de esta jornada y no los del episodio
+    // entero — una caída puede venir de ayer y seguir abierta.
+    const dvrByLocal = await estadoDvrPorLocal(localIds, start.toDate(), rangeEnd.toDate(), REPORT_TZ);
+
     // Franquicia → locales (incluye locales en horario aunque lleven 0)
     const franchisesMap = new Map();
     for (const local of locals) {
         const counts = { ...emptyCounts(), ...(countsByLocal.get(String(local._id)) ?? {}) };
         delete counts._id;
+
+        const dvr = dvrByLocal.get(String(local._id)) ?? sinFallas();
+
+        // Los tres estados. `sinConexion` gana sobre `sinReportar`: un local
+        // caído queda fuera de la cuenta de omisiones aunque esté en 0.
+        const status = dvr.down ? 'sinConexion'
+            : counts.total > 0 ? 'reportaron'
+                : 'sinReportar';
+
         if (!franchisesMap.has(local.franchiseName)) {
-            franchisesMap.set(local.franchiseName, { name: local.franchiseName, totals: emptyCounts(), locals: [] });
+            franchisesMap.set(local.franchiseName, {
+                name: local.franchiseName,
+                totals: emptyCounts(),
+                dvr: emptyDvrTotals(),
+                status: emptyStatus(),
+                locals: [],
+            });
         }
         const group = franchisesMap.get(local.franchiseName);
-        group.locals.push({ idLocal: String(local._id), name: local.name, ...counts });
+        group.locals.push({ idLocal: String(local._id), name: local.name, ...counts, dvr, status });
         addCounts(group.totals, counts);
+
+        group.status[status] += 1;
+        group.dvr.downNow += dvr.down ? 1 : 0;
+        group.dvr.affectedToday += dvr.episodes > 0 ? 1 : 0;
+        group.dvr.downtimeMinutes += dvr.downtimeMinutes;
+        group.dvr.episodes += dvr.episodes;
     }
 
     const franchises = [...franchisesMap.values()]
@@ -239,6 +303,34 @@ export async function buildNoveltyCountReport({ isFinal = false, at, category, b
     franchises.forEach(f => f.locals.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })));
 
     const totals = franchises.reduce((acc, f) => addCounts(acc, f.totals), emptyCounts());
+
+    const dvrTotals = franchises.reduce((acc, f) => {
+        for (const key of Object.keys(acc)) acc[key] += f.dvr[key] ?? 0;
+        return acc;
+    }, emptyDvrTotals());
+
+    const statusTotals = franchises.reduce((acc, f) => {
+        for (const key of Object.keys(acc)) acc[key] += f.status[key] ?? 0;
+        return acc;
+    }, emptyStatus());
+
+    // La lista corta de los que están caídos ahora, con su hora. Es lo que se
+    // pinta arriba del reporte y lo que se avisa por socket: quien lo mira
+    // quiere saber cuáles son sin recorrer todas las franquicias.
+    const dvrDownNow = franchises
+        .flatMap(f => f.locals.map(local => ({ ...local, franchiseName: f.name })))
+        .filter(local => local.dvr.down)
+        .map(local => ({
+            idLocal: local.idLocal,
+            name: local.name,
+            franchiseName: local.franchiseName,
+            failedAt: local.dvr.failedAt,
+            failedAtLabel: local.dvr.failedAtLabel,
+            downtimeMinutes: local.dvr.downtimeMinutes,
+            reportedByName: local.dvr.reportedByName,
+        }))
+        .sort((a, b) => new Date(a.failedAt) - new Date(b.failedAt));
+
     const onDuty = await getOnDutyByShift(start);
 
     return {
@@ -251,6 +343,16 @@ export async function buildNoveltyCountReport({ isFinal = false, at, category, b
         operationalDayKey: start.format('YYYY-MM-DD'),
         onDuty,
         totals,
+
+        // Cuántos reportaron, cuántos no, y cuántos no podían. Se devuelve
+        // contado y no derivado por cada consumidor: el criterio de qué es "no
+        // reportó" tiene que ser uno solo, y vive acá.
+        status: statusTotals,
+
+        // El estado de las cámaras: cuántos caídos ahora, cuántos se cayeron en
+        // algún momento del día, y los minutos ciegos de la jornada.
+        dvr: { ...dvrTotals, locals: dvrDownNow },
+
         localsInSchedule: locals.length,
         franchises,
     };

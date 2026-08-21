@@ -62,4 +62,44 @@ export const downtimeMinutesBetween = (failedAt: Date, restoredAt: Date): number
 };
 
 
-export default { operationalDateOf, downtimeMinutesBetween };
+/**
+ * Cuántos minutos de un episodio caen DENTRO de una ventana.
+ *
+ * El reporte de novedades mira el día operativo, y una caída no tiene por qué
+ * coincidir con él: puede haber empezado ayer y seguir abierta, o haber
+ * arrancado a las 06:00 y cerrado a las 09:00, con la jornada abriendo a las
+ * 08:00. Lo que le interesa al reporte no es cuánto duró la caída, sino cuánto
+ * tiempo de ESA jornada el establecimiento estuvo ciego.
+ *
+ * Se recorta el episodio contra la ventana y se mide lo que queda:
+ *
+ *     caída    │────────────────────│
+ *     ventana         │───────────────────│
+ *     cuenta          │────────────│
+ *
+ * `hasta` es el final de la ventana para un episodio ya cerrado y, para uno
+ * todavía abierto, el momento del corte — porque un episodio abierto sigue
+ * sumando hasta ahora, no hasta el final del día que aún no llegó.
+ *
+ * Devuelve 0 si no se tocan, que es lo correcto: la caída existió pero no en
+ * esta jornada.
+ */
+export const overlapMinutes = (
+    failedAt: Date,
+    restoredAt: Date | null,
+    windowStart: Date,
+    windowEnd: Date,
+): number => {
+    const inicio = Math.max(failedAt.getTime(), windowStart.getTime());
+
+    // Sin restablecimiento el episodio sigue abierto: llega hasta donde llegue
+    // la ventana.
+    const fin = Math.min(restoredAt ? restoredAt.getTime() : windowEnd.getTime(), windowEnd.getTime());
+
+    if (!Number.isFinite(inicio) || !Number.isFinite(fin) || fin <= inicio) return 0;
+
+    return Math.max(1, Math.ceil((fin - inicio) / 60_000));
+};
+
+
+export default { operationalDateOf, downtimeMinutesBetween, overlapMinutes };

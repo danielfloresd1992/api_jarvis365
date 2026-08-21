@@ -1,4 +1,5 @@
 import express from 'express';
+import moment from 'moment-timezone';
 import { Types } from 'mongoose';
 import nameApi from '../../libs/name_api.js';
 import { validateSession } from '../../middleware/validateSessionAndUser.js';
@@ -40,6 +41,43 @@ const OPCIONES_VALIDACION = { abortEarly: false, stripUnknown: true };
 const paraElPanel = {
     path: 'local',
     select: 'name franchiseReference',
+};
+
+
+// ══════════════════════════════════════════════════════════════════════
+// EL AVISO AL REPORTE DE NOVEDADES
+// ══════════════════════════════════════════════════════════════════════
+// El reporte del día (`/noveltyReport/today`) marca cada establecimiento como
+// 'reportaron', 'sinReportar' o 'sinConexion', y un local caído queda fuera de
+// la cuenta de omisiones. Ese estado tiene que cambiar EN EL MOMENTO en que se
+// registra la caída o el restablecimiento, no en el próximo refresco.
+//
+// Se emite un evento chico y no el reporte entero: rearmarlo son seis consultas
+// —novedades, horarios, guardias, DVR—, y hacerlo en cada caída para todas las
+// pantallas conectadas es trabajo repetido. Con esto, quien tenga el reporte
+// abierto parchea la fila del local y ajusta los contadores; quien no lo tenga,
+// lo ignora.
+const avisarAlReporte = (episodio: any, tz = process.env.MONITORING_TZ || 'America/Caracas') => {
+    io.emit('noveltyReport:dvr-changed', {
+        idLocal: String(episodio.local),
+        name: episodio.localName,
+
+        // Caído o no. El `status` del reporte no viaja acá a propósito: cuando
+        // la conexión VUELVE, el local pasa a 'reportaron' o a 'sinReportar'
+        // según cuántas novedades lleve, y ese número lo tiene el cliente en la
+        // fila que ya está mostrando. Mandar un estado calculado sin saberlo
+        // obligaría a consultar las novedades para poder avisar de un DVR.
+        down: Boolean(episodio.active),
+
+        failedAt: episodio.failedAt,
+        failedAtLabel: moment.tz(episodio.failedAt, tz).format('HH:mm'),
+        restoredAt: episodio.restoredAt ?? null,
+        restoredAtLabel: episodio.restoredAt ? moment.tz(episodio.restoredAt, tz).format('HH:mm') : null,
+
+        downtimeMinutes: episodio.downtimeMinutes ?? null,
+        reportedByName: episodio.reportedByName ?? '',
+        restoredByName: episodio.restoredByName ?? '',
+    });
 };
 
 
@@ -136,6 +174,7 @@ routerDvrFailure.post(`${nameApi}/dvr-failure`, validateSession, asyncHandler(as
         date: failedAt,
         title: datos.alertName,
     });
+    avisarAlReporte(episodio.toObject());
 
     return res.status(201).json({ status: 201, message: 'ok', failure: episodio });
 }));
@@ -196,6 +235,7 @@ routerDvrFailure.put(`${nameApi}/dvr-failure/restore`, validateSession, asyncHan
         idLocal: String(episodio.local),
         localName: episodio.localName,
     });
+    avisarAlReporte(episodio.toObject());
 
     return res.status(200).json({ status: 200, message: 'ok', failure: episodio });
 }));

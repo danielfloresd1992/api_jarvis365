@@ -1,10 +1,13 @@
 import express from 'express';
+import moment from 'moment-timezone';
 import nameApi from '../../libs/name_api.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { io } from '../../services/socket/io.js';
 import DvrFailureModel from '../dvrFailure/dvrFailure.model.js';
 import LocalModel from '../local/local.model.js';
 import { operationalDateOf, downtimeMinutesBetween } from '../dvrFailure/dvrFailure.lib.js';
+
+const TZ = process.env.MONITORING_TZ || 'America/Caracas';
 
 const routesFailed = express.Router();
 
@@ -49,17 +52,45 @@ const formaVieja = (episodio) => ({
 });
 
 
-// Los dos eventos, siempre juntos: el nuevo lleva el episodio entero; el viejo
-// es el que Client365 ya escucha hoy. Dejar de emitir el viejo apagaría el aviso
-// en la pantalla que lo usa.
+/**
+ * El aviso al reporte de novedades, para que marque o desmarque el local sin
+ * esperar al próximo refresco. Ver la nota en `dvrFailure.routes.ts`.
+ *
+ * Va también desde acá y no solo desde el recurso nuevo: mientras las
+ * estaciones sigan reportando por estas rutas, es por acá por donde entran casi
+ * todas las caídas. Sin esto el reporte seguiría contando como omisión a un
+ * local que acaba de quedarse sin cámaras.
+ */
+const avisarAlReporte = (episodio) => {
+    io.emit('noveltyReport:dvr-changed', {
+        idLocal: String(episodio.local),
+        name: episodio.localName,
+        down: Boolean(episodio.active),
+        failedAt: episodio.failedAt,
+        failedAtLabel: moment.tz(episodio.failedAt, TZ).format('HH:mm'),
+        restoredAt: episodio.restoredAt ?? null,
+        restoredAtLabel: episodio.restoredAt ? moment.tz(episodio.restoredAt, TZ).format('HH:mm') : null,
+        downtimeMinutes: episodio.downtimeMinutes ?? null,
+        reportedByName: episodio.reportedByName ?? '',
+        restoredByName: episodio.restoredByName ?? '',
+    });
+};
+
+
+// Los tres eventos, siempre juntos: `dvr-failure:*` lleva el episodio entero,
+// `failed-connection*` es el que Client365 ya escucha hoy, y
+// `noveltyReport:dvr-changed` es el que actualiza el reporte del día. Dejar de
+// emitir el viejo apagaría el aviso en la pantalla que lo usa.
 const avisarCaida = (episodio) => {
     io.emit('dvr-failure:down', episodio);
     io.emit('failed-connection', formaVieja(episodio));
+    avisarAlReporte(episodio);
 };
 
 const avisarRestablecida = (episodio) => {
     io.emit('dvr-failure:restored', episodio);
     io.emit('failed-connection-deleteItem', formaVieja(episodio));
+    avisarAlReporte(episodio);
 };
 
 

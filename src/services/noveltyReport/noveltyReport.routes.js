@@ -12,7 +12,20 @@ const routerNoveltyReport = express.Router();
  * Misma data que alimenta el PDF/caption del job de WhatsApp:
  *   { dateLabel, weekdayLabel, windowLabel, cutoffLabel, onDuty{diurno,nocturno},
  *     totals{total,positivas,negativas,ignoradas,enviadas,diurno,nocturno},
- *     localsInSchedule, franchises[{name, totals, locals[{name, ...conteos}]}] }
+ *     status{reportaron,sinReportar,sinConexion},
+ *     dvr{downNow,affectedToday,downtimeMinutes,episodes,locals[]},
+ *     localsInSchedule,
+ *     franchises[{name, totals, dvr, status, locals[{name, ...conteos, dvr, status}]}] }
+ *
+ * CÁMARAS CAÍDAS. Cada local trae `dvr` con la hora de la falla y los minutos
+ * que estuvo ciego en la jornada, y un `status` de tres valores: 'reportaron',
+ * 'sinReportar' o 'sinConexion'. Un local con el DVR caído sale como
+ * 'sinConexion' y NO cuenta como omisión — no podía monitorear. En cuanto se
+ * registra el restablecimiento vuelve a la cuenta normal.
+ *
+ * En vivo sin refrescar todo: el recurso de caídas emite
+ * `noveltyReport:dvr-changed` por socket cada vez que un establecimiento cae o
+ * vuelve, con lo justo para parchear esa fila.
  *
  * Query params:
  *   ?final=true          → evalúa la ventana COMPLETA del día (como el reporte
