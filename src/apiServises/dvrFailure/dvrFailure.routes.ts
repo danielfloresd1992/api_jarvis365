@@ -343,6 +343,16 @@ routerDvrFailure.get(`${nameApi}/dvr-failure/history`, validateSession, asyncHan
  * Los episodios TODAVÍA ABIERTOS cuentan en `failures` pero no suman minutos:
  * su duración no está sellada, y sumar la de "hasta ahora" daría un total que
  * cambia solo entre dos consultas del mismo rango.
+ *
+ * Devuelve DOS cortes del mismo rango:
+ *
+ *   byLocal  el ranking — qué establecimiento se cae más
+ *   byDay    una fila por día operativo, para el mapa de calor
+ *
+ * Los días SIN caídas no salen en `byDay`: la agregación solo ve lo que
+ * ocurrió. Es el cliente el que arma la rejilla completa del mes y pinta en
+ * cero lo que falte — así el hueco es una decisión de la vista y no una
+ * consulta que devuelve treinta ceros.
  */
 routerDvrFailure.get(`${nameApi}/dvr-failure/stats`, validateSession, asyncHandler(async (req, res) => {
     const filtros = await dvrQuerySchema.validate(req.query, OPCIONES_VALIDACION);
@@ -359,7 +369,12 @@ routerDvrFailure.get(`${nameApi}/dvr-failure/stats`, validateSession, asyncHandl
     if (filtros.local) match.local = new Types.ObjectId(filtros.local);
     if (filtros.shift) match.shift = filtros.shift;
 
-    const porEstablecimiento = await DvrFailureModel.aggregate([
+    // ── Las dos agregaciones, en paralelo ─────────────────────────────
+    // Son cortes distintos del mismo conjunto y ninguna depende de la otra, así
+    // que van juntas en vez de una detrás de la otra.
+    const [porEstablecimiento, porDia] = await Promise.all([
+
+    DvrFailureModel.aggregate([
         { $match: match },
         {
             $group: {
@@ -392,6 +407,35 @@ routerDvrFailure.get(`${nameApi}/dvr-failure/stats`, validateSession, asyncHandl
         },
         // El que más se cae, primero: es la pregunta que se hace siempre.
         { $sort: { failures: -1, downtimeMinutes: -1 } },
+    ]),
+
+    // ── Una fila por día operativo, para el mapa de calor ─────────────
+    // `locals` es cuántos establecimientos DISTINTOS se cayeron ese día, que no
+    // es lo mismo que cuántas caídas hubo: un local que se cae tres veces son
+    // tres episodios de un solo establecimiento, y en el mapa la diferencia
+    // entre "se cayó todo" y "uno dio guerra" es justamente ésa.
+    DvrFailureModel.aggregate([
+        { $match: match },
+        {
+            $group: {
+                _id: '$operationalDate',
+                failures: { $sum: 1 },
+                downtimeMinutes: { $sum: { $ifNull: ['$downtimeMinutes', 0] } },
+                locals: { $addToSet: '$local' },
+            },
+        },
+        {
+            $project: {
+                _id: 0,
+                date: '$_id',
+                failures: 1,
+                downtimeMinutes: 1,
+                locals: { $size: '$locals' },
+            },
+        },
+        { $sort: { date: 1 } },
+    ]),
+
     ]);
 
     const totales = porEstablecimiento.reduce((acumulado, fila) => ({
@@ -406,6 +450,7 @@ routerDvrFailure.get(`${nameApi}/dvr-failure/stats`, validateSession, asyncHandl
         to: filtros.to ? operationalDateOf(filtros.to) : null,
         totals: { ...totales, locals: porEstablecimiento.length },
         byLocal: porEstablecimiento,
+        byDay: porDia,
     });
 }));
 
