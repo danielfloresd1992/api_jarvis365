@@ -125,6 +125,7 @@ import { routerNoveltyReport } from './services/noveltyReport/noveltyReport.rout
 import { routerMonitoring } from './services/monitoring/monitoring.routes.js';
 import { routesTimer } from './apiServises/time/time.routes.js'
 import { routesFailed } from './apiServises/failed/failed.routes.js';
+import { routerDvrFailure } from './apiServises/dvrFailure/dvrFailure.routes.js';
 import { routesDishes } from './apiServises/dishes/dishes.router.js';
 import { authRouter } from './apiServises/auth/auth.routes.js';
 import { routerDocument } from './apiServises/documentsAndAnalytics/document.routes.js';
@@ -170,6 +171,7 @@ app
     .use(routerBonus)
     .use(routerMonitoring)
     .use(routesTimer)
+    .use(routerDvrFailure)
     .use(routesFailed)
     .use(routesDishes)
     .use(authRouter)
