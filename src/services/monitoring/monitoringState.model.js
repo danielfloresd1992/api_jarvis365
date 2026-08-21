@@ -62,6 +62,35 @@ const MonitoringState = new Schema({
         at:    { type: Date, default: null },
         lastSentAt: { type: Date, default: null },
         flagged: { type: Boolean, default: false }
+    },
+
+    // ══════════════════════════════════════════════════════════════════
+    // EXENTO DEL CORTE DE SILENCIO
+    // ══════════════════════════════════════════════════════════════════
+    // Un administrador puede sacar a un establecimiento de la lista
+    // "ESTABLECIMIENTOS SIN REPORTAR AL GRUPO". Hay locales que están en
+    // monitoreo y aun así no tienen nada que reportar durante horas —una obra,
+    // un local cerrado por dentro, una cámara apuntando a un depósito— y el
+    // aviso horario se vuelve ruido que enseña a ignorar la lista entera.
+    //
+    // SOLO APAGA ESE AVISO. El local sigue contando en todo lo demás: sus
+    // alertas se cuentan igual, su inicio y su fin de monitoreo se anuncian
+    // igual, y si se le cae el DVR aparece igual. Lo único que deja de hacer es
+    // salir en el corte horario.
+    //
+    // Es un interruptor manual, no un silencio con vencimiento: se apaga cuando
+    // el administrador lo apaga, y en ese momento el local vuelve a evaluarse en
+    // el corte siguiente. Se guarda quién y cuándo porque es una decisión que
+    // alguien tiene que poder explicar semanas después.
+    //
+    // `default: false` a propósito: los documentos que ya existen se comportan
+    // exactamente como antes y no hay nada que migrar.
+    silenceExempt: {
+        active: { type: Boolean, default: false },
+        by:     { type: Schema.Types.ObjectId, ref: 'user', default: null },
+        byName: { type: String, default: '' },
+        at:     { type: Date, default: null },
+        reason: { type: String, default: '', trim: true }
     }
 }, { timestamps: true });
 

@@ -268,6 +268,22 @@ async function runSilenceCut(ctx, statuses) {
         const { start } = getOperationalDay(ctx.now);
         const oneHourAgo = ctx.now.clone().subtract(1, 'hour').toDate();
 
+        // ── Exentos ───────────────────────────────────────────────────
+        // Locales que un administrador sacó de esta lista. Se consulta en cada
+        // corte y no se cachea: el interruptor se puede tocar entre dos cortes y
+        // el siguiente tiene que respetarlo sin esperar a un reinicio.
+        //
+        // Salen SOLO del corte. Siguen entrando en `inWindowIds`, así que su
+        // `lastSentAt` se sigue guardando igual y el resto del panel —alertas,
+        // inicio y fin de monitoreo, caídas de DVR— no se entera de nada.
+        const exentos = new Set(
+            (await MonitoringStateModel
+                .find({ 'silenceExempt.active': true })
+                .select('idLocal')
+                .lean())
+                .map(estado => String(estado.idLocal)),
+        );
+
         // En ventana analítica AHORA; "evaluable" = también lo estaba hace 1h
         // (al recién abierto solo se le siembra baseline y se juzga al siguiente).
         const inWindowIds = [];
@@ -275,6 +291,7 @@ async function runSilenceCut(ctx, statuses) {
         for (const [id, { doc, status }] of statuses) {
             if (!isAnalyticalInWindow(status)) continue;
             inWindowIds.push(id);
+            if (exentos.has(id)) continue;   // exento: no se juzga en este corte
             if (isAnalyticalInWindow(getActiveMonitoringNow(doc, ctx.isWinter, oneHourAgo))) evaluableIds.push(id);
         }
 

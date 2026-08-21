@@ -1,5 +1,8 @@
 import express from 'express';
-import { extendSession, validateSession } from '../../middleware/validateSessionAndUser.js';
+import { Types } from 'mongoose';
+import { extendSession, validateSession, validateAdminUser } from '../../middleware/validateSessionAndUser.js';
+import { asyncHandler } from '../../middleware/asyncHandler.js';
+import { io } from '../socket/io.js';
 import MonitoringStateModel from './monitoringState.model.js';
 import Schedules from '../../apiServises/schedules/schedule.model.js';
 import LocalModel from '../../apiServises/local/local.model.js';
@@ -35,7 +38,7 @@ routerMonitoring.get(`${nameApi}/monitoring/status`, extendSession, validateSess
             IsDaylightSavingTimeBoolean.findOne(),
             Schedules.find(),
             LocalModel.find({ isActive: true }).select('_id name').lean(),
-            MonitoringStateModel.find().select('idLocal noveltyCheck lastStartAt lastEndAt').lean(),
+            MonitoringStateModel.find().select('idLocal noveltyCheck lastStartAt lastEndAt silenceExempt').lean(),
         ]);
         const isWinter = Boolean(timeDoc?.usWinterActive);
         const nameById = new Map(activeLocals.map(l => [String(l._id), l.name]));
@@ -62,7 +65,21 @@ routerMonitoring.get(`${nameApi}/monitoring/status`, extendSession, validateSess
                 // viejo (local que ya cerró) muere aquí y no llega al front.
                 noveltyCheck: {
                     ...(st?.noveltyCheck ?? {}),
-                    flagged: Boolean(st?.noveltyCheck?.flagged) && status.types.includes('analytical'),
+                    // Un local exento nunca llega señalado, aunque haya quedado
+                    // un flag viejo de antes de eximirlo: el corte que lo
+                    // apagaría podría tardar una hora en llegar.
+                    flagged: Boolean(st?.noveltyCheck?.flagged)
+                        && status.types.includes('analytical')
+                        && !st?.silenceExempt?.active,
+                },
+
+                // Para pintar el interruptor en el panel. Viaja siempre: el
+                // front decide con `admin` si además deja tocarlo.
+                silenceExempt: {
+                    active: Boolean(st?.silenceExempt?.active),
+                    byName: st?.silenceExempt?.byName ?? '',
+                    at: st?.silenceExempt?.at ?? null,
+                    reason: st?.silenceExempt?.reason ?? '',
                 },
             });
         }
@@ -73,5 +90,80 @@ routerMonitoring.get(`${nameApi}/monitoring/status`, extendSession, validateSess
         return res.status(500).json({ status: 500, error: 'Error server internal' });
     }
 });
+
+// ══════════════════════════════════════════════════════════════════════
+// EXIMIR DEL CORTE DE SILENCIO
+// ══════════════════════════════════════════════════════════════════════
+
+/**
+ * PUT /monitoring/silence-exempt — saca (o devuelve) un establecimiento de la
+ * lista "ESTABLECIMIENTOS SIN REPORTAR AL GRUPO". Solo administradores.
+ *
+ *     { idLocal: '<id>', active: true, reason?: 'texto' }
+ *
+ * QUÉ APAGA Y QUÉ NO. Solo el aviso horario. El local sigue contando sus
+ * alertas, sigue anunciando inicio y fin de monitoreo, y sigue apareciendo si
+ * se le cae el DVR. Lo único que deja de hacer es salir en ese corte.
+ *
+ * Al apagarlo, el flag de silencio que tuviera se limpia en el acto en vez de
+ * esperar al corte siguiente: si no, un local recién eximido seguiría en rojo
+ * hasta una hora después de haberlo eximido, y parecería que el botón no hizo
+ * nada.
+ *
+ * Al volver a activarlo NO se lo señala: se lo devuelve a la evaluación normal
+ * y el corte siguiente decide. Marcarlo de entrada sería juzgarlo por una hora
+ * en la que estaba exento.
+ *
+ * `upsert` porque un local que todavía no tuvo ninguna transición de monitoreo
+ * no tiene documento de estado, y aun así se lo tiene que poder eximir.
+ */
+routerMonitoring.put(`${nameApi}/monitoring/silence-exempt`, validateSession, validateAdminUser, asyncHandler(async (req, res) => {
+    const { idLocal, active, reason } = req.body ?? {};
+
+    if (!idLocal || !Types.ObjectId.isValid(String(idLocal))) {
+        return res.status(400).json({ status: 400, error: 'Bad request', message: 'Falta un idLocal válido' });
+    }
+
+    if (typeof active !== 'boolean') {
+        return res.status(400).json({ status: 400, error: 'Bad request', message: 'El campo `active` debe ser true o false' });
+    }
+
+    const exento = {
+        active,
+        by: req.session?.userId ?? null,
+        byName: [req.session?.name, req.session?.surName].filter(Boolean).join(' ').trim(),
+        at: new Date(),
+        reason: typeof reason === 'string' ? reason.trim().slice(0, 300) : '',
+    };
+
+    const cambios = { silenceExempt: exento };
+
+    // Al eximir, se apaga el aviso que tuviera puesto. Ver la nota de arriba.
+    if (active) cambios['noveltyCheck.flagged'] = false;
+
+    const estado = await MonitoringStateModel.findOneAndUpdate(
+        { idLocal: String(idLocal) },
+        { $set: cambios },
+        { new: true, upsert: true, setDefaultsOnInsert: true },
+    ).lean();
+
+    // En vivo para todas las salas de control abiertas: el que lo tocó ve el
+    // cambio, y los demás también, sin recargar.
+    io.emit('monitoring-silence-exempt', {
+        idLocal: String(idLocal),
+        active,
+        byName: exento.byName,
+        at: exento.at,
+        reason: exento.reason,
+    });
+
+    return res.status(200).json({
+        status: 200,
+        message: 'ok',
+        idLocal: String(idLocal),
+        silenceExempt: estado?.silenceExempt ?? exento,
+    });
+}));
+
 
 export { routerMonitoring };
