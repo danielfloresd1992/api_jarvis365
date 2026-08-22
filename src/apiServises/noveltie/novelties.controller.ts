@@ -23,6 +23,7 @@ import { Request, Response } from 'express';
 
 import { io } from '../../services/socket/io.js';
 import MonitoringStateModel from '../../services/monitoring/monitoringState.model.js';
+import { getOperationalDay } from '../../services/noveltyReport/noveltyReport.service.js';
 
 /** La zona de la operación; la misma variable que usa el reporte de novedades. */
 const REPORT_TZ = process.env.MONITORING_TZ || 'America/Caracas';
@@ -987,6 +988,108 @@ export default class ControllerNovelty {
             operadores: porId(operadores as any[], (u: any) => [u.name, u.surName].filter(Boolean).join(' ') || null),
             alertas: porId(alertas as any[], (m: any) => ({ es: m.es ?? null, en: m.en ?? null, category: m.category ?? null })),
         };
+    };
+
+
+
+    /**
+     * LAS ALERTAS DE UN ESTABLECIMIENTO EN EL DÍA.
+     *
+     *   /noveltie/establecimiento/id=<idLocal>/dia=0
+     *
+     * `dia=0` es hoy; cualquier otro valor es una fecha `AAAA-MM-DD`.
+     *
+     * Devuelve lo justo para una lista desplegable: qué alerta fue, a qué hora
+     * y cómo quedó la validación. Nada de imágenes, videos ni comentarios —es
+     * lo que se abre al tocar una fila, no la ficha de la novedad.
+     *
+     *
+     * EL MISMO DÍA QUE LOS CONTEOS DE LA FILA
+     *
+     * Usa `getOperationalDay` —de 08:00 a 07:00 del día siguiente— que es el
+     * que ya usan el reporte y los conteos que la fila muestra al lado. Si acá
+     * se usara el día civil, el desplegable mostraría siete alertas donde el
+     * contador dice nueve, y eso se lee como que el sistema está roto.
+     *
+     * Por lo mismo el establecimiento se busca en los DOS lugares donde puede
+     * estar: `establishment` en los documentos vigentes, `local.idLocal` en
+     * los viejos.
+     */
+    getNoveltiesOfLocalByDay = async (req: Request, res: any): Promise<void> => {
+        try {
+            const { id, dia } = req.params;
+
+            if (!Types.ObjectId.isValid(id)) {
+                return res.status(400).json({
+                    status: 400,
+                    error: 'Bad request',
+                    message: `El establecimiento "${id}" no es un identificador válido.`,
+                });
+            }
+
+            // El día operativo pedido. Sin fecha, el de ahora.
+            const referencia = dia && dia !== '0' ? moment.tz(dia, 'YYYY-MM-DD', REPORT_TZ).hour(12) : undefined;
+
+            if (referencia && !referencia.isValid()) {
+                return res.status(400).json({
+                    status: 400,
+                    error: 'Bad request',
+                    message: `La fecha "${dia}" no es válida. Se espera AAAA-MM-DD, o 0 para hoy.`,
+                });
+            }
+
+            const { start, end } = getOperationalDay(referencia);
+
+            const idLocal = new Types.ObjectId(id);
+            const query: any = {
+                date: { $gte: start.toDate(), $lt: end.toDate() },
+                $or: [{ establishment: idLocal }, { 'local.idLocal': idLocal }],
+            };
+
+            // Se proyecta lo que se va a mostrar y nada más. Una novedad
+            // completa trae imágenes, video y comentarios: traer cincuenta de
+            // esas para pintar una lista de tres columnas es mover megabytes
+            // para mostrar texto.
+            const novedades = await NoveltieModel
+                .find(query)
+                .select('title date shift validationResult.isApproved validationResult.detail sharedByUser.user.nameUser')
+                .sort({ date: 1 })
+                .lean();
+
+            const alertas = novedades.map((n: any) => ({
+                id: String(n._id),
+                title: n.title ?? null,
+                hora: n.date ?? null,
+                turno: n.shift ?? null,
+                operador: n.sharedByUser?.user?.nameUser ?? null,
+                // Tres estados, no dos: `null` es "todavía nadie la miró", que
+                // no es lo mismo que rechazada.
+                validacion: typeof n.validationResult?.isApproved === 'boolean'
+                    ? (n.validationResult.isApproved ? 'aprobada' : 'rechazada')
+                    : 'sin validar',
+                detalle: n.validationResult?.detail ?? null,
+            }));
+
+            res.json({
+                status: 200,
+                dia: { desde: start.toDate(), hasta: end.toDate() },
+                resumen: {
+                    total: alertas.length,
+                    aprobadas: alertas.filter(a => a.validacion === 'aprobada').length,
+                    rechazadas: alertas.filter(a => a.validacion === 'rechazada').length,
+                    sinValidar: alertas.filter(a => a.validacion === 'sin validar').length,
+                },
+                alertas,
+            });
+        }
+        catch (err) {
+            console.log(err);
+            res.status(500).json({
+                status: 500,
+                error: 'Internal server error',
+                message: 'No se pudieron traer las alertas del establecimiento.',
+            });
+        }
     };
 
 };

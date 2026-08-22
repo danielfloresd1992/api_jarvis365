@@ -116,6 +116,15 @@ routerNoveltie.get(`${nameApi}/noveltie/date=:date/shift=:shift/establishments=:
 routerNoveltie.get(`${nameApi}/noveltie/local=:local/since=:since/until=:until/page=:page`, validateSession, controller.getNoveltiesFilter);
 
 
+// Las alertas de un establecimiento en el día operativo, en versión corta:
+// título, hora y validación. Es lo que se abre al desplegar una fila de la
+// sala de control. `dia=0` es hoy.
+routerNoveltie.get(
+    `${nameApi}/noveltie/establecimiento/id=:id/dia=:dia`,
+    extendSession, validateSession, controller.getNoveltiesOfLocalByDay,
+);
+
+
 // El libro de bonos: las novedades de un rango, ya agrupadas. `operador`,
 // `local` y `agrupar` aceptan 0 como "todos".
 routerNoveltie.get(
