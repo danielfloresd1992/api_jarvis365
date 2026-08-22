@@ -84,6 +84,29 @@ const menuSchema = yup.object({
         .default(null),
 
     descriptionNoteForReportDocument: yup.boolean().default(false),
+
+    // ══════════════════════════════════════════════════════════════════
+    // QUÉ LE HACE ESTA ALERTA A LA CONEXIÓN CON EL DVR
+    // ══════════════════════════════════════════════════════════════════
+    //   'down'  reporta que el establecimiento se quedó sin cámaras
+    //   'up'    reporta que la conexión volvió
+    //   null    una alerta cualquiera (lo normal)
+    //
+    // Es lo que permite que el sistema RECONOZCA esas dos alertas sin volver a
+    // atarlas a un `_id` escrito a mano. Ver la nota larga en menu.model.js.
+    //
+    // Se declara acá aunque el esquema no rechace campos desconocidos: sin esto
+    // el valor entraba igual pero SIN VALIDAR, y un 'arriba' o un 'UP' recién lo
+    // atajaba Mongoose al guardar, con un mensaje que no dice cuáles son las
+    // opciones. Marcar mal esta alerta es lo que puede dejar a un local sin
+    // poder reportar, así que conviene que falle temprano y explicando.
+    //
+    // Nullable y sin `required`: las alertas normales —que son casi todas— se
+    // siguen creando sin mencionarlo.
+    dvrEffect: yup.string()
+        .oneOf(['down', 'up', null], 'Valor no válido. Opciones: down (se cayó la conexión), up (se restableció)')
+        .nullable()
+        .default(null),
 });
 
 
