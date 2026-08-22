@@ -1,6 +1,9 @@
 import colors from 'colors';
+import moment from 'moment-timezone';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import os from 'os';
+import DvrFailureModel from '../dvrFailure/dvrFailure.model.js';
+import { debeRechazarLaAlerta } from '../dvrFailure/dvrGate.lib.js';
 import NoveltieModel, { CommentSchema } from './noveltie.model.js';
 import LocalModel from '../local/local.model.js';
 import { commentYupSchema } from './novelty.squema.js';
@@ -20,6 +23,9 @@ import { Request, Response } from 'express';
 
 import { io } from '../../services/socket/io.js';
 import MonitoringStateModel from '../../services/monitoring/monitoringState.model.js';
+
+/** La zona de la operación; la misma variable que usa el reporte de novedades. */
+const REPORT_TZ = process.env.MONITORING_TZ || 'America/Caracas';
 
 //call servises publisher
 
@@ -405,6 +411,68 @@ export default class ControllerNovelty {
             const resultMenu = await MenuModel.findOne({ _id: novelties.body.alertId });
 
             //    if(!resultMenu) return res.status(400).json({ error: 'The result of the title property is not registered in the system' })
+
+
+            // ══════════════════════════════════════════════════════════
+            // UN LOCAL SIN CÁMARAS NO PUEDE REPORTAR NADA
+            // ══════════════════════════════════════════════════════════
+            // Si el establecimiento tiene una caída de DVR abierta, lo único que
+            // se le acepta es la alerta que dice que la conexión VOLVIÓ.
+            //
+            // No es un capricho: sin cámaras no hay nada que ver, así que
+            // cualquier otra alerta que entre en ese rato o viene de otra fuente
+            // o está mal cargada. Y sobre todo, dejarlas pasar ensucia el
+            // historial justo en el tramo en que el local estaba ciego, que es
+            // el que después se usa para explicar por qué no reportó.
+            //
+            // La alerta de restablecimiento se reconoce por `Menu.dvrEffect ===
+            // 'up'`, del catálogo. Hasta ahora eso vivía como un `_id` escrito a
+            // mano en el front; ver la nota en menu.model.
+            //
+            // MIENTRAS NADIE MARQUE `dvrEffect` EN EL CATÁLOGO, ESTO NO BLOQUEA
+            // NADA: sin una alerta marcada 'up' no habría forma de desbloquear
+            // un local, así que el candado no se echa. Es deliberado — un
+            // despliegue no puede dejar a los locales sin poder reportar por un
+            // dato que todavía no se cargó.
+            const idLocal = novelties.body.localId;
+
+            if (idLocal && Types.ObjectId.isValid(String(idLocal)) && resultMenu?.dvrEffect !== 'up') {
+
+                const caidaAbierta = await DvrFailureModel
+                    .findOne({ local: idLocal, active: true })
+                    .select('localName failedAt reportedByName')
+                    .lean();
+
+                if (caidaAbierta) {
+                    const hayComoDesbloquear = Boolean(await MenuModel.exists({ dvrEffect: 'up' }));
+
+                    if (debeRechazarLaAlerta({
+                        dvrEffect: resultMenu?.dvrEffect,
+                        hayCaidaAbierta: true,
+                        hayComoDesbloquear,
+                    })) {
+                        const desde = moment.tz(caidaAbierta.failedAt, REPORT_TZ).format('HH:mm');
+
+                        // 409: no es que la petición esté mal formada —lo estaría
+                        // igual mañana—, es que CHOCA con el estado actual del
+                        // establecimiento. `code` viaja aparte del texto para que
+                        // el cliente pueda distinguirlo de cualquier otro 409 sin
+                        // leer el mensaje.
+                        return res.status(409).json({
+                            status: 409,
+                            error: 'conflict',
+                            code: 'DVR_DOWN',
+                            message: `${caidaAbierta.localName || 'Este establecimiento'} tiene una falla de conexión con el DVR desde las ${desde}. No se pueden enviar alertas hasta que se reporte el restablecimiento de la conexión.`,
+                            dvrFailure: {
+                                localName: caidaAbierta.localName ?? '',
+                                failedAt: caidaAbierta.failedAt,
+                                failedAtLabel: desde,
+                                reportedByName: caidaAbierta.reportedByName ?? '',
+                            },
+                        });
+                    }
+                }
+            }
 
             // `shift` no se toca acá: conserva el valor por defecto del modelo.
             // Es la propiedad de siempre y jarvis-reportes depende de ella, así

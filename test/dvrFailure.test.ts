@@ -5,6 +5,7 @@ import {
     downtimeMinutesBetween,
     overlapMinutes,
 } from '../src/apiServises/dvrFailure/dvrFailure.lib.ts';
+import { debeRechazarLaAlerta } from '../src/apiServises/dvrFailure/dvrGate.lib.ts';
 
 // ══════════════════════════════════════════════════════════════════════
 // LAS DOS CUENTAS DE LAS CAÍDAS DE DVR
@@ -219,4 +220,61 @@ test('solapamiento: una caída que envuelve la jornada entera cuenta la jornada'
         overlapMinutes(new Date('2026-08-18T14:00:00Z'), null, ABRE, CIERRA),
         23 * 60,
     );
+});
+
+
+// ══════════════════════════════════════════════════════════════════════
+// EL CANDADO: UN LOCAL SIN CÁMARAS NO REPORTA
+// ══════════════════════════════════════════════════════════════════════
+// Decide si se le acepta una alerta a un establecimiento con el DVR caído.
+// Equivocarlo de más deja a los locales sin poder cargar su trabajo, y eso se
+// nota tarde y mal.
+
+test('el candado: con el DVR sano NO se bloquea nada', () => {
+    assert.equal(debeRechazarLaAlerta({
+        dvrEffect: null, hayCaidaAbierta: false, hayComoDesbloquear: true,
+    }), false);
+});
+
+test('el candado: caído, se rechaza una alerta cualquiera', () => {
+    assert.equal(debeRechazarLaAlerta({
+        dvrEffect: null, hayCaidaAbierta: true, hayComoDesbloquear: true,
+    }), true);
+});
+
+test('el candado: la alerta de RESTABLECIMIENTO siempre pasa', () => {
+    // Es la única que puede reabrir el local. Bloquearla lo dejaría encerrado.
+    assert.equal(debeRechazarLaAlerta({
+        dvrEffect: 'up', hayCaidaAbierta: true, hayComoDesbloquear: true,
+    }), false);
+});
+
+test('el candado: la alerta que REPORTA la caída también se rechaza si ya está caído', () => {
+    // No es un descuido: el local ya está registrado como caído, y una segunda
+    // caída sobre la misma no aporta nada — el episodio abierto es uno solo.
+    assert.equal(debeRechazarLaAlerta({
+        dvrEffect: 'down', hayCaidaAbierta: true, hayComoDesbloquear: true,
+    }), true);
+});
+
+test('el candado: SIN alerta de restablecimiento en el catálogo, no se cierra', () => {
+    // La condición que más importa. `dvrEffect` es nuevo y arranca en null: si
+    // nadie marcó todavía una alerta como 'up', echar el candado dejaría al
+    // local encerrado para siempre porque no habría con qué abrirlo.
+    assert.equal(debeRechazarLaAlerta({
+        dvrEffect: null, hayCaidaAbierta: true, hayComoDesbloquear: false,
+    }), false);
+});
+
+test('el candado: sin catálogo marcado, ni siquiera la de caída se bloquea', () => {
+    assert.equal(debeRechazarLaAlerta({
+        dvrEffect: 'down', hayCaidaAbierta: true, hayComoDesbloquear: false,
+    }), false);
+});
+
+test('el candado: un dvrEffect desconocido se trata como alerta cualquiera', () => {
+    // Un valor que no es 'up' no abre nada. Ante la duda, no se desbloquea.
+    assert.equal(debeRechazarLaAlerta({
+        dvrEffect: 'cualquier-cosa', hayCaidaAbierta: true, hayComoDesbloquear: true,
+    }), true);
 });

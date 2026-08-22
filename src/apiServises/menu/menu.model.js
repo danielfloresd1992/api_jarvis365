@@ -224,6 +224,32 @@ const Menu = new Schema({
         default: null,
     },
 
+    // ══════════════════════════════════════════════════════════════════
+    // QUÉ LE HACE ESTA ALERTA A LA CONEXIÓN CON EL DVR
+    // ══════════════════════════════════════════════════════════════════
+    //   'down'  esta alerta REPORTA que el establecimiento se quedó sin cámaras
+    //   'up'    esta alerta reporta que la conexión VOLVIÓ
+    //   null    una alerta cualquiera, que no tiene nada que ver con el DVR
+    //
+    // Existe porque el sistema necesita RECONOCER esas dos alertas, y hasta
+    // ahora las reconocía por su `_id` escrito a mano dentro de un componente
+    // del front (SendNoveltie). Dos identificadores de marzo de 2023: el día que
+    // alguien recreara esas alertas en la base, el código seguiría funcionando y
+    // sencillamente dejaría de registrar las caídas, sin dar un solo error.
+    //
+    // Con esto la decisión vuelve al catálogo, que es donde se define qué
+    // significa cada alerta. Y marcar una como 'up' es además lo que le permite
+    // seguir entrando cuando el local está bloqueado por falta de cámaras — ver
+    // el bloque que lo comprueba en novelties.controller.
+    //
+    // `null` por defecto: las alertas ya cargadas no cambian de comportamiento y
+    // no hay nada que migrar.
+    dvrEffect: {
+        type: String,
+        enum: ['down', 'up', null],
+        default: null,
+    },
+
     // NOTA: el campo 'especial' completo está definido arriba (líneas 38-49).
     // La línea duplicada 'especial: {}' fue eliminada porque sobreescribía
     // la definición estructurada con un objeto vacío, perdiendo todos los sub-campos.
