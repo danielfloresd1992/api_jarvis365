@@ -4,6 +4,7 @@ import { extendSession, validateSession, validateAdminUser } from '../../middlew
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { io } from '../socket/io.js';
 import MonitoringStateModel from './monitoringState.model.js';
+import DvrFailureModel from '../../apiServises/dvrFailure/dvrFailure.model.js';
 import Schedules from '../../apiServises/schedules/schedule.model.js';
 import LocalModel from '../../apiServises/local/local.model.js';
 import { IsDaylightSavingTimeBoolean } from '../../apiServises/time/time.model.js';
@@ -26,23 +27,36 @@ const routerMonitoring = express.Router();
  * el flag de silencio solo viaja si el monitoreo ANALÍTICO del local está
  * dentro de su rango en este instante.
  *
+ * El aviso de silencio tampoco viaja si el local está EXENTO o si tiene una
+ * CAÍDA DE DVR abierta. Es la misma regla que aplica el corte horario, aplicada
+ * también al indicador: si solo se comprobara en el corte, entre uno y otro
+ * —hasta una hora— la pantalla mostraría en rojo a un local que se quedó sin
+ * cámaras hace diez minutos, y las dos cosas dirían cosas distintas.
+ *
  * El front lo usa para SEMBRAR sus indicadores "en vivo"; los cambios
  * posteriores llegan por los eventos 'monitoring-start' / 'monitoring-end'.
  *
  * Respuesta: [{ idLocal, name, activeTypes, usingWinter, lastStartAt,
- * lastEndAt, noveltyCheck }] (solo los que están dentro de su ventana ahora).
+ * lastEndAt, noveltyCheck, silenceExempt, dvrDown }] (solo los que están dentro
+ * de su ventana ahora).
  */
 routerMonitoring.get(`${nameApi}/monitoring/status`, extendSession, validateSession, async (req, res) => {
     try {
-        const [timeDoc, schedules, activeLocals, states] = await Promise.all([
+        const [timeDoc, schedules, activeLocals, states, caidasAbiertas] = await Promise.all([
             IsDaylightSavingTimeBoolean.findOne(),
             Schedules.find(),
             LocalModel.find({ isActive: true }).select('_id name').lean(),
             MonitoringStateModel.find().select('idLocal noveltyCheck lastStartAt lastEndAt silenceExempt').lean(),
+            DvrFailureModel.find({ active: true }).select('local failedAt localName').lean(),
         ]);
         const isWinter = Boolean(timeDoc?.usWinterActive);
         const nameById = new Map(activeLocals.map(l => [String(l._id), l.name]));
         const stateById = new Map(states.map(s => [s.idLocal, s]));
+
+        // Los que no tienen cámaras AHORA. Se consulta en cada petición, que es
+        // lo que hace que el indicador esté al día: un local se cae o se
+        // restablece entre dos refrescos y la pantalla lo refleja enseguida.
+        const sinCamaras = new Map(caidasAbiertas.map(c => [String(c.local), c]));
 
         const docs = [];
         for (const doc of schedules) {
@@ -65,13 +79,27 @@ routerMonitoring.get(`${nameApi}/monitoring/status`, extendSession, validateSess
                 // viejo (local que ya cerró) muere aquí y no llega al front.
                 noveltyCheck: {
                     ...(st?.noveltyCheck ?? {}),
-                    // Un local exento nunca llega señalado, aunque haya quedado
-                    // un flag viejo de antes de eximirlo: el corte que lo
-                    // apagaría podría tardar una hora en llegar.
+                    // El aviso de silencio SOLO viaja si el local de verdad
+                    // podía reportar. Se comprueba acá y no solo en el corte
+                    // horario porque un flag durable puede tener hasta una hora
+                    // de antigüedad: entre dos cortes el local pudo quedarse sin
+                    // cámaras o un administrador pudo eximirlo, y la pantalla
+                    // seguiría mostrándolo en rojo todo ese rato.
+                    //
+                    // Es la MISMA regla del corte, aplicada al indicador, para
+                    // que las dos cosas no puedan decir cosas distintas.
                     flagged: Boolean(st?.noveltyCheck?.flagged)
                         && status.types.includes('analytical')
-                        && !st?.silenceExempt?.active,
+                        && !st?.silenceExempt?.active
+                        && !sinCamaras.has(id),
                 },
+
+                // Sin cámaras ahora mismo, y desde cuándo. Va acá para que
+                // cualquier pantalla que ya lea este endpoint pueda mostrarlo
+                // sin pedir nada más.
+                dvrDown: sinCamaras.has(id)
+                    ? { failedAt: sinCamaras.get(id).failedAt, localName: sinCamaras.get(id).localName ?? name }
+                    : null,
 
                 // Para pintar el interruptor en el panel. Viaja siempre: el
                 // front decide con `admin` si además deja tocarlo.

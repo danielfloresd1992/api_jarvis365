@@ -6,6 +6,8 @@ import LocalModel from '../../apiServises/local/local.model.js';
 import { IsDaylightSavingTimeBoolean } from '../../apiServises/time/time.model.js';
 import { getActiveMonitoringNow } from '../../apiServises/schedules/schedule.logic.js';
 import MonitoringStateModel from './monitoringState.model.js';
+import DvrFailureModel from '../../apiServises/dvrFailure/dvrFailure.model.js';
+import { entraEnElCorteDeSilencio } from '../../apiServises/dvrFailure/dvrGate.lib.js';
 import NoveltyReportLog from '../noveltyReport/noveltyReportLog.model.js';
 import Noveltie from '../../apiServises/noveltie/noveltie.model.js';
 import { getOperationalDay, REPORT_TZ } from '../noveltyReport/noveltyReport.service.js';
@@ -268,21 +270,31 @@ async function runSilenceCut(ctx, statuses) {
         const { start } = getOperationalDay(ctx.now);
         const oneHourAgo = ctx.now.clone().subtract(1, 'hour').toDate();
 
-        // ── Exentos ───────────────────────────────────────────────────
-        // Locales que un administrador sacó de esta lista. Se consulta en cada
-        // corte y no se cachea: el interruptor se puede tocar entre dos cortes y
-        // el siguiente tiene que respetarlo sin esperar a un reinicio.
+        // ── Quién se queda afuera del corte ───────────────────────────
+        // Dos motivos, y los dos se consultan EN ESTE INSTANTE, sin cachear:
+        // entre un corte y el siguiente un local se cae, se restablece, o un
+        // administrador toca el interruptor, y el corte que viene tiene que
+        // reflejarlo sin esperar a un reinicio.
         //
-        // Salen SOLO del corte. Siguen entrando en `inWindowIds`, así que su
-        // `lastSentAt` se sigue guardando igual y el resto del panel —alertas,
-        // inicio y fin de monitoreo, caídas de DVR— no se entera de nada.
-        const exentos = new Set(
-            (await MonitoringStateModel
-                .find({ 'silenceExempt.active': true })
-                .select('idLocal')
-                .lean())
-                .map(estado => String(estado.idLocal)),
-        );
+        //   EXENTOS    un administrador los sacó de la lista (obra, local
+        //              cerrado por dentro, cámara apuntando a un depósito).
+        //
+        //   SIN DVR    tienen una caída de conexión abierta. Sin cámaras no hay
+        //              nada que mirar, así que reclamarles que no reportaron es
+        //              reclamarles por algo que no podían hacer. Aparecían todas
+        //              las horas en el grupo como si el operador no hubiera
+        //              hecho su trabajo.
+        //
+        // Los dos salen SOLO del corte. Siguen entrando en `inWindowIds`, así
+        // que su `lastSentAt` se sigue guardando y —importante— se les escribe
+        // `flagged: false`, que apaga cualquier aviso viejo que hubieran dejado.
+        const [estadosExentos, caidasAbiertas] = await Promise.all([
+            MonitoringStateModel.find({ 'silenceExempt.active': true }).select('idLocal').lean(),
+            DvrFailureModel.find({ active: true }).select('local').lean(),
+        ]);
+
+        const exentos = new Set(estadosExentos.map(estado => String(estado.idLocal)));
+        const sinCamaras = new Set(caidasAbiertas.map(caida => String(caida.local)));
 
         // En ventana analítica AHORA; "evaluable" = también lo estaba hace 1h
         // (al recién abierto solo se le siembra baseline y se juzga al siguiente).
@@ -291,8 +303,16 @@ async function runSilenceCut(ctx, statuses) {
         for (const [id, { doc, status }] of statuses) {
             if (!isAnalyticalInWindow(status)) continue;
             inWindowIds.push(id);
-            if (exentos.has(id)) continue;   // exento: no se juzga en este corte
-            if (isAnalyticalInWindow(getActiveMonitoringNow(doc, ctx.isWinter, oneHourAgo))) evaluableIds.push(id);
+
+            // Las cuatro condiciones, en un solo lugar y con pruebas propias.
+            const entra = entraEnElCorteDeSilencio({
+                enVentanaAnalitica: true,   // ya se comprobó arriba
+                estabaHaceUnaHora: isAnalyticalInWindow(getActiveMonitoringNow(doc, ctx.isWinter, oneHourAgo)),
+                exento: exentos.has(id),
+                dvrCaido: sinCamaras.has(id),
+            });
+
+            if (entra) evaluableIds.push(id);
         }
 
         // Nadie en ventana → apaga cualquier aviso viejo (durable y en el front)

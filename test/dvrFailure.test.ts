@@ -5,7 +5,7 @@ import {
     downtimeMinutesBetween,
     overlapMinutes,
 } from '../src/apiServises/dvrFailure/dvrFailure.lib.ts';
-import { debeRechazarLaAlerta } from '../src/apiServises/dvrFailure/dvrGate.lib.ts';
+import { debeRechazarLaAlerta, entraEnElCorteDeSilencio } from '../src/apiServises/dvrFailure/dvrGate.lib.ts';
 
 // ══════════════════════════════════════════════════════════════════════
 // LAS DOS CUENTAS DE LAS CAÍDAS DE DVR
@@ -277,4 +277,61 @@ test('el candado: un dvrEffect desconocido se trata como alerta cualquiera', () 
     assert.equal(debeRechazarLaAlerta({
         dvrEffect: 'cualquier-cosa', hayCaidaAbierta: true, hayComoDesbloquear: true,
     }), true);
+});
+
+
+// ══════════════════════════════════════════════════════════════════════
+// EL CORTE DE "SIN REPORTAR AL GRUPO"
+// ══════════════════════════════════════════════════════════════════════
+// De esto sale el mensaje que se manda al grupo cada hora. Meter en esa lista
+// a un local que no podía reportar enseña a ignorarla, y entonces deja de
+// servir para nadie.
+
+/** El caso normal: un local que sí podía reportar y no lo hizo. */
+const local = (extra = {}) => ({
+    enVentanaAnalitica: true,
+    estabaHaceUnaHora: true,
+    exento: false,
+    dvrCaido: false,
+    ...extra,
+});
+
+test('el corte: un local que podía reportar y no reportó, entra', () => {
+    assert.equal(entraEnElCorteDeSilencio(local()), true);
+});
+
+test('el corte: SIN CÁMARAS no entra', () => {
+    // El caso que motivó todo esto: aparecían todas las horas en el grupo como
+    // si el operador no hubiera hecho su trabajo.
+    assert.equal(entraEnElCorteDeSilencio(local({ dvrCaido: true })), false);
+});
+
+test('el corte: fuera de la ventana analítica no entra', () => {
+    // El monitoreo perimetral no reporta alertas: reclamarle sería reclamarle
+    // por algo que no le toca.
+    assert.equal(entraEnElCorteDeSilencio(local({ enVentanaAnalitica: false })), false);
+});
+
+test('el corte: el que acaba de abrir no entra', () => {
+    // No se le puede reclamar una hora que no trabajó.
+    assert.equal(entraEnElCorteDeSilencio(local({ estabaHaceUnaHora: false })), false);
+});
+
+test('el corte: el que un administrador sacó de la lista no entra', () => {
+    assert.equal(entraEnElCorteDeSilencio(local({ exento: true })), false);
+});
+
+test('el corte: basta UN motivo para quedar afuera', () => {
+    // Cualquier duda deja al local afuera. Es preferible no reclamarle a uno
+    // que debía, que reclamarle a uno que no podía.
+    const motivos = ['dvrCaido', 'exento'];
+    for (const motivo of motivos) {
+        assert.equal(entraEnElCorteDeSilencio(local({ [motivo]: true })), false, motivo);
+    }
+    assert.equal(entraEnElCorteDeSilencio(local({ enVentanaAnalitica: false })), false);
+    assert.equal(entraEnElCorteDeSilencio(local({ estabaHaceUnaHora: false })), false);
+});
+
+test('el corte: sin cámaras Y exento tampoco entra', () => {
+    assert.equal(entraEnElCorteDeSilencio(local({ dvrCaido: true, exento: true })), false);
 });

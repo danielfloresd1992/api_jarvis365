@@ -55,4 +55,67 @@ export const debeRechazarLaAlerta = ({
 };
 
 
+// ══════════════════════════════════════════════════════════════════════
+// ¿ESTE LOCAL ENTRA EN EL CORTE DE "SIN REPORTAR AL GRUPO"?
+// ══════════════════════════════════════════════════════════════════════
+// El corte horario manda al grupo la lista de establecimientos que no enviaron
+// nada en la última hora. Un local solo merece estar en esa lista si de verdad
+// PODÍA haber reportado y no lo hizo.
+//
+// Son cuatro condiciones, y las cuatro tienen que darse:
+//
+//   1. está en monitoreo AHORA y es ANALÍTICO — el perimetral no reporta
+//      alertas, así que reclamarle sería reclamar por algo que no le toca;
+//   2. ya lo estaba hace una hora — al que acaba de abrir no se le puede
+//      reclamar una hora que no trabajó;
+//   3. tiene el conteo habilitado — un administrador puede sacarlo de la lista
+//      (obra, local cerrado por dentro, cámara apuntando a un depósito);
+//   4. NO tiene una falla de conexión con el DVR abierta.
+//
+// La cuarta es la que faltaba, y es la que más se notaba: un local sin cámaras
+// aparecía todas las horas en el grupo como si el operador no hubiera hecho su
+// trabajo, cuando lo que pasaba es que no había nada que mirar.
+//
+// Se evalúa EN EL MOMENTO DEL CORTE, con el estado de ese instante. No se
+// guarda ni se cachea: entre un corte y el siguiente un local se cae, se
+// restablece, o un administrador cambia el interruptor, y el corte que viene
+// tiene que reflejarlo sin esperar a nada.
+
+export interface EntradaDelCorte {
+    /** ¿Está en ventana de monitoreo analítico en este momento? */
+    enVentanaAnalitica: boolean;
+
+    /** ¿También lo estaba hace una hora? */
+    estabaHaceUnaHora: boolean;
+
+    /** ¿Un administrador lo sacó de la lista? */
+    exento: boolean;
+
+    /** ¿Tiene una caída de DVR abierta ahora mismo? */
+    dvrCaido: boolean;
+}
+
+
+/**
+ * ¿Se lo juzga en este corte?
+ *
+ * Solo `true` cuando el local podía reportar de verdad. Cualquier motivo para
+ * dudarlo lo deja afuera: es preferible no reclamarle a uno que debía, que
+ * reclamarle todas las horas a uno que no podía — eso último enseña a ignorar
+ * la lista entera, y entonces deja de servir para nadie.
+ */
+export const entraEnElCorteDeSilencio = ({
+    enVentanaAnalitica,
+    estabaHaceUnaHora,
+    exento,
+    dvrCaido,
+}: EntradaDelCorte): boolean => {
+    if (!enVentanaAnalitica) return false;
+    if (!estabaHaceUnaHora) return false;
+    if (exento) return false;
+    if (dvrCaido) return false;
+    return true;
+};
+
+
 export default debeRechazarLaAlerta;
