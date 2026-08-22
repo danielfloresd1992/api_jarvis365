@@ -347,7 +347,9 @@ routerDvrFailure.get(`${nameApi}/dvr-failure/history`, validateSession, asyncHan
  * Devuelve DOS cortes del mismo rango:
  *
  *   byLocal  el ranking — qué establecimiento se cae más
- *   byDay    una fila por día operativo, para el mapa de calor
+ *   byDay    una fila por día operativo, para el mapa de calor. Trae el conteo
+ *            de establecimientos y también sus NOMBRES: el mapa los muestra al
+ *            pasar por encima, y "3 establecimientos" no dice cuáles.
  *
  * Los días SIN caídas no salen en `byDay`: la agregación solo ve lo que
  * ocurrió. Es el cliente el que arma la rejilla completa del mes y pinta en
@@ -422,6 +424,12 @@ routerDvrFailure.get(`${nameApi}/dvr-failure/stats`, validateSession, asyncHandl
                 failures: { $sum: 1 },
                 downtimeMinutes: { $sum: { $ifNull: ['$downtimeMinutes', 0] } },
                 locals: { $addToSet: '$local' },
+
+                // Los NOMBRES, además del conteo: el mapa los muestra al pasar
+                // por encima, y "3 establecimientos" no dice cuáles. Salen del
+                // nombre copiado en el episodio, no de la referencia, para no
+                // cruzar una colección entera por un texto de ayuda.
+                localNames: { $addToSet: '$localName' },
             },
         },
         {
@@ -430,7 +438,19 @@ routerDvrFailure.get(`${nameApi}/dvr-failure/stats`, validateSession, asyncHandl
                 date: '$_id',
                 failures: 1,
                 downtimeMinutes: 1,
+
+                // El conteo sale de los IDS y no de los nombres: un local
+                // renombrado a mitad del período aporta dos nombres distintos y
+                // se contaría dos veces.
                 locals: { $size: '$locals' },
+
+                // Sin los vacíos: un episodio cargado por el puente `/failed`
+                // sin nombre de local dejaría una cadena en blanco en la lista.
+                //
+                // El ORDEN se pone en el cliente. `$addToSet` no garantiza
+                // ninguno, y `$sortArray` —que sería lo natural— pide MongoDB
+                // 5.2, que no es algo que este despliegue pueda dar por sentado.
+                localNames: { $filter: { input: '$localNames', as: 'n', cond: { $ne: ['$$n', ''] } } },
             },
         },
         { $sort: { date: 1 } },
