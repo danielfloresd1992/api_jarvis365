@@ -5,7 +5,7 @@ import {
     downtimeMinutesBetween,
     overlapMinutes,
 } from '../src/apiServises/dvrFailure/dvrFailure.lib.ts';
-import { debeRechazarLaAlerta, entraEnElCorteDeSilencio } from '../src/apiServises/dvrFailure/dvrGate.lib.ts';
+import { debeRechazarLaAlerta, entraEnElCorteDeSilencio, resolveDvrEffect, ALERTA_DVR_LEGADA } from '../src/apiServises/dvrFailure/dvrGate.lib.ts';
 
 // ══════════════════════════════════════════════════════════════════════
 // LAS DOS CUENTAS DE LAS CAÍDAS DE DVR
@@ -335,3 +335,38 @@ test('el corte: basta UN motivo para quedar afuera', () => {
 test('el corte: sin cámaras Y exento tampoco entra', () => {
     assert.equal(entraEnElCorteDeSilencio(local({ dvrCaido: true, exento: true })), false);
 });
+
+// ══════════════════════════════════════════════════════════════════════
+// QUÉ LE HACE UNA ALERTA A LA CONEXIÓN
+// ══════════════════════════════════════════════════════════════════════
+// El catálogo manda; los `_id` históricos —los mismos que Jarvis-express
+// reconoce a mano desde 2023— son el respaldo. Sin ese respaldo la compuerta
+// entera quedaba dormida: `dvrEffect` es nuevo y nadie lo marcó todavía.
+
+test('el catálogo manda: dvrEffect gana aunque el _id no sea el legado', () => {
+    assert.equal(resolveDvrEffect({ alertId: 'cualquiera', dvrEffect: 'up' }), 'up');
+    assert.equal(resolveDvrEffect({ alertId: 'cualquiera', dvrEffect: 'down' }), 'down');
+});
+
+test('sin catálogo, los _id legados resuelven el efecto', () => {
+    assert.equal(resolveDvrEffect({ alertId: ALERTA_DVR_LEGADA.up, dvrEffect: null }), 'up');
+    assert.equal(resolveDvrEffect({ alertId: ALERTA_DVR_LEGADA.down, dvrEffect: null }), 'down');
+});
+
+test('una alerta común no le hace nada a la conexión', () => {
+    assert.equal(resolveDvrEffect({ alertId: '000000000000000000000000', dvrEffect: null }), null);
+    assert.equal(resolveDvrEffect({ alertId: null, dvrEffect: null }), null);
+    // Un valor raro en el catálogo tampoco cuenta como efecto.
+    assert.equal(resolveDvrEffect({ alertId: null, dvrEffect: 'otra-cosa' }), null);
+});
+
+test('con el local caído, la legada de restablecimiento pasa y una común no', () => {
+    const conCaida = { hayCaidaAbierta: true, hayComoDesbloquear: true };
+
+    const efectoUp = resolveDvrEffect({ alertId: ALERTA_DVR_LEGADA.up, dvrEffect: null });
+    assert.equal(debeRechazarLaAlerta({ ...conCaida, dvrEffect: efectoUp }), false);
+
+    const efectoComun = resolveDvrEffect({ alertId: '000000000000000000000000', dvrEffect: null });
+    assert.equal(debeRechazarLaAlerta({ ...conCaida, dvrEffect: efectoComun }), true);
+});
+

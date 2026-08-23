@@ -10,8 +10,45 @@
 // bloqueo; equivocarla en el otro deja a los establecimientos sin poder
 // reportar, y eso se nota tarde y mal. Pura y con pruebas.
 
+/**
+ * LAS DOS ALERTAS DEL DVR, POR SU `_id` HISTÓRICO.
+ *
+ * Son las mismas dos que Jarvis-express reconoce a mano desde marzo de 2023:
+ * la que reporta la caída y la que reporta el restablecimiento. El plan es que
+ * esto lo diga el catálogo (`Menu.dvrEffect`), pero ese campo es nuevo y nadie
+ * lo marcó todavía — y mientras tanto la compuerta no puede quedarse dormida.
+ *
+ * Por eso el efecto se resuelve en dos pasos: el catálogo manda, y si no dice
+ * nada se cae a estos `_id`. El día que las dos alertas tengan su `dvrEffect`
+ * cargado, este respaldo deja de usarse solo.
+ */
+export const ALERTA_DVR_LEGADA = {
+    down: '640f7c747d44282c3f625d79',   // «Falla de conexión con DVR»
+    up: '6417181494525c2ce4fc98aa',     // «Conexión restablecida»
+} as const;
+
+
+/**
+ * Qué le hace esta alerta a la conexión: 'down', 'up' o nada.
+ *
+ * @param alertId    el `_id` de la alerta que se está cargando
+ * @param dvrEffect  lo que diga el catálogo, si dice algo
+ */
+export const resolveDvrEffect = ({ alertId, dvrEffect }: {
+    alertId?: string | null;
+    dvrEffect?: string | null;
+}): 'down' | 'up' | null => {
+    if (dvrEffect === 'down' || dvrEffect === 'up') return dvrEffect;
+
+    const id = String(alertId ?? '');
+    if (id === ALERTA_DVR_LEGADA.down) return 'down';
+    if (id === ALERTA_DVR_LEGADA.up) return 'up';
+    return null;
+};
+
+
 export interface EntradaDelCandado {
-    /** Qué le hace al DVR la alerta que se está cargando (Menu.dvrEffect). */
+    /** Qué le hace al DVR la alerta que se está cargando, YA RESUELTO. */
     dvrEffect?: string | null;
 
     /** ¿El establecimiento tiene una caída abierta AHORA? */

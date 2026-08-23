@@ -3,7 +3,7 @@ import moment from 'moment-timezone';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import os from 'os';
 import DvrFailureModel from '../dvrFailure/dvrFailure.model.js';
-import { debeRechazarLaAlerta } from '../dvrFailure/dvrGate.lib.js';
+import { debeRechazarLaAlerta, resolveDvrEffect, ALERTA_DVR_LEGADA } from '../dvrFailure/dvrGate.lib.js';
 import NoveltieModel, { CommentSchema } from './noveltie.model.js';
 import LocalModel from '../local/local.model.js';
 import { commentYupSchema } from './novelty.squema.js';
@@ -430,14 +430,19 @@ export default class ControllerNovelty {
             // 'up'`, del catálogo. Hasta ahora eso vivía como un `_id` escrito a
             // mano en el front; ver la nota en menu.model.
             //
-            // MIENTRAS NADIE MARQUE `dvrEffect` EN EL CATÁLOGO, ESTO NO BLOQUEA
-            // NADA: sin una alerta marcada 'up' no habría forma de desbloquear
-            // un local, así que el candado no se echa. Es deliberado — un
-            // despliegue no puede dejar a los locales sin poder reportar por un
-            // dato que todavía no se cargó.
+            // El efecto se resuelve en dos pasos: el catálogo manda
+            // (`Menu.dvrEffect`) y, si no dice nada, se cae a los DOS `_id`
+            // históricos — los mismos que Jarvis-express reconoce a mano desde
+            // 2023. Sin ese respaldo la compuerta quedaba dormida: el campo es
+            // nuevo, nadie lo marcó, y cualquier alerta pasaba con el local
+            // caído.
             const idLocal = novelties.body.localId;
+            const efectoDvr = resolveDvrEffect({
+                alertId: novelties.body.alertId,
+                dvrEffect: resultMenu?.dvrEffect,
+            });
 
-            if (idLocal && Types.ObjectId.isValid(String(idLocal)) && resultMenu?.dvrEffect !== 'up') {
+            if (idLocal && Types.ObjectId.isValid(String(idLocal)) && efectoDvr !== 'up') {
 
                 const caidaAbierta = await DvrFailureModel
                     .findOne({ local: idLocal, active: true })
@@ -445,10 +450,19 @@ export default class ControllerNovelty {
                     .lean();
 
                 if (caidaAbierta) {
-                    const hayComoDesbloquear = Boolean(await MenuModel.exists({ dvrEffect: 'up' }));
+                    // La llave: una alerta capaz de reabrir el local. Vale la
+                    // marcada en el catálogo o la legada por `_id` — si no
+                    // existe NINGUNA, el candado no se echa, porque cerrarlo
+                    // sin llave deja al local mudo para siempre.
+                    const hayComoDesbloquear = Boolean(
+                        await MenuModel.exists({ $or: [
+                            { dvrEffect: 'up' },
+                            { _id: ALERTA_DVR_LEGADA.up },
+                        ] }),
+                    );
 
                     if (debeRechazarLaAlerta({
-                        dvrEffect: resultMenu?.dvrEffect,
+                        dvrEffect: efectoDvr,
                         hayCaidaAbierta: true,
                         hayComoDesbloquear,
                     })) {
