@@ -8,6 +8,7 @@ import { io } from '../../services/socket/io.js';
 import DvrFailureModel from './dvrFailure.model.js';
 import LocalModel from '../local/local.model.js';
 import { operationalDateOf, downtimeMinutesBetween } from './dvrFailure.lib.js';
+import { avisarCaidaAlGrupo } from './dvrAlert.service.js';
 import { dvrFailureSchema, dvrRestoreSchema, dvrQuerySchema } from './dvrFailure.schema.js';
 
 const routerDvrFailure = express.Router();
@@ -175,6 +176,12 @@ routerDvrFailure.post(`${nameApi}/dvr-failure`, validateSession, asyncHandler(as
         title: datos.alertName,
     });
     avisarAlReporte(episodio.toObject());
+
+    // El aviso al grupo «Información importante»: la foto de la falla con el
+    // establecimiento y la hora. No se espera a propósito —ver la nota en
+    // `dvrAlert.service.ts`—: un bot lento no puede volver un 500 un registro
+    // que ya quedó bien guardado.
+    avisarCaidaAlGrupo(episodio.toObject());
 
     return res.status(201).json({ status: 201, message: 'ok', failure: episodio });
 }));

@@ -73,15 +73,20 @@ const postJsonToBot = (url, payload) => new Promise((resolve, reject) => {
 });
 
 
-// Envía el PDF (base64) con caption a la API del bot de WhatsApp, a uno o varios
-// destinatarios. La lista se DEDUPLICA (número principal + adicionales) para que
-// ningún número reciba el mismo reporte dos veces aunque aparezca en ambas listas.
-export async function sendReportToWhatsapp({ pdfBuffer, caption, filename, number = REPORT_NUMBER, listNumber = [] }) {
+// Envía un ADJUNTO CUALQUIERA (base64) con caption a la API del bot, a uno o
+// varios destinatarios. La lista se DEDUPLICA (número principal + adicionales)
+// para que ningún número reciba lo mismo dos veces aunque aparezca en ambas.
+//
+// Es la versión general de `sendReportToWhatsapp`, que antes traía el
+// 'application/pdf' clavado adentro. Se separó para poder mandar también la FOTO
+// de una falla de conexión, que es un JPG: el bot acepta cualquier tipo en el
+// mismo endpoint, era el emisor el que solo sabía de PDF.
+export async function sendMediaToWhatsapp({ buffer, mimeType, caption, filename, number = REPORT_NUMBER, listNumber = [] }) {
     const chatIds = [...new Set([number, ...listNumber].filter(Boolean).map(toChatId))];
 
     const payload = {
-        'my-file': pdfBuffer.toString('base64'),
-        'type': 'application/pdf',
+        'my-file': buffer.toString('base64'),
+        'type': mimeType,
         'my-text': caption,
         'filename': filename
     };
@@ -111,6 +116,21 @@ export async function sendReportToWhatsapp({ pdfBuffer, caption, filename, numbe
     }
 
     return { chatId: recipients[0] || null, recipients, count: recipients.length, failed };
+}
+
+
+// El reporte de asistencia sigue teniendo su propia puerta, con el mismo nombre
+// y la misma firma de siempre: por dentro delega en el emisor general. Así los
+// llamadores que ya existen no se enteran del cambio.
+export async function sendReportToWhatsapp({ pdfBuffer, caption, filename, number = REPORT_NUMBER, listNumber = [] }) {
+    return sendMediaToWhatsapp({
+        buffer: pdfBuffer,
+        mimeType: 'application/pdf',
+        caption,
+        filename,
+        number,
+        listNumber,
+    });
 }
 
 

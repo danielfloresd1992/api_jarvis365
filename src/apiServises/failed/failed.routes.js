@@ -6,6 +6,7 @@ import { io } from '../../services/socket/io.js';
 import DvrFailureModel from '../dvrFailure/dvrFailure.model.js';
 import LocalModel from '../local/local.model.js';
 import { operationalDateOf, downtimeMinutesBetween } from '../dvrFailure/dvrFailure.lib.js';
+import { avisarCaidaAlGrupo } from '../dvrFailure/dvrAlert.service.js';
 
 const TZ = process.env.MONITORING_TZ || 'America/Caracas';
 
@@ -81,10 +82,19 @@ const avisarAlReporte = (episodio) => {
 // `failed-connection*` es el que Client365 ya escucha hoy, y
 // `noveltyReport:dvr-changed` es el que actualiza el reporte del día. Dejar de
 // emitir el viejo apagaría el aviso en la pantalla que lo usa.
-const avisarCaida = (episodio) => {
+const avisarCaida = (episodio, fotoEnElCuerpo = null) => {
     io.emit('dvr-failure:down', episodio);
     io.emit('failed-connection', formaVieja(episodio));
     avisarAlReporte(episodio);
+
+    // Y el aviso al grupo «Información importante». Va acá dentro y no en el
+    // endpoint porque `avisarCaida` es el embudo por el que pasa toda caída que
+    // entra por esta ruta: si mañana se agrega otra forma de reportarla, el
+    // aviso al grupo viene incluido sin que nadie tenga que acordarse.
+    //
+    // OJO: esta ruta vieja NO recibe `evidence` —descarta el `buffer_img` que le
+    // mandan—, así que estas caídas se avisan SIN FOTO. Ver la nota del POST.
+    avisarCaidaAlGrupo(episodio, fotoEnElCuerpo);
 };
 
 const avisarRestablecida = (episodio) => {
@@ -123,7 +133,7 @@ routesFailed.get(`${nameApi}/failed/all`, asyncHandler(async (req, res) => {
  * multimedia ya devolvió al subir la foto.
  */
 routesFailed.post(`${nameApi}/failed`, asyncHandler(async (req, res) => {
-    const { idLocal, localName, date, title } = req.body ?? {};
+    const { idLocal, localName, date, title, buffer_img } = req.body ?? {};
 
     if (!idLocal) {
         return res.status(400).json({ status: 400, error: 'Bad request', message: 'Falta idLocal' });
@@ -160,7 +170,10 @@ routesFailed.post(`${nameApi}/failed`, asyncHandler(async (req, res) => {
         alertName: title ?? '',
     });
 
-    avisarCaida(episodio.toObject());
+    // `buffer_img` se sigue SIN GUARDAR —ver la nota del endpoint—, pero se le
+    // pasa al aviso: para mandarla al grupo alcanza con tenerla un instante en
+    // memoria, y es la única foto que esta ruta llega a ver.
+    avisarCaida(episodio.toObject(), buffer_img);
 
     // 200 y `{ text: 'ok' }`, como antes: el cliente instalado comprueba el 200.
     return res.status(200).json({ text: 'ok' });

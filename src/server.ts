@@ -9,6 +9,7 @@ import { config as dotenvConfig } from 'dotenv';
 import { logBanner, logServerStart, logHttpStart, logSocketStart } from './util/logger.js';
 import { startAttendanceReportScheduler } from './apiServises/user/attendanceReport.job.js';
 import { startMonitoringWatcher } from './services/monitoring/monitoringWatcher.js';
+import { startDvrAlertScheduler } from './apiServises/dvrFailure/dvrAlert.job.js';
 import { join } from 'path';
 import * as url from 'url';
 import appConfig from './config/index.js';
@@ -136,6 +137,7 @@ server.listen(httpPort, () => {
     logSocketStart();
     startAttendanceReportScheduler();
     startMonitoringWatcher();
+    startDvrAlertScheduler();
     const httpPortDev: number = 8080;
     app_dev.listen(httpPortDev, () => {
         logHttpStart(httpPortDev);
