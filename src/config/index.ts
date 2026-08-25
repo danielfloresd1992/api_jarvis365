@@ -24,6 +24,12 @@ const REDIS_URL = process.env.REDIS_URL || '';
 // se le pasa nada, y una página de reporte con sus novedades embebidas cruza ese
 // umbral a partir de unas 29 alertas. Se mide sobre bytes YA descomprimidos.
 const BODY_LIMIT = process.env.BODY_LIMIT || '10mb';
+
+// La llave con la que se FIRMAN las API keys (HMAC-SHA256). No tiene default a
+// proposito: firmar con una cadena vacia produciria hashes que cualquiera puede
+// recalcular, y el sistema quedaria abierto sin que nadie lo note. Si falta, las
+// funciones de apiKey.lib lanzan al intentar usarla.
+const API_KEY_SECRET = process.env.API_KEY_SECRET || '';
 const CORS_ORIGINS = (process.env.CORS_ORIGINS || '')
     .split(',')
     .map((s) => s.trim())
@@ -38,6 +44,7 @@ export interface Config {
     CORS_ORIGINS: string[];
     COOKIE_SECURE: boolean;
     BODY_LIMIT: string;
+    API_KEY_SECRET: string;
 }
 
 const config: Config = {
@@ -49,6 +56,7 @@ const config: Config = {
     CORS_ORIGINS,
     COOKIE_SECURE: NODE_ENV === 'production',
     BODY_LIMIT,
+    API_KEY_SECRET,
 };
 
 export default config;
