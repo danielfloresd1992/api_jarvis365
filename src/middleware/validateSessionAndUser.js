@@ -4,6 +4,7 @@ import AttendanceModel from '../apiServises/user/attendance.model.js';
 import { getOperationalDay } from '../services/noveltyReport/noveltyReport.service.js';
 import ApiKeyModel from '../apiServises/apiKey/apiKey.model.js';
 import { parsearApiKey, secretoCoincide } from '../apiServises/apiKey/apiKey.lib.js';
+import { llavePuedePasar, motivoDelRechazo } from '../apiServises/apiKey/apiKeyGate.lib.js';
 import appConfig from '../config/index.js';
 config();
 
@@ -90,6 +91,28 @@ function validateSession(req, res, next){
                     name: llave.name,
                     scopes: llave.scopes ?? [],
                 };
+
+                // ── El candado de solo lectura ────────────────────────
+                // La llave ya demostro quien es; falta si puede hacer ESTO.
+                // La regla vive en `apiKeyGate.lib.js`, pura y con pruebas,
+                // porque equivocarla hacia el lado permisivo no se ve: la API
+                // sigue andando y simplemente deja borrar.
+                //
+                // No alcanza con mirar el verbo. Dos rutas de este proyecto son
+                // GET y sin embargo escriben (`/document/exit` hace deleteOne,
+                // `/document/resume/:id` crea una tarea); la lista de excepciones
+                // esta en esa misma regla.
+                if (!llavePuedePasar({ metodo: req.method, ruta: req.originalUrl, scopes: req.apiKey.scopes })) {
+                    if(SHOW_CONSOLE) console.log(colors.bgRed(`La integracion «${llave.name}» intento ${req.method} ${req.originalUrl} con una llave de solo lectura
+`.white));
+
+                    return res.status(403).json({
+                        status: 403,
+                        error: 'Forbidden',
+                        message: motivoDelRechazo({ metodo: req.method, ruta: req.originalUrl }),
+                        apiKey: llave.name,
+                    });
+                }
                 if(SHOW_CONSOLE) console.log(colors.bgBlue(`La integración «${llave.name}» accedió a un recurso\norigen: ${req.ip}\nrouter: ${req.originalUrl}\ndate: ${new Date()}\n`.white));
                 return next();
             }
