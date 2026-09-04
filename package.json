@@ -11,7 +11,8 @@
     "start": "node ./dist/server.js",
     "test": "node --test test/resolveBonus.test.ts test/bonusSchemas.test.ts test/dvrFailure.test.ts test/dvrAlert.test.ts test/apiKey.test.ts test/apiKeyGate.test.ts test/tabulador.test.ts",
     "debuggin": "set NODE_ENV=production&& set DEBUG=true&& npx nodemon ./src/server.ts",
-    "dev": "cross-env NODE_ENV=development npx nodemon"
+    "dev": "cross-env NODE_ENV=development npx nodemon",
+    "seed:tabulador": "npx tsx scripts/seed-tabulador.ts"
   },
   "devDependencies": {
     "@babel/cli": "^7.26.4",
