@@ -4,11 +4,24 @@
  *     npx tsx scripts/seed-tabulador.ts             muestra lo que haria; no escribe
  *     npx tsx scripts/seed-tabulador.ts --aplicar   escribe en la base del .env
  *
- * Idempotente: solo CREA los cargos que no existan (por nombre). Los que ya
- * esten no se tocan, para no pisar lo editado desde la pantalla. Antes de
- * escribir, cada fila pasa por el mismo esquema de yup que el POST y se
- * comprueba que el TOTAL SALARIO calculado coincide con la columna O de la
+ * DOS TRABAJOS DISTINTOS, y conviene no confundirlos:
+ *
+ *   CARGA INICIAL   crea los 25 cargos, y SOLO si la tabla esta vacia. Con la
+ *                   tabla poblada no crea nada: el nombre se edita desde la
+ *                   ficha, asi que un cargo renombrado se veria como uno que
+ *                   falta y se crearia duplicado. Paso de verdad con SUB
+ *                   GERENTE, renombrado a GERENTE DE OPERACIONES.
+ *   RELLENO         pone el salario base donde el campo FALTA. Es idempotente
+ *                   y corre siempre con --aplicar.
+ *
+ * Antes de escribir, cada fila pasa por el mismo esquema de yup que el POST y
+ * se comprueba que el TOTAL SALARIO calculado coincide con la columna O de la
  * hoja: si una sola fila no cuadra, no se escribe ninguna.
+ *
+ * El relleno existe porque los 25 cargos se cargaron antes de que el campo
+ * existiera, y sin el la quincena sale NaN. Toca solo los documentos donde el
+ * campo FALTA, asi que un cargo con salario propio no se pisa y una segunda
+ * corrida no rellena nada.
  *
  * Dos decisiones sobre la hoja:
  *   - El Nº de la hoja no es unico (dos filas con 3), asi que `order` es la
@@ -23,7 +36,7 @@ import mongoose from 'mongoose';
 import connectDB from '../src/config/db_connect.js';
 import TabuladorModel from '../src/apiServises/tabulador/tabulador.model.js';
 import tabuladorSchema from '../src/apiServises/tabulador/tabulador.schema.js';
-import { ratesOf } from '../src/apiServises/tabulador/tabulador.lib.js';
+import { ratesOf, DEFAULT_BASE_SALARY_BS } from '../src/apiServises/tabulador/tabulador.lib.js';
 
 
 /** Una fila de la hoja: los cuatro numeros que se teclean y el total que muestra, para comprobar. */
@@ -117,26 +130,63 @@ async function main() {
         return;
     }
 
-    // 3. Escribir: solo lo que no exista todavia.
+    // 3. Escribir.
     await connectDB();
     let creados = 0;
     let existentes = 0;
+    let rellenados = 0;
     try {
-        for (const { cargo } of cargos) {
-            const r = await TabuladorModel.updateOne(
-                { name: cargo.name },
-                { $setOnInsert: cargo },
-                { upsert: true },
-            );
-            if (r.upsertedCount) creados += 1;
-            else existentes += 1;
+        // LA CARGA INICIAL SOLO CORRE CON LA TABLA VACIA.
+        //
+        // Antes creaba «los que falten por nombre», y eso resucita cargos: el
+        // nombre se edita desde la ficha del tabulador, asi que renombrar SUB
+        // GERENTE a GERENTE DE OPERACIONES hacia que la siguiente corrida no lo
+        // encontrara y lo creara de nuevo, dejando los dos. Paso de verdad.
+        //
+        // Con la tabla ya poblada, el nombre dejo de ser una clave estable y
+        // este script no tiene forma de saber si un cargo falta o lo
+        // renombraron. Asi que no adivina: informa y no escribe. Para volver a
+        // cargar desde cero hay que vaciar la coleccion a mano, que es una
+        // decision de una persona y no de un script.
+        existentes = await TabuladorModel.countDocuments({});
+
+        if (existentes === 0) {
+            for (const { cargo } of cargos) {
+                await TabuladorModel.create(cargo);
+                creados += 1;
+            }
+        } else {
+            const nombres = new Set((await TabuladorModel.find({}).select('name').lean()).map((c) => c.name));
+            const ausentes = cargos.map(({ cargo }) => cargo.name).filter((n) => !nombres.has(n));
+            if (ausentes.length) {
+                console.log('');
+                console.log(`La tabla ya tiene ${existentes} cargos, asi que NO se crea ninguno.`);
+                console.log('Estos nombres de la hoja no estan en la base; lo mas probable es que');
+                console.log('los hayan renombrado desde la pantalla, no que falten:');
+                for (const n of ausentes) console.log(`  - ${n}`);
+            }
         }
+
+        // 4. Rellenar el salario base donde FALTE. Va despues de crear porque
+        //    los recien creados ya lo traen del esquema y no entran aqui. El
+        //    filtro es `$exists: false` y no `null` a proposito: lo que se
+        //    arregla es la ausencia del campo en los documentos viejos, no un
+        //    valor que alguien haya puesto a mano desde la pantalla.
+        const relleno = await TabuladorModel.updateMany(
+            { baseSalaryBs: { $exists: false } },
+            { $set: { baseSalaryBs: DEFAULT_BASE_SALARY_BS } },
+        );
+        rellenados = relleno.modifiedCount;
     } finally {
         await mongoose.disconnect();
     }
 
     console.log('');
-    console.log(`Listo: ${creados} creado(s), ${existentes} ya existia(n) y no se tocaron.`);
+    console.log(
+        creados
+            ? `Listo: ${creados} creado(s) en una tabla vacia, ${rellenados} rellenado(s) con el salario base de ${DEFAULT_BASE_SALARY_BS} Bs.`
+            : `Listo: la tabla ya tenia ${existentes} cargos y no se creo ninguno; ${rellenados} rellenado(s) con el salario base de ${DEFAULT_BASE_SALARY_BS} Bs.`,
+    );
 }
 
 

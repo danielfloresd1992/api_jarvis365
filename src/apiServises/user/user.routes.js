@@ -5,6 +5,7 @@ import { join, basename } from 'path';
 import sharp from 'sharp';
 import UserModel, { UpdateByUserSchema } from './user.model.js';
 import { userUpdateSchema } from './user.schema.js'
+import TabuladorModel from '../tabulador/tabulador.model.js';
 import addCredentials from '../../middleware/addCredential.js';
 import checkLaboralEntry from '../../middleware/checkLaboralEntry.js';
 import controller from './user.controller.js';
@@ -226,7 +227,11 @@ routerUser.get(`${nameApi}/user/list`, validateSession, async (req, res) => {
 
         // Solo un admin ve (y por ende puede editar) las banderas admin/super.
         const isAdmin = req.session.admin === true;
-        const fields = 'name surName dni email img jobInformation inabilited createdOn'
+        // `phone` viaja porque la nomina lo muestra en su propia columna. Sin el
+        // en este select la columna salia vacia para todos: el campo existe en
+        // el modelo y esta poblado, pero un `select` acotado lo dejaba fuera y
+        // eso no da ningun error, solo un hueco.
+        const fields = 'name surName dni email phone img jobInformation inabilited createdOn'
             + (isAdmin ? ' admin super' : '');
 
         const skip = (page - 1) * limit;
@@ -255,6 +260,60 @@ routerUser.get(`${nameApi}/user/list`, validateSession, async (req, res) => {
         return res.status(500).json({ status: 500, error: 'Error server internal', message: error.message });
     }
 });
+
+
+// ══════════════════════════════════════════════════════════════════════
+// ENDPOINT: El cargo del tabulador de un usuario
+// ══════════════════════════════════════════════════════════════════════
+// PUT .../user/tabulador/id=:id   body { tabuladorPosition: id | null }
+//
+// Existe porque el PUT generico de abajo reemplaza `jobInformation` ENTERO:
+// hace $set con el objeto que arma yup, asi que cambiar el cargo por esa via
+// obligaria al cliente a reenviar departamento y detalle, y si no los manda
+// los pisa. Cambiar el cargo es una accion sola en la ficha del empleado y
+// merece una ruta que toque solo esa clave.
+//
+// Por eso el $set va con notacion de punto ('jobInformation.tabuladorPosition')
+// y no con { jobInformation: {...} }: Mongo escribe esa clave y deja intactas
+// las hermanas, que es justo lo que el PUT generico no puede garantizar.
+//
+// El id del cargo se comprueba contra la coleccion antes de escribir, como
+// hace la asignacion de reglas de bono: un id con forma valida pero que no
+// existe, o un cargo dado de baja, dejaria al trabajador apuntando a algo
+// que no se paga, y eso saldria de la nomina sin dar ningun error.
+//
+// Se declara ANTES de /user/:id por la convencion de este archivo: lo
+// especifico antes que lo parametrico.
+routerUser.put(`${nameApi}/user/tabulador/id=:id`, validateSession, validateAdminUser, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ status: 400, error: 'Bad request', message: 'Id inválido' });
+
+    const { tabuladorPosition } = req.body ?? {};
+    const cargoId = tabuladorPosition == null ? null : tabuladorPosition;
+
+    if (cargoId !== null) {
+        if (typeof cargoId !== 'string' || !/^[0-9a-fA-F]{24}$/.test(cargoId)) {
+            return res.status(400).json({ status: 400, error: 'Bad request', message: 'El cargo no es un id valido' });
+        }
+
+        const cargo = await TabuladorModel.findById(cargoId).select('active').lean();
+        if (!cargo) return res.status(404).json({ status: 404, error: 'Not found', message: 'El cargo no existe' });
+        if (cargo.active === false) return res.status(400).json({ status: 400, error: 'Bad request', message: 'El cargo esta inactivo' });
+    }
+
+    const user = await UserModel.findByIdAndUpdate(
+        id,
+        {
+            $set: { 'jobInformation.tabuladorPosition': cargoId },
+            $push: { updateByUser: { idRef: req.session.userId, change: ['jobInformation.tabuladorPosition'] } },
+        },
+        { new: true },
+    ).select('_id name surName jobInformation').lean();
+
+    if (!user) return res.status(404).json({ status: 404, error: 'Not found', message: 'El usuario no existe' });
+
+    return res.status(200).json({ status: 200, message: 'ok', user });
+}));
 
 
 routerUser.put(`${nameApi}/user/:id`, validateAdminUser, asyncHandler(async (req, res) => {

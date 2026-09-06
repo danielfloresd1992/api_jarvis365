@@ -6,6 +6,7 @@ import { asyncHandler } from '../../middleware/asyncHandler.js';
 import TabuladorModel from './tabulador.model.js';
 import tabuladorSchema from './tabulador.schema.js';
 import { withRates } from './tabulador.lib.js';
+import UserModel from '../user/user.model.js';
 
 const routerTabulador = express.Router();
 
@@ -51,6 +52,29 @@ routerTabulador.get(`${nameApi}/tabulador`, validateSession, validateAdminUser, 
     return res.status(200).json({
         status: 200,
         positions: cargos.map(withRates),
+    });
+}));
+
+
+/**
+ * GET /tabulador/options — solo el nombre y el orden de los cargos activos.
+ *
+ * Existe para que cualquier pantalla con sesion muestre el nombre de un cargo
+ * sin exponer los salarios, que siguen siendo de administrador: la ficha de
+ * un empleado o el directorio necesitan escribir "SUPERVISOR" junto a una
+ * persona, no cuanto cobra. Por eso el select es cerrado y no pasa por
+ * `withRates`. Va antes de /tabulador/id=:id por la convencion de la casa de
+ * declarar lo especifico antes que lo parametrico.
+ */
+routerTabulador.get(`${nameApi}/tabulador/options`, validateSession, asyncHandler(async (_req, res) => {
+    const cargos = await TabuladorModel.find({ active: true })
+        .select('name order')
+        .sort({ order: 1, name: 1 })
+        .lean();
+
+    return res.status(200).json({
+        status: 200,
+        options: cargos.map(cargo => ({ _id: cargo._id, name: cargo.name, order: cargo.order })),
     });
 }));
 
@@ -107,19 +131,34 @@ routerTabulador.put(`${nameApi}/tabulador/id=:id`, validateSession, validateAdmi
 }));
 
 
+/** Cuantos trabajadores tienen este cargo. Es lo que decide si se puede borrar. */
+const trabajadoresQueLoUsan = (id: string): Promise<number> =>
+    UserModel.countDocuments({ 'jobInformation.tabuladorPosition': id });
+
+
 /**
  * DELETE /tabulador/id=:id
  *
- * Hoy borra sin mas, porque todavia no hay trabajadores que apunten al
- * tabulador. El dia que existan, esta ruta tiene que hacer lo que hace la de
- * reglas de bono: contar cuantos lo usan y responder 409 con `inUse` en vez
- * de borrar — un trabajador apuntando a un cargo que no existe sale de la
- * nomina sin dar ningun error, que es la peor forma de dejar de pagar. Para
- * eso ya existe `active`: desactivar es la baja normal.
+ * Desde que el usuario apunta al tabulador (jobInformation.tabuladorPosition)
+ * esta ruta hace lo mismo que la de reglas de bono: cuenta cuantos lo usan y
+ * responde 409 con `inUse` en vez de borrar. Un trabajador apuntando a un
+ * cargo que no existe saldria de la nomina sin dar ningun error, que es la
+ * peor forma de dejar de pagar. Para eso ya existe `active`: desactivar es la
+ * baja normal, y un cargo inactivo ya no se puede asignar.
  */
 routerTabulador.delete(`${nameApi}/tabulador/id=:id`, validateSession, validateAdminUser, asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!Types.ObjectId.isValid(id)) return idInvalido(res);
+
+    const enUso = await trabajadoresQueLoUsan(id);
+    if (enUso > 0) {
+        return res.status(409).json({
+            status: 409,
+            error: 'conflict',
+            inUse: enUso,
+            message: `Lo tienen ${enUso} trabajador(es). Desactivalo en lugar de borrarlo: deja de ofrecerse pero los que ya lo tienen no cambian.`,
+        });
+    }
 
     const borrado = await TabuladorModel.findByIdAndDelete(id);
     if (!borrado) return res.status(404).json({ status: 404, error: 'Not found', message: 'El cargo no existe' });

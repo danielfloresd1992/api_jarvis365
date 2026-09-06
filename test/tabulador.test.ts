@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import tabuladorSchema from '../src/apiServises/tabulador/tabulador.schema.ts';
-import { ratesOf, withRates, DAYS_PER_MONTH } from '../src/apiServises/tabulador/tabulador.lib.ts';
+import TabuladorModel from '../src/apiServises/tabulador/tabulador.model.ts';
+import { ratesOf, withRates, DAYS_PER_MONTH, PAY_PERIODS_PER_MONTH, DEFAULT_BASE_SALARY_BS } from '../src/apiServises/tabulador/tabulador.lib.ts';
 
 // ══════════════════════════════════════════════════════════════════════
 // EL TABULADOR
@@ -15,6 +16,13 @@ import { ratesOf, withRates, DAYS_PER_MONTH } from '../src/apiServises/tabulador
 //   2. Que las tarifas salgan IGUALES que en la hoja TABULADOR del modelo en
 //      Excel, celda por celda, con las filas reales de la hoja como
 //      referencia. Si alguien toca una constante, esto es lo que lo delata.
+//
+//   3. Que el SALARIO BASE siga siendo lo que es: un campo DEL CARGO, el unico
+//      en bolivares, del que solo se deriva la quincena. No sale de la hoja
+//      —la hoja esta toda en dolares— y por eso se prueba aparte. Hoy vale 130
+//      en los 25 cargos, y esa coincidencia es justo la que hace facil volver
+//      a convertirlo en una constante global: estas pruebas usan dos cargos
+//      con salarios distintos para que eso no pase inadvertido.
 
 const OPC = { abortEarly: false, stripUnknown: true };
 
@@ -71,6 +79,11 @@ test('el esquema rechaza lo que pagaria mal', async (t) => {
         await rechaza({ ...SUB_GERENTE, zeroMarginOverride: -10 });
     });
 
+    await t.test('salario base negativo — es el unico numero en bolivares, pero tampoco se paga en negativo', async () => {
+        const mensaje = await rechaza({ ...SUB_GERENTE, baseSalaryBs: -1 });
+        assert.match(mensaje, /salario base/i);
+    });
+
     await t.test('orden decimal', async () => {
         await rechaza({ ...SUB_GERENTE, order: 1.5 });
     });
@@ -90,6 +103,16 @@ test('el esquema acepta y normaliza', async (t) => {
         const { complementaryBonus: _fuera, ...sinBono } = SUB_GERENTE;
         const v = await tabuladorSchema.validate(sinBono, OPC);
         assert.equal(v.complementaryBonus, 0);
+    });
+
+    await t.test('salario base ausente = 130 — un cuerpo de los de antes, sin el campo, no puede romperse', async () => {
+        const v = await tabuladorSchema.validate(SUB_GERENTE, OPC);
+        assert.equal(v.baseSalaryBs, 130);
+    });
+
+    await t.test('el salario base es del cargo: si viene otro, se guarda ese y no el minimo', async () => {
+        const v = await tabuladorSchema.validate({ ...SUB_GERENTE, baseSalaryBs: 260 }, OPC);
+        assert.equal(v.baseSalaryBs, 260);
     });
 
     await t.test('el nombre sale en mayusculas y sin espacios sobrantes — la hoja trae cuatro asi', async () => {
@@ -163,16 +186,70 @@ test('las tarifas son las de la hoja, celda por celda', async (t) => {
         igual(con.hourRate, sin.hourRate, 'hora');
     });
 
-    await t.test('withRates conserva el cargo y le pega las nueve tarifas', () => {
+    // Las dos que siguen son la unica cifra derivada que no sale de la hoja: la
+    // quincena del salario base, en bolivares. Se prueba con DOS cargos de
+    // salario distinto a proposito. Con uno solo, una constante global de 65
+    // pasaria las pruebas igual de bien, y eso es exactamente lo que no puede
+    // volver a ser.
+    await t.test('la quincena es la mitad del salario base del cargo: 130 da 65 y 260 da 130', () => {
+        const cifras = { monthlyBasePackage: 400, fullPackage: 500, complementaryBonus: 100 };
+        igual(ratesOf({ ...cifras, baseSalaryBs: 130 }).halfMonthBaseSalaryBs, 65, 'quincena del minimo vigente');
+        igual(ratesOf({ ...cifras, baseSalaryBs: 260 }).halfMonthBaseSalaryBs, 130, 'quincena de un cargo con otro salario base');
+    });
+
+    await t.test('un cargo sin salario base cae en los 130 por defecto — los 25 que ya estan en Mongo no traen el campo y darian NaN', () => {
+        const r = ratesOf({ monthlyBasePackage: 400, fullPackage: 500, complementaryBonus: 100 });
+        assert.ok(Number.isFinite(r.halfMonthBaseSalaryBs), `la quincena salio ${r.halfMonthBaseSalaryBs}`);
+        igual(r.halfMonthBaseSalaryBs, 65, 'quincena por defecto');
+    });
+
+    await t.test('withRates conserva el cargo y le pega las diez tarifas', () => {
         const cargo = { _id: 'abc', name: 'AUDITOR', monthlyBasePackage: 200, fullPackage: 200, complementaryBonus: 20, overtimeHourRate: 1.3, zeroMarginOverride: null, active: true };
         const r = withRates(cargo);
         assert.equal(r._id, 'abc');
         assert.equal(r.overtimeHourRate, 1.3);
         igual(r.totalSalary, 220, 'total de AUDITOR');
-        assert.equal(Object.keys(r).length, Object.keys(cargo).length + 9);
+        igual(r.halfMonthBaseSalaryBs, 65, 'quincena de AUDITOR — el cargo no trae el campo, va por defecto');
+        assert.equal(Object.keys(r).length, Object.keys(cargo).length + 10);
     });
 
     await t.test('el mes de tarifa es de 30 dias, como en la hoja', () => {
         assert.equal(DAYS_PER_MONTH, 30);
+    });
+
+    await t.test('el salario base son 130 Bs y el mes se paga en dos veces', () => {
+        assert.equal(DEFAULT_BASE_SALARY_BS, 130);
+        assert.equal(PAY_PERIODS_PER_MONTH, 2);
+    });
+});
+
+
+// ══════════════════════════════════════════════════════════════════════
+// EL 130 ESTA ESCRITO EN TRES SITIOS
+// ══════════════════════════════════════════════════════════════════════
+// La constante de la lib, el `default` del esquema de mongoose y el `.default`
+// de yup. No se importan entre si a proposito: el modelo y el esquema se
+// cargan tambien desde estas pruebas, que leen las fuentes .ts, y ahi un
+// import con extension .js no resuelve.
+//
+// Asi que la coherencia la sostiene esta prueba. Si alguien sube el salario
+// minimo en un sitio y se olvida de los otros, un cargo nuevo se guardaria con
+// un salario y se validaria contra otro, y la diferencia se paga.
+
+test('el salario base por defecto es el mismo numero en los tres sitios', async (t) => {
+
+    await t.test('la constante de la lib y el default del modelo', () => {
+        const enElModelo = TabuladorModel.schema.path('baseSalaryBs').options.default;
+        assert.equal(enElModelo, DEFAULT_BASE_SALARY_BS, 'el modelo guarda otro minimo que la lib');
+    });
+
+    await t.test('la constante de la lib y el default de yup', async () => {
+        const { overtimeHourRate, ...resto } = SUB_GERENTE;
+        const v = await tabuladorSchema.validate({ ...resto, overtimeHourRate }, OPC);
+        assert.equal(v.baseSalaryBs, DEFAULT_BASE_SALARY_BS, 'yup acepta otro minimo que la lib');
+    });
+
+    await t.test('el modelo no lo deja negativo', () => {
+        assert.equal(TabuladorModel.schema.path('baseSalaryBs').options.min, 0);
     });
 });

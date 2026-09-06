@@ -23,11 +23,16 @@ import { Schema, model, Types } from 'mongoose';
 // 1,04 la normal; un subgerente 2,60 y 2,08). Es un dato de negocio.
 //
 //
-// EL DINERO ES EN DOLARES
+// EL DINERO ES EN DOLARES, MENOS UNO
 //
 // Todo el tabulador esta en dolares; el paso a bolivares lo hace la nomina
 // con la tasa del momento (la hoja "MARGEN 0" multiplica por 800). Aqui no
 // hay moneda ni tasa: son globales, no del cargo.
+//
+// La excepcion es `baseSalaryBs`, el salario minimo declarado del cargo: ese
+// nace en bolivares y se paga en bolivares, no hay conversion que hacerle, y
+// convertirlo a dolares para guardarlo lo dejaria atado a la tasa del dia en
+// que se tecleo. Se guarda tal como se declara.
 //
 //
 // POR QUE NO HAY VIRTUALES NI VALIDADOR CRUZADO EN EL ESQUEMA
@@ -66,6 +71,20 @@ export interface TabuladorPositionDoc {
      */
     zeroMarginOverride: number | null;
 
+    /**
+     * SALARIO BASE, en BOLIVARES: la unica cifra del cargo que no esta en
+     * dolares. Es el salario minimo declarado, el que la hoja NOMINA 30-SM
+     * paga en dos veces al mes. No es `monthlyBasePackage`, que es el paquete
+     * en dolares y no tiene relacion con el minimo: son dos numeros distintos
+     * que se llaman parecido, y confundirlos paga mal.
+     *
+     * Hoy vale lo mismo para los veinticinco cargos, pero se guarda por cargo
+     * y no como ajuste global porque es del cargo y puede diferir. La quincena
+     * no se guarda: se deriva en `ratesOf`, para no tener el mismo dato dos
+     * veces y que un dia discrepen.
+     */
+    baseSalaryBs: number;
+
     /** Un cargo en uso no se borra: se desactiva. Los trabajadores lo siguen viendo. */
     active: boolean;
 
@@ -103,6 +122,18 @@ const TabuladorPosition = new Schema<TabuladorPositionDoc>({
     overtimeHourRate: { type: Number, required: true, min: 0 },
 
     zeroMarginOverride: { type: Number, default: null, min: 0 },
+
+    // ── El salario base, en bolivares ─────────────────────────────────
+    // `required` y ademas `default`: los documentos que ya estan en Mongo se
+    // guardaron sin el campo, y sin el respaldo un guardado sobre cualquiera
+    // de ellos fallaria por un dato que nadie tecleo nunca.
+    //
+    // El 130 va literal y no importado de DEFAULT_BASE_SALARY_BS porque este
+    // archivo se carga tambien desde las pruebas, que leen las fuentes .ts, y
+    // ahi un import con extension .js no resuelve. Que los tres 130 del modulo
+    // —este, el del esquema y la constante de la lib— sigan siendo el mismo
+    // numero lo garantiza una prueba, no la confianza.
+    baseSalaryBs: { type: Number, required: true, default: 130, min: 0 },
 
     // ── Baja ──────────────────────────────────────────────────────────
     active: { type: Boolean, default: true },

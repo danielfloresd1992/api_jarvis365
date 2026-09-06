@@ -95,17 +95,23 @@ export default model('user', new Schema({
             type: String,
             enum: ['Operaciones', 'Sistemas y desarrollo', 'Reportes', 'Recursos Humanos', 'Audioria']
         },
-        position: {
-            type: String,
-            // Aquí puedes listar todos los puestos posibles
-            enum: [
-                'Gerente', 'Subgerente', 'Coordinador', 'Supervisor', 'Operador senior', 'Operador experto', 'Operador',
-                'Verificador', 'Auditor de datos',
-                'Analista de sistemas', 'Analista de reportes', 'Analista de auditoria', 'Analista de RRHH'
-            ]
-        },
         detail: {
             type: String,
+            default: null,
+        },
+        // El cargo del trabajador es una referencia al tabulador y no un texto
+        // de una lista fija, porque el tabulador es el que sabe cuanto paga
+        // cada cargo: con el id se llega a las tarifas sin copiar nada aqui.
+        //
+        // Aqui vivia `position`, un String con enum de trece puestos. Se quito
+        // la declaracion pero NO el dato: Mongoose no borra lo que deja de
+        // declarar, asi que los documentos conservan el texto viejo y el
+        // script de migracion lo lee crudo (con .lean() o aggregate) para
+        // convertirlo en esta referencia. Ninguna otra ruta lo lee ni lo
+        // escribe.
+        tabuladorPosition: {
+            type: Schema.Types.ObjectId,
+            ref: 'TabuladorPosition',
             default: null,
         },
         required: false

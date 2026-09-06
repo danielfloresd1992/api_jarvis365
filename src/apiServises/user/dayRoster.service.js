@@ -1,6 +1,10 @@
 import UserModel from './user.model.js';
 import AttendanceModel from './attendance.model.js';
 import { getOperationalDay } from '../../services/noveltyReport/noveltyReport.service.js';
+// Solo por el efecto de registrar el modelo 'TabuladorPosition': el populate
+// de abajo lo busca por nombre y, si este servicio se carga sin pasar por
+// app.ts (una prueba, un script), Mongoose no lo conoce y el populate falla.
+import '../tabulador/tabulador.model.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // SERVICIO: Ficha del personal del día (roster del día OPERATIVO)
@@ -85,6 +89,10 @@ export async function buildTodayRoster() {
         // /user, que no los renderiza): no forman parte del roster del día.
         UserModel.find({ inabilited: { $ne: true }, 'workSchedule.outForkSchedule': { $ne: true } })
             .select('name surName img jobInformation workSchedule')
+            // El cargo vive en el tabulador y el usuario guarda solo la
+            // referencia; aqui se trae el nombre. No se filtra por `active`:
+            // un cargo desactivado sigue siendo el cargo de quien lo tiene.
+            .populate('jobInformation.tabuladorPosition', 'name')
             .lean(),
         AttendanceModel.find({ date: civilDate })
             .select('userId scheduleOverride onDuty auxiliary checkIn checkOut isLate')
@@ -124,7 +132,10 @@ export async function buildTodayRoster() {
             surName: u.surName ?? '',
             img: u.img ?? null,
             department: u.jobInformation?.department ?? null,
-            position: u.jobInformation?.position ?? null,
+            // Nombre del cargo del tabulador y nada mas: el usuario no guarda
+            // el texto del puesto, solo la referencia, para que no haya dos
+            // fuentes del mismo dato. Sin cargo asignado va null, como el resto.
+            position: u.jobInformation?.tabuladorPosition?.name ?? null,
             // Grupo de trabajo (jobInformation.detail): "Apoyo matutino",
             // "Verificadores", etc. Se recorta porque hay valores con espacios.
             group: u.jobInformation?.detail?.trim() || null,

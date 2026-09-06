@@ -3,6 +3,10 @@ import { esAltaDeHoy } from './newEmployee.lib.js';
 import UserModel from './user.model.js';
 import AttendanceModel from './attendance.model.js';
 import { SYSTEM_USER_ID } from '../../libs/systemUser.js';
+// Solo por el efecto de registrar el modelo 'TabuladorPosition': el populate
+// del corte lo busca por nombre y, si este servicio se carga sin pasar por
+// app.ts (una prueba, un script), Mongoose no lo conoce y el populate falla.
+import '../tabulador/tabulador.model.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // SERVICIO: Corte diario de asistencia (retardos y ausencias)
@@ -149,7 +153,13 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
     const nowMinutes = (now.hours() * 60) + now.minutes();
 
     const [users, records] = await Promise.all([
-        UserModel.find({ inabilited: false, 'workSchedule.outForkSchedule': { $ne: true } }),
+        // El cargo vive en el tabulador y el usuario guarda solo la
+        // referencia; aqui se trae el nombre (mismo criterio que
+        // dayRoster.service.js). El documento sigue hidratado a proposito:
+        // resolveEffectiveRule lee scheduleByDay como Map y no hay razon
+        // para tocar eso por un populate.
+        UserModel.find({ inabilited: false, 'workSchedule.outForkSchedule': { $ne: true } })
+            .populate('jobInformation.tabuladorPosition', 'name'),
         AttendanceModel.find({ date: todayMidnight })
     ]);
 
@@ -181,7 +191,10 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
             name: `${user.name || ''} ${user.surName || ''}`.trim(),
             dni: user.dni || '—',
             department: user.jobInformation?.department || '—',
-            position: user.jobInformation?.position || '—',
+            // Nombre del cargo del tabulador y nada mas: el usuario ya no
+            // guarda el texto del puesto, solo la referencia. Sin cargo va el
+            // mismo guion que usan las otras columnas vacias.
+            position: user.jobInformation?.tabuladorPosition?.name ?? '—',
             shift: rule.shift,
             workType: rule.workType,
             scheduleSource: rule.source,

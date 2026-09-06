@@ -18,6 +18,16 @@ const dolares = (nombre: string) => yup.number()
     .min(0, `${nombre} no puede ser negativo`);
 
 
+/**
+ * Un monto en bolivares. Mismo cuerpo que `dolares` —a yup la moneda le da
+ * igual—, pero con el nombre honesto: en un archivo donde todo lo demas esta
+ * en dolares, leer `dolares('El salario base')` haria pensar lo que no es.
+ */
+const bolivares = (nombre: string) => yup.number()
+    .typeError(`${nombre} debe ser un número`)
+    .min(0, `${nombre} no puede ser negativo`);
+
+
 const tabuladorSchema = yup.object({
 
     // ── Identificacion ────────────────────────────────────────────────
@@ -45,6 +55,15 @@ const tabuladorSchema = yup.object({
     // `null` es "usar la formula". Un numero solo cuando difiere de ella a
     // proposito, como el 130 de RRHH en la hoja.
     zeroMarginOverride: dolares('El margen "0" manual').nullable().default(null),
+
+
+    // ── El salario base, en bolivares ─────────────────────────────────
+    // Con `default` y sin `required`: un PUT es un reemplazo completo, y los
+    // cuerpos armados antes de que el campo existiera no lo mandan. Exigirlo
+    // romperia esos guardados por un dato que el front todavia no tenia; con
+    // el respaldo entran con el minimo vigente.
+    // El 130 va literal; ver la nota del mismo campo en tabulador.model.ts.
+    baseSalaryBs: bolivares('El salario base').default(130),
 
 
     // ── Baja ──────────────────────────────────────────────────────────

@@ -1,11 +1,18 @@
 import * as yup from 'yup';
 
 const DEPARTMENT_ENUM = ['Operaciones', 'Sistemas y desarrollo', 'Reportes', 'Recursos Humanos', 'Audioria'];
-const POSITION_ENUM = [
-    'Gerente', 'Subgerente', 'Coordinador', 'Supervisor', 'Operador senior', 'Operador experto',
-    'Operador', 'Verificador', 'Auditor de datos',
-    'Analista de sistemas', 'Analista de reportes', 'Analista de auditoria', 'Analista de RRHH'
-];
+
+// El cargo ya no es un texto de una lista fija sino el id de un cargo del
+// tabulador, que es quien sabe cuanto paga cada uno. Aqui solo se comprueba
+// la forma del id: que el cargo exista y este activo lo decide la ruta, que
+// es la que puede consultar la coleccion.
+//
+// Es un `.test` y no un `.matches` porque `.matches` deja pasar null y
+// undefined sin mirar, y aqui hace falta decir con claridad que null es
+// "sin cargo" y cualquier otra cosa que no sea un ObjectId es un error.
+const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
+const tabuladorPositionSchema = yup.string().nullable().default(null)
+    .test('cargo-id', 'El cargo no es un id valido', (valor) => valor == null || OBJECT_ID.test(valor));
 
 // Sub-schema de validación para un día individual de scheduleByDay
 const dayScheduleSchema = yup.object({
@@ -58,9 +65,7 @@ export const userSchemaComplete = yup.object({
         department: yup.string()
             .oneOf(DEPARTMENT_ENUM, 'Departamento no válido')
             .nullable(),
-        position: yup.string()
-            .oneOf(POSITION_ENUM, 'Puesto no válido')
-            .nullable()
+        tabuladorPosition: tabuladorPositionSchema,
     }).nullable().default(null),
 
     workSchedule: yup.object({
@@ -88,9 +93,7 @@ export const userUpdateSchema = yup.object({
         department: yup.string()
             .oneOf(DEPARTMENT_ENUM, 'Departamento no válido')
             .optional(),
-        position: yup.string()
-            .oneOf(POSITION_ENUM, 'Puesto no válido')
-            .optional(),
+        tabuladorPosition: tabuladorPositionSchema,
         detail: yup.string().nullable().default(null),
     }).nullable().optional(),
 
