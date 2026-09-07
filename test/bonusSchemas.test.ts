@@ -130,27 +130,21 @@ test('la regla acepta lo válido y pone los defectos', async (t) => {
 });
 
 
-test('los valores globales', async (t) => {
+test('el valor global del bono', async (t) => {
+    // Fue un par —el valor del bono y la tasa de cambio— hasta que la tasa se
+    // mudó a su propio recurso. De ahí que acá quede un solo campo y que sea
+    // obligatorio: sin un segundo campo, "mandá solo uno" ya no existe.
 
     await t.test('un cuerpo vacío se rechaza — no es "no cambies nada"', async () => {
         await rechaza(bonusSettingsSchema, {});
     });
 
-    await t.test('valores negativos', async () => {
+    await t.test('un valor negativo', async () => {
         await rechaza(bonusSettingsSchema, { pointValue: -1 });
-        await rechaza(bonusSettingsSchema, { exchangeRate: -0.5 });
     });
 
-    await t.test('una tasa no numérica', async () => {
-        await rechaza(bonusSettingsSchema, { exchangeRate: 'setecientos' });
-    });
-
-    await t.test('mandar solo la tasa deja el otro sin tocar', async () => {
-        // Es lo habitual: la tasa cambia mucho más seguido que el valor del bono,
-        // y mandar los dos ensuciaría el historial con un cambio que no ocurrió.
-        const r = await bonusSettingsSchema.validate({ exchangeRate: 700 }, OPC);
-        assert.equal(r.exchangeRate, 700);
-        assert.equal(r.pointValue ?? null, null);
+    await t.test('un valor no numérico', async () => {
+        await rechaza(bonusSettingsSchema, { pointValue: 'veinte centavos' });
     });
 
     await t.test('un string numérico se castea', async () => {
@@ -159,10 +153,32 @@ test('los valores globales', async (t) => {
         assert.equal(r.pointValue, 0.2);
     });
 
+    await t.test('un valor infinito se rechaza', async () => {
+        // `1e999` es finito de escribir e infinito de guardar: Mongoose lo
+        // castea sin quejarse y BSON lo almacena. Después `getBonusSettings` lo
+        // descarta por no finito y sella con el valor por defecto, y el GET
+        // responde `null` porque JSON no sabe escribir Infinity — el valor
+        // configurado se pierde sin que nadie vea un error.
+        await rechaza(bonusSettingsSchema, { pointValue: 1e999 });
+        await rechaza(bonusSettingsSchema, { pointValue: '1e999' });
+    });
+
     await t.test('el cero es un valor legítimo', async () => {
-        // La tasa arranca en cero hasta que alguien la carga.
-        const r = await bonusSettingsSchema.validate({ exchangeRate: 0 }, OPC);
-        assert.equal(r.exchangeRate, 0);
+        const r = await bonusSettingsSchema.validate({ pointValue: 0 }, OPC);
+        assert.equal(r.pointValue, 0);
+    });
+
+    await t.test('la tasa de cambio ya no entra por acá', async () => {
+        // Un front viejo que siga mandándola no debe escribir nada: `stripUnknown`
+        // la descarta, y lo que queda es un cuerpo sin el campo obligatorio.
+        await rechaza(bonusSettingsSchema, { exchangeRate: 700 });
+    });
+
+    await t.test('y colada junto al valor del bono, tampoco pasa', async () => {
+        const r = await bonusSettingsSchema.validate(
+            { pointValue: 0.25, exchangeRate: 700 }, OPC) as Record<string, unknown>;
+        assert.equal(r.pointValue, 0.25);
+        assert.equal(r.exchangeRate, undefined);
     });
 });
 

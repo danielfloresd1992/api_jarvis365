@@ -135,6 +135,8 @@ import { routerUser } from './apiServises/user/user.routes.js';
 import { routerNotification } from './apiServises/notification/notification.routes.js';
 import { routerBonus } from './apiServises/bonus/bonus.routes.js';
 import { routerTabulador } from './apiServises/tabulador/tabulador.routes.js';
+import { routerNomina } from './apiServises/nomina/nomina.routes.js';
+import { routerExchangeRate } from './apiServises/exchangeRate/exchangeRate.routes.js';
 import { routerApiKey } from './apiServises/apiKey/apiKey.routes.js';
 import routerMultimedia from './apiServises/multimedia/routes.index.ts'
 import swaggerUi from 'swagger-ui-express';
@@ -172,6 +174,8 @@ app
     .use(routerNoveltyReport)
     .use(routerBonus)
     .use(routerTabulador)
+    .use(routerNomina)
+    .use(routerExchangeRate)
     .use(routerApiKey)
     .use(routerMonitoring)
     .use(routesTimer)

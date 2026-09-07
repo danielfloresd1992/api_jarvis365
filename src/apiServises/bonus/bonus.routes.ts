@@ -7,7 +7,7 @@ import BonusSettingsModel from './bonusSettings.model.js';
 import BonusRuleModel from './bonusRule.model.js';
 import BonusCategoryModel from './bonusCategory.model.js';
 import MenuModel from '../menu/menu.model.js';
-import { getBonusPointValue, saveBonusSettings, DEFAULT_POINT_VALUE, DEFAULT_EXCHANGE_RATE } from './bonusSettings.lib.js';
+import { getBonusPointValue, saveBonusSettings, DEFAULT_POINT_VALUE } from './bonusSettings.lib.js';
 import bonusSettingsSchema from './bonusSettings.schema.js';
 import bonusRuleSchema, { menuBonusRulesSchema } from './bonusRule.schema.js';
 import bonusCategorySchema from './bonusCategory.schema.js';
@@ -20,22 +20,27 @@ const OPCIONES_VALIDACION = { abortEarly: false, stripUnknown: true };
 
 
 // ══════════════════════════════════════════════════════════════════════
-// LOS VALORES GLOBALES
+// EL VALOR GLOBAL
 // ══════════════════════════════════════════════════════════════════════
-// Cuánto vale un bono y a qué cambio se paga. Dos números para todo el sistema.
+// Cuánto vale un bono. Un número para todo el sistema.
+//
+// Acá se administraba también la tasa de cambio. Se mudó a su propio recurso
+// —`/exchange-rate`— porque cambia todos los días y la usan dos módulos, el bono
+// y la nómina; el porqué largo está en el encabezado de `bonusSettings.model.ts`.
+// Estas tres rutas ya no la devuelven ni la aceptan: quien la necesite la pide
+// allá.
 
 
 /**
- * GET /bonus/settings — las dos variables globales del sistema.
+ * GET /bonus/settings — la variable global del sistema de bonificación.
  *
- *   pointValue    cuánto vale UN bono, en dólares
- *   exchangeRate  la tasa del BCV con la que se paga en bolívares
+ *   pointValue  cuánto vale UN bono, en dólares
  *
- * Lo lee cualquiera con sesión: la pantalla las muestra y el informe las
- * necesita para explicar los totales. Cambiarlas sí es de admin.
+ * Lo lee cualquiera con sesión: la pantalla lo muestra y el informe lo necesita
+ * para explicar los totales. Cambiarlo sí es de admin.
  *
- * Si nunca se configuró devuelve los valores por defecto sin crear nada: leer
- * no debería escribir en la base.
+ * Si nunca se configuró devuelve el valor por defecto sin crear nada: leer no
+ * debería escribir en la base.
  */
 routerBonus.get(`${nameApi}/bonus/settings`, validateSession, asyncHandler(async (req, res) => {
     const ajustes = await BonusSettingsModel.findOne().lean();
@@ -43,7 +48,6 @@ routerBonus.get(`${nameApi}/bonus/settings`, validateSession, asyncHandler(async
     return res.status(200).json({
         status: 200,
         pointValue: ajustes?.pointValue ?? DEFAULT_POINT_VALUE,
-        exchangeRate: ajustes?.exchangeRate ?? DEFAULT_EXCHANGE_RATE,
         updatedAt: ajustes?.updatedAt ?? null,
         updatedBy: ajustes?.updatedBy ?? null,
         configured: Boolean(ajustes),
@@ -52,13 +56,14 @@ routerBonus.get(`${nameApi}/bonus/settings`, validateSession, asyncHandler(async
 
 
 /**
- * PUT /bonus/settings — cambia el valor del bono, la tasa, o las dos.
- * Solo administradores.
+ * PUT /bonus/settings — cambia cuánto vale un bono. Solo administradores.
  *
- * Acepta cambios parciales: mandar solo `exchangeRate` deja el valor del bono
- * como estaba. Es lo habitual, porque la tasa cambia mucho más seguido.
+ * `pointValue` es obligatorio. El cuerpo aceptaba cambios parciales cuando venía
+ * acompañado de la tasa y lo habitual era mandar una sola de las dos; con un
+ * campo único, un cuerpo sin él no es "no cambies nada", es una petición vacía, y
+ * el esquema la rechaza antes de llegar acá.
  *
- * El par anterior se conserva en el historial con quién lo cambió: un corte se
+ * El valor anterior se conserva en el historial con quién lo cambió: un corte se
  * audita semanas después y hay que poder responder por qué se pagó lo que se
  * pagó.
  *
@@ -68,14 +73,7 @@ routerBonus.get(`${nameApi}/bonus/settings`, validateSession, asyncHandler(async
 routerBonus.put(`${nameApi}/bonus/settings`, validateSession, validateAdminUser, asyncHandler(async (req, res) => {
     const validado = await bonusSettingsSchema.validate(req.body, OPCIONES_VALIDACION);
 
-    // Solo lo que vino de verdad. Un campo en null es "no lo toques", y mandarlo
-    // igual dejaría en el historial un cambio del valor del bono cada vez que
-    // alguien actualiza la tasa.
-    const cambios = Object.fromEntries(
-        Object.entries(validado).filter(([, valor]) => valor != null),
-    );
-
-    const ajustes = await saveBonusSettings(cambios, {
+    const ajustes = await saveBonusSettings(validado.pointValue, {
         nameUser: req.session.name,
         _id: req.session.userId,
     });
@@ -84,7 +82,6 @@ routerBonus.put(`${nameApi}/bonus/settings`, validateSession, validateAdminUser,
         status: 200,
         message: 'ok',
         pointValue: ajustes.pointValue,
-        exchangeRate: ajustes.exchangeRate,
         updatedAt: ajustes.updatedAt,
         updatedBy: ajustes.updatedBy,
     });
@@ -94,16 +91,29 @@ routerBonus.put(`${nameApi}/bonus/settings`, validateSession, validateAdminUser,
 /**
  * GET /bonus/settings/history — los cambios del valor, del más reciente al más
  * viejo. Solo administradores: es información de auditoría.
+ *
+ * A qué tasa se pagó un corte se responde en el historial de `/exchange-rate`,
+ * cruzando la fecha; acá no vive esa respuesta.
  */
 routerBonus.get(`${nameApi}/bonus/settings/history`, validateSession, validateAdminUser, asyncHandler(async (req, res) => {
     const ajustes = await BonusSettingsModel.findOne().lean();
-    const historial = [...(ajustes?.history ?? [])].reverse();
+
+    // Cada entrada se arma campo por campo. `lean()` devuelve el documento CRUDO
+    // de Mongo, y las entradas guardadas antes de la mudanza todavía tienen la
+    // tasa adentro: devolver el historial tal cual la haría reaparecer en
+    // pantalla como si siguiera siendo del bono.
+    const historial = [...(ajustes?.history ?? [])]
+        .reverse()
+        .map(cambio => ({
+            pointValue: cambio.pointValue,
+            changedAt: cambio.changedAt,
+            changedBy: cambio.changedBy ?? null,
+        }));
 
     return res.status(200).json({
         status: 200,
         current: {
             pointValue: ajustes?.pointValue ?? DEFAULT_POINT_VALUE,
-            exchangeRate: ajustes?.exchangeRate ?? DEFAULT_EXCHANGE_RATE,
         },
         history: historial,
     });

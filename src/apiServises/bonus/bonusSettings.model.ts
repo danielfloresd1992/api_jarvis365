@@ -1,14 +1,38 @@
 import { Schema, model, Types } from 'mongoose';
 
 // ══════════════════════════════════════════════════════════════════════
-// LOS VALORES GLOBALES DEL SISTEMA
+// EL VALOR GLOBAL DEL SISTEMA DE BONIFICACIÓN
 // ══════════════════════════════════════════════════════════════════════
-// Cuánto dinero vale UN bono y a qué cambio se paga. Dos números para todo el
-// sistema, no por alerta ni por establecimiento: el reglamento los fija de forma
-// general.
+// Cuánto dinero vale UN bono. Un número para todo el sistema, no por alerta ni
+// por establecimiento: el reglamento lo fija de forma general.
 //
 //
-// POR QUÉ SON GLOBALES Y NO VIVEN EN LA ALERTA
+// ACÁ VIVÍA TAMBIÉN LA TASA DE CAMBIO, Y SE MUDÓ
+//
+// Este documento tuvo dos variables globales. La tasa bolívar/dólar se fue a su
+// propio recurso —`apiServises/exchangeRate/`— por tres razones que ninguna
+// forma de acomodar este modelo resolvía:
+//
+//   Cambia todos los días, y el valor del bono casi nunca. Compartiendo
+//   documento, este historial —que existe para explicar por qué una semana el
+//   bono valió 0,20— quedaba enterrado bajo decenas de entradas que no hablan
+//   del bono.
+//
+//   La usan dos módulos, el bono y la nómina. Mientras vivió acá, la nómina
+//   tenía que leer la configuración del BONO para convertir un sueldo a
+//   bolívares, o guardarse su propia copia — que fue lo que terminó pasando.
+//
+//   Y las reglas son OPUESTAS. El valor del bono se CONGELA al sellar una
+//   novedad —ver `resolveBonus.lib.ts`— porque es lo que se pactó pagar; la
+//   tasa no se congela nunca, se aplica la vigente al momento de leer. Dos
+//   campos vecinos en un mismo documento invitan a tratarlos igual, y tratarlos
+//   igual es exactamente el error.
+//
+// Acá no queda ni una copia de respaldo: quien necesite la tasa la pide al
+// recurso nuevo.
+//
+//
+// POR QUÉ ES GLOBAL Y NO VIVE EN LA ALERTA
 //
 // Antes cada alerta guardaba su propio precio. Eso obligaba a editar decenas de
 // alertas para cambiar un número que en el reglamento es uno solo, y bastaba con
@@ -20,7 +44,7 @@ import { Schema, model, Types } from 'mongoose';
 //
 // SE GUARDA UNO SOLO Y SE CONSERVA EL HISTORIAL
 //
-// Hay un único documento vigente. Cada cambio empuja el par anterior a
+// Hay un único documento vigente. Cada cambio empuja el valor anterior a
 // `history`, con quién lo hizo y cuándo: al revisar un corte viejo hay que poder
 // responder "¿por qué esa semana el bono valió 0,20?".
 //
@@ -46,10 +70,9 @@ export interface BonusActor {
 }
 
 
-/** Un par de valores que estuvo vigente, con quién lo dejó así. */
+/** Un valor que estuvo vigente, con quién lo dejó así. */
 export interface BonusSettingsChange {
     pointValue?: number;
-    exchangeRate?: number;
     changedAt?: Date;
     changedBy?: BonusActor | null;
 }
@@ -58,9 +81,6 @@ export interface BonusSettingsChange {
 export interface BonusSettingsDoc {
     /** Cuánto vale un bono, en dólares. */
     pointValue: number;
-
-    /** Bolívares por dólar, según el Banco Central. */
-    exchangeRate: number;
 
     history: BonusSettingsChange[];
     updatedBy?: BonusActor | null;
@@ -78,6 +98,10 @@ const BonusSettings = new Schema<BonusSettingsDoc>({
      *
      * Admite decimales porque la cantidad de bonos de una alerta también los
      * admite (1,5 en nocturno), y el total es cantidad × valor.
+     *
+     * En dólares y no en bolívares porque es lo que el reglamento fija: el
+     * bolívar es una conversión de presentación, y se calcula al leer con la
+     * tasa vigente.
      */
     pointValue: {
         type: Number,
@@ -87,32 +111,7 @@ const BonusSettings = new Schema<BonusSettingsDoc>({
     },
 
     /*
-     * LA TASA DE CAMBIO DEL DÓLAR, según el Banco Central de Venezuela.
-     *
-     * El bono se define en dólares, pero se paga en bolívares. La tasa es la
-     * segunda variable global del sistema y cambia mucho más seguido que el
-     * valor del bono, así que se carga aparte.
-     *
-     * Va acá y no en un servicio que la consulte sola a propósito: lo que se
-     * paga tiene que ser el número que alguien fijó y quedó registrado, no el
-     * que devolviera una API el día que se corrió el cálculo. Si mañana se
-     * automatiza la consulta al BCV, el valor seguirá aterrizando en este campo
-     * y el resto del sistema no se entera.
-     */
-    exchangeRate: {
-        type: Number,
-        required: true,
-        default: 0,
-        min: 0,
-    },
-
-    /*
      * Los valores anteriores, del más viejo al más reciente.
-     *
-     * Se guardan LOS DOS en cada cambio, aunque solo se haya tocado uno: al
-     * revisar un corte hace falta saber con qué par de números se calculó, y
-     * reconstruirlo cruzando dos historiales separados es la clase de cuenta que
-     * sale mal.
      *
      * No es decoración: un corte se audita semanas después, y sin esto no hay
      * forma de reconstruir por qué se pagó lo que se pagó cuando alguien
@@ -120,7 +119,6 @@ const BonusSettings = new Schema<BonusSettingsDoc>({
      */
     history: [{
         pointValue: { type: Number },
-        exchangeRate: { type: Number },
         changedAt: { type: Date, default: Date.now },
         changedBy: {
             nameUser: { type: String },

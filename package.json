@@ -9,11 +9,12 @@
   "scripts": {
     "build": "npx babel src --out-dir dist --extensions \".ts,.js\" && npx gulp --gulpfile gulpfile.esm.js build",
     "start": "node ./dist/server.js",
-    "test": "node --test test/resolveBonus.test.ts test/bonusSchemas.test.ts test/dvrFailure.test.ts test/dvrAlert.test.ts test/apiKey.test.ts test/apiKeyGate.test.ts test/tabulador.test.ts test/userTabulador.test.ts",
+    "test": "node --test test/resolveBonus.test.ts test/bonusSchemas.test.ts test/dvrFailure.test.ts test/dvrAlert.test.ts test/apiKey.test.ts test/apiKeyGate.test.ts test/tabulador.test.ts test/userTabulador.test.ts test/nomina.test.ts test/exchangeRate.test.ts",
     "debuggin": "set NODE_ENV=production&& set DEBUG=true&& npx nodemon ./src/server.ts",
     "dev": "cross-env NODE_ENV=development npx nodemon",
     "seed:tabulador": "npx tsx scripts/seed-tabulador.ts",
-    "migrate:cargo": "npx tsx scripts/migrate-puesto-a-cargo.ts"
+    "migrate:cargo": "npx tsx scripts/migrate-puesto-a-cargo.ts",
+    "migrate:tasa": "npx tsx scripts/migrate-tasa-a-recurso.ts"
   },
   "devDependencies": {
     "@babel/cli": "^7.26.4",
