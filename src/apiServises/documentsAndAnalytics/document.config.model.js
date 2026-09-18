@@ -128,7 +128,8 @@ export default model('DocumentConfig', new Schema({
     // Qué alertas del catálogo (Menu) entran en cada conteo del reporte
     // semanal que arma reportes365. Por defecto la lista lleva las que el
     // reporte diario ya clasifica solo (primera atención, limpieza y
-    // preparación); reportes365 las resuelve por nombre y las añade.
+    // preparación) y las devoluciones que el semanal ya reconoce;
+    // reportes365 las resuelve por nombre y las añade.
     //
     // Referencias por _id y no por nombre: un nombre se renombra en el
     // catálogo y el conteo se rompería sin avisar.
@@ -136,6 +137,7 @@ export default model('DocumentConfig', new Schema({
         firstAttention: [{ type: Schema.Types.ObjectId, ref: 'Menu' }],
         cleaning: [{ type: Schema.Types.ObjectId, ref: 'Menu' }],
         preparation: [{ type: Schema.Types.ObjectId, ref: 'Menu' }],
+        returns: [{ type: Schema.Types.ObjectId, ref: 'Menu' }],
     },
 
 }, { minimize: false }));
