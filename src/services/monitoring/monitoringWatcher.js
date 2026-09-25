@@ -12,7 +12,7 @@ import NoveltyReportLog from '../noveltyReport/noveltyReportLog.model.js';
 import Noveltie from '../../apiServises/noveltie/noveltie.model.js';
 import { getOperationalDay, REPORT_TZ } from '../noveltyReport/noveltyReport.service.js';
 import { maybeSendNoveltyReport } from '../noveltyReport/noveltyReport.job.js';
-import { sendTextToWhatsapp } from '../../apiServises/user/attendanceReport.job.js';
+import { sendTextToWhatsapp } from '../whatsapp/whatsappBot.service.js';
 import { io } from '../socket/io.js';
 
 // ══════════════════════════════════════════════════════════════════════════

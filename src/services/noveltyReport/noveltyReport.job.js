@@ -3,7 +3,7 @@ import moment from 'moment-timezone';
 import { buildNoveltyCountReport, getOperationalDay, REPORT_TZ } from './noveltyReport.service.js';
 import { buildNoveltyReportPdf } from './noveltyReport.pdf.js';
 import NoveltyReportLog from './noveltyReportLog.model.js';
-import { sendReportToWhatsapp } from '../../apiServises/user/attendanceReport.job.js';
+import { sendReportToWhatsapp } from '../whatsapp/whatsappBot.service.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // JOB: Reporte de conteo de novedades → PDF → grupo de WhatsApp

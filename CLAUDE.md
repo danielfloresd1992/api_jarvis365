@@ -16,7 +16,7 @@ Express 4 con Mongoose 6, ESM, y TypeScript transpilado con Babel. El código y 
 npm run dev        # nodemon -> tsx src/server.ts, NODE_ENV=development
 npm run build      # babel src -> dist, luego gulp copia vistas y estáticos
 npm start          # node ./dist/server.js
-npm test           # 327 pruebas, ~1.5 s
+npm test           # 348 pruebas, ~1.5 s
 ```
 
 ### Pruebas
@@ -26,7 +26,7 @@ Usan `node:test` y `node:assert/strict`, sobre archivos `.ts` directamente. **No
 Comandos verificados:
 
 ```sh
-node --test                                     # descubre todo: 327 pruebas
+node --test                                     # descubre todo: 348 pruebas
 node --test test/nomina.test.ts                 # un archivo: 67
 node --test --test-name-pattern="..." test/nomina.test.ts
 ```
@@ -63,7 +63,9 @@ Cada router se registra con `app.use(router)` **en la raíz**, sin ruta de monta
 
 `nameApi` vale `/api_jarvis/v1`, o `/api_jarvis_dev/v1` cuando `NODE_ENV` es `development`, y **se evalúa una sola vez al importar**. Cambiar `NODE_ENV` cambia la ruta de toda la API.
 
-Hay unos 185 endpoints repartidos en 26 módulos. Los más grandes con diferencia son `user.routes.js`, que pasa de las 2000 líneas, y `document.routes.js`.
+Hay unos 185 endpoints repartidos en 27 módulos. El más grande con diferencia es `document.routes.js`.
+
+`attendanceUser` (la asistencia) sigue el patrón de `manager`: `attendanceUser.routes.js` es una línea por endpoint en orden jerárquico, `attendanceUser.controller.js` tiene un método por endpoint, y la lógica vive en `services/` (`.lib.js` puro, `.service.js` toca Mongo o sockets) y `report/`. Sus URLs siguen bajo `/user/attendance/...`.
 
 El nombre de los recursos es inconsistente por accidente histórico: conviven `/noveltie`, `/novelties`, `/noveltiesAll`, `/novelty` y `/noventy`. Los parámetros se escriben a menudo pegados con `=` dentro del segmento, como `/local/id=:id`, en vez de como segmento propio.
 
@@ -133,7 +135,7 @@ No hay `node-cron` ni Agenda ni Bull. Todo lo programado son temporizadores a ma
 
 El **corte de silencio** avisa al grupo de los locales que llevan una hora sin reportar. Quedan fuera los eximidos a mano y los que tienen el DVR caído. La idempotencia es una clave única en Mongo, gana el primero que escribe.
 
-Los avisos al grupo salen por el **bot de WhatsApp**, no por sockets. Cada destino tiene su variable de entorno y su respaldo escrito en el código. Todos los envíos llevan una bandera de activación que **por defecto solo está encendida en producción**, para que una máquina de desarrollo no llene el grupo real.
+Los avisos al grupo salen por el **bot de WhatsApp**, no por sockets, a través de `src/services/whatsapp/whatsappBot.service.js` (DVR todavía lo importa reexportado desde el job de asistencia). Cada destino tiene su variable de entorno y su respaldo escrito en el código. Todos los envíos llevan una bandera de activación que **por defecto solo está encendida en producción**, para que una máquina de desarrollo no llene el grupo real.
 
 El campo `dvrEffect` del catálogo de alertas marca cuál alerta reporta que se cayeron las cámaras y cuál que volvieron. El candado solo se echa si además **existe alguna alerta de reconexión** en el catálogo, con su razón explícita: sin llave no se cierra la puerta, o el local se quedaría mudo para siempre.
 

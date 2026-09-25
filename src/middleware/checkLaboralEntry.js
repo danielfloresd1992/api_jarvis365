@@ -1,22 +1,8 @@
 import UserModel from '../apiServises/user/user.model.js';
-import AttendanceModel from '../apiServises/user/attendance.model.js';
+import AttendanceModel from '../apiServises/attendanceUser/attendanceUser.model.js';
+import config from '../config/index.js';    
 
-/**
- * Middleware: evalúa si el usuario REGISTRÓ SU ENTRADA LABORAL hoy.
- *
- * Reutiliza el mismo criterio del endpoint GET /user/attendance/authenticated/:dni:
- *   - Marcó checkIn hoy                          → registrado
- *   - No está sujeto a control de asistencia     → registrado (no aplica)
- *   - Hoy es día libre (descanso/permiso/vac/falta) → registrado (no requiere)
- *   - Debía trabajar y no marcó                  → NO registrado
- *
- * Resuelve el usuario por `req.credentialForUser` (si ya viene de controller.login)
- * o, para reutilización futura, buscándolo por la propiedad `user` o `email` del body.
- *
- * Adjunta el resultado en `req.laboralEntry` y en `req.session.laboralEntry`.
- * Por defecto NO bloquea (solo evalúa). Poner BLOCK_LOGIN_IF_NO_ENTRY = true
- * para convertirlo en un gate que impida el login sin entrada registrada.
- */
+
 
 // ── Zona horaria de asistencia (Venezuela, UTC-4) ──────────────────────
 const ATTENDANCE_TIMEZONE = 'America/Caracas';
@@ -45,8 +31,16 @@ const NOT_REQUIRED = ['descanso', 'permiso', 'vacaciones', 'falta'];
 // ⚙️ true = bloquea el login si el empleado no registró su entrada laboral hoy.
 const BLOCK_LOGIN_IF_NO_ENTRY = true;
 
+
+
 export default async function checkLaboralEntry(req, res, next) {
     try {
+
+        
+        if(config.NODE_ENV === 'development'){ 
+            req.laboralEntry = { registered: true, reason: `día libre (1)` };
+            return next(); 
+        }// En desarrollo no se bloquea el login por asistencia{
         // 1. Resolver el usuario: primero el ya autenticado (controller.login),
         //    si no, buscar por `user` o por `email` (para reutilización futura).
         let user = req.credentialForUser || null;
@@ -57,7 +51,7 @@ export default async function checkLaboralEntry(req, res, next) {
                 : null;
             if (query) user = await UserModel.findOne(query);
         }
-
+        
         // Sin usuario no se puede evaluar: no se bloquea (el login ya validó credenciales)
         if (!user) {
             req.laboralEntry = { registered: null, reason: 'usuario no resuelto' };

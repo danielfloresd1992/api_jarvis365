@@ -17,8 +17,6 @@ export default async function addCredentials(req, res, next) {
 
 
         if (documentReport) req.session.dataUser.activity = documentReport;
-
-
         return res.status(200).json(user);
     }
     catch(error){

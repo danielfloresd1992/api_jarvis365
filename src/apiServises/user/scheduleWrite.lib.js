@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import UserModel from './user.model.js';
-import AttendanceModel from './attendance.model.js';
-import { io } from '../../services/socket/io.js';
+import AttendanceModel from '../attendanceUser/attendanceUser.model.js';
+import { emitRecordRefresh } from '../attendanceUser/services/attendanceRecord.service.js';
 import { notify, adminUserIds } from '../notification/notification.service.js';
 import { detalleDelCambio } from './scheduleLabels.lib.js';
 
@@ -133,11 +133,7 @@ export async function applyScheduleUpdates(updates = [], authorUserId) {
 
             // Refresco en vivo de la celda, mismo canal de siempre
             const userDoc = await UserModel.findById(userId);
-            if (userDoc) {
-                const dateEvent = new Date(record.date);
-                dateEvent.setUTCHours(dateEvent.getUTCHours() + 4);
-                io.emit(`${dateEvent.toISOString()}-${userDoc.email}`, { finalRecord: record, user: userDoc });
-            }
+            if (userDoc) emitRecordRefresh(record, userDoc);
 
             results.push(record);
         }

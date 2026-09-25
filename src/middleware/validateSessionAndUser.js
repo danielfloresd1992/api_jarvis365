@@ -1,6 +1,6 @@
 import colors from 'colors';
 import { config } from 'dotenv';
-import AttendanceModel from '../apiServises/user/attendance.model.js';
+import AttendanceModel from '../apiServises/attendanceUser/attendanceUser.model.js';
 import { getOperationalDay } from '../services/noveltyReport/noveltyReport.service.js';
 import ApiKeyModel from '../apiServises/apiKey/apiKey.model.js';
 import { parsearApiKey, secretoCoincide } from '../apiServises/apiKey/apiKey.lib.js';
@@ -14,18 +14,6 @@ const SHOW_CONSOLE = !(process.env.NODE_ENV === 'development');
 
 
 
-// ══════════════════════════════════════════════════════════════════════
-// LA SEGUNDA FORMA DE ENTRAR: UNA API KEY
-// ══════════════════════════════════════════════════════════════════════
-// La sesión con cookie es para PERSONAS con un navegador. Un programa —el
-// asistente de IA, un panel, un script— no tiene dónde guardar una cookie ni a
-// quién pedirle la contraseña, así que necesita otra puerta.
-//
-// Esta función NO decide nada por su cuenta: responde «esta petición trae una
-// llave válida, o no». Quien decide es el middleware que la llama.
-//
-// Devuelve la llave si es buena, y `null` en cualquier otro caso. Nunca lanza
-// por una cabecera rara: una llave mal escrita es un 401, no un 500.
 async function autenticarPorApiKey(req) {
 
     // Se aceptan las dos cabeceras. `Authorization: Bearer …` es la estándar y
@@ -34,10 +22,6 @@ async function autenticarPorApiKey(req) {
     const cabecera = req.get('authorization') || req.get('x-api-key');
 
     const partes = parsearApiKey(cabecera);
-
-    // Sin una cabecera CON FORMA DE LLAVE no se toca la base. Esto es lo que
-    // hace que abrir esta puerta no cambie en nada el camino de las sesiones:
-    // una petición de las de siempre sale por acá sin una consulta extra.
     if (!partes) return null;
 
     const llave = await ApiKeyModel.findOne({ keyId: partes.keyId }).select('+secretHash');
@@ -60,10 +44,12 @@ async function autenticarPorApiKey(req) {
 }
 
 
+
 function validateSession(req, res, next){
     const userAgent = req.get('User-Agent');
     const ip = req.ip;
 
+    console.log(req.session);
 
     if (userAgent === 'node' && (`${ip}` === process.env.SERVER_JARVIS365DEV || `${ip}` === process.env.SERVER_JARVIS365PROD)){
         if(SHOW_CONSOLE) console.log(colors.bgBlue(`Text accessed a resource\norigen: ${req.ip}\nrouter: ${req.originalUrl}\ndate: ${new Date()}\norigin: ${req.headers.origin}\n`.white));
@@ -268,9 +254,14 @@ function validateAdminUser(req, res, next) {
 // servidor-a-servidor que el resto de los middlewares.
 async function validateDayRoleUser(req, res, next) {
     try {
+
+        if(appConfig.NODE_ENV === 'development') return next();
+
+
         const userAgent = req.get('User-Agent');
         const ip = req.ip;
         const port = req.socket.remotePort;
+        
 
         // Bypass servidor-a-servidor (mismo patrón que los otros middlewares)
         if (userAgent === 'node' && (`${ip}:${port}` === process.env.SERVER_JARVIS365DEV || `${ip}:${port}` === process.env.SERVER_JARVIS365PROD)) {

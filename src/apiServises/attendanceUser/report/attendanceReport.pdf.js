@@ -1,15 +1,8 @@
 import PDFDocument from 'pdfkit';
 
-// ══════════════════════════════════════════════════════════════════════
-// GENERADOR PDF: Corte diario de asistencia
-// ══════════════════════════════════════════════════════════════════════
-// Recibe los datos que produce buildDailyAttendanceReport() y devuelve un
-// Buffer con un PDF A4 presentable: encabezado, tarjetas de resumen y
-// tablas de retardos / ausencias / pendientes con salto de página.
+// PDF A4 del corte diario: encabezado, tarjetas de resumen y tablas por grupo.
 
-// Paleta inspirada en Claude / Anthropic: fondo crema (ivory), tipografía
-// en negro cálido y acentos en naranja "book cloth". Tonos terracota para
-// las señales para mantener la estética cálida.
+// Paleta cálida: fondo crema, texto negro cálido, acentos naranja y terracota.
 const COLORS = {
     header: '#CC785C',      // naranja Claude "book cloth" (banda superior)
     accent: '#D97757',      // naranja Claude (acento / línea)
@@ -33,11 +26,13 @@ const PAGE = { width: 595.28, height: 841.89, margin: 40 }; // A4 en puntos
 const CONTENT_WIDTH = PAGE.width - (PAGE.margin * 2);
 
 
+// Salta de página si no caben `needed` puntos más.
 const ensureSpace = (doc, needed) => {
     if (doc.y + needed > PAGE.height - PAGE.margin - 20) doc.addPage();
 };
 
 
+// Banda superior con título, corte, fecha y hora de generación.
 const drawHeader = (doc, { cutLabel, dateLabel, generatedAtLabel }) => {
     doc.rect(0, 0, PAGE.width, 92).fill(COLORS.header);
     doc.rect(0, 92, PAGE.width, 4).fill(COLORS.accent);
@@ -57,6 +52,7 @@ const drawHeader = (doc, { cutLabel, dateLabel, generatedAtLabel }) => {
 };
 
 
+// Fila de tarjetas con los totales del corte.
 const drawSummaryCards = (doc, totals) => {
     const cards = [
         { label: 'Esperados hoy', value: totals.expected, color: COLORS.header },
@@ -88,6 +84,7 @@ const drawSummaryCards = (doc, totals) => {
 };
 
 
+// Título de sección con su contador.
 const drawSectionTitle = (doc, title, count, color) => {
     ensureSpace(doc, 60);
     const y = doc.y;
@@ -98,7 +95,7 @@ const drawSectionTitle = (doc, title, count, color) => {
 };
 
 
-// Tabla genérica con zebra y salto de página (repite el encabezado).
+// Tabla con filas alternas; al saltar de página repite el encabezado.
 // columns: [{ key, label, width, align? }]
 const drawTable = (doc, columns, rows, accentColor) => {
     const rowH = 20;
@@ -161,6 +158,7 @@ const drawTable = (doc, columns, rows, accentColor) => {
 const sourceLabel = (s) => s === 'manual' ? 'Manual' : (s === 'por defecto' ? 'Defecto' : '—');
 
 
+// Mensaje en cursiva para una sección sin filas.
 const drawEmptySection = (doc, message) => {
     ensureSpace(doc, 30);
     doc.fill(COLORS.muted).font('Helvetica-Oblique').fontSize(9)
@@ -169,12 +167,7 @@ const drawEmptySection = (doc, message) => {
 };
 
 
-/**
- * Genera el PDF del corte de asistencia.
- * @param {object} report - Salida de buildDailyAttendanceReport().
- * @param {string} cutLabel - Etiqueta del corte (ej. "Primer corte · Mediodía").
- * @returns {Promise<Buffer>}
- */
+// Genera el PDF del corte a partir de buildDailyAttendanceReport(). Devuelve un Buffer.
 export function buildAttendanceReportPdf(report, cutLabel) {
     return new Promise((resolve, reject) => {
         const doc = new PDFDocument({ size: 'A4', margin: PAGE.margin, bufferPages: true });
@@ -183,9 +176,7 @@ export function buildAttendanceReportPdf(report, cutLabel) {
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
 
-        // Fondo crema (ivory) en todas las páginas — estética Claude. Se pinta
-        // antes de cualquier contenido: en la página 1 aquí, y en las que se
-        // agregan por paginación vía el evento 'pageAdded'.
+        // Fondo crema en cada página, antes de cualquier contenido.
         const paintBackground = () => doc.rect(0, 0, PAGE.width, PAGE.height).fill(COLORS.page);
         doc.on('pageAdded', paintBackground);
         paintBackground();
