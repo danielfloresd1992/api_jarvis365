@@ -131,13 +131,20 @@ app_dev.use(express.static(join(__dirname, '../public')));
 
 
 server.listen(httpPort, () => {
+
     logBanner();
     logServerStart(appConfig.NODE_ENV, httpPort);
     io.init(server);
     logSocketStart();
-    startAttendanceReportScheduler();
-    startMonitoringWatcher();
-    startDvrAlertScheduler();
+
+    if(appConfig.NODE_ENV === 'production') {
+        console.log('Running in production mode');
+        startAttendanceReportScheduler();
+        startMonitoringWatcher();
+        startDvrAlertScheduler();
+    }
+    
+
     const httpPortDev: number = 8080;
     app_dev.listen(httpPortDev, () => {
         logHttpStart(httpPortDev);
