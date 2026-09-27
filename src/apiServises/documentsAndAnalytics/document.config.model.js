@@ -140,4 +140,12 @@ export default model('DocumentConfig', new Schema({
         returns: [{ type: Schema.Types.ObjectId, ref: 'Menu' }],
     },
 
+    // Oculta las hojas de toques de gerente del reporte semanal. Por defecto
+    // salen; con true, reportes365 no las dibuja. Viaja por la actualización
+    // genérica de configuración, como weeklyAlerts.
+    weeklyHideManagerTouches: {
+        type: Boolean,
+        default: false
+    },
+
 }, { minimize: false }));

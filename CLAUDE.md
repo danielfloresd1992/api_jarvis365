@@ -207,6 +207,8 @@ La autenticación es **cookie de sesión**, sin tokens. El frontend manda `withC
 
 `weeklyAlerts` guarda **solo las alertas extra**, por id del catálogo. Se espera que reportes365 resuelva por nombre las alertas base de cada demora y las añada. No tiene endpoint propio ni validación: viaja por la actualización genérica de configuración.
 
+`weeklyHideManagerTouches` es un booleano, `false` por defecto. Con `true`, el semanal de reportes365 no dibuja las hojas de toques de gerente. Viaja por el mismo camino que `weeklyAlerts`. Un campo de configuración nuevo tiene que estar en el esquema: el `PUT` hace `findByIdAndUpdate` con el body, y Mongoose descarta en silencio lo que no reconoce.
+
 `Menu.category` **no tiene enum**. Es texto libre y nada impide una errata; la alerta simplemente no aparecerá donde debería, sin error.
 
 El endpoint `/extract` de novedades es el camino antiguo. Usa formato de fecha `MM-DD-YYYY`, filtra por campos marcados como obsoletos y devuelve una proyección por exclusión que además quita el `_id`. Hay un endpoint moderno y bastante más sano para las alertas del día.
