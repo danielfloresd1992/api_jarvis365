@@ -72,6 +72,8 @@ export const localValidateComplete = yup.object({
         .oneOf(['simplified', 'extended'])
         .default('extended'),
 
+    processRegister: yup.boolean().default(false),
+
     timestamps: yup.object({
         createdAt: yup.object({
             time: yup.date().default(() => new Date()),
