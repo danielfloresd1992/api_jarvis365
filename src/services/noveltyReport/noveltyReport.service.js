@@ -5,7 +5,7 @@ import BonusRuleModel from '../../apiServises/bonus/bonusRule.model.js';
 import MenuModel from '../../apiServises/menu/menu.model.js';
 import LocalModel from '../../apiServises/local/local.model.js';
 import Schedules from '../../apiServises/schedules/schedule.model.js';
-import AttendanceModel from '../../apiServises/user/attendance.model.js';
+import AttendanceModel from '../../apiServises/attendanceUser/attendanceUser.model.js';
 import UserModel from '../../apiServises/user/user.model.js';
 import { IsDaylightSavingTimeBoolean } from '../../apiServises/time/time.model.js';
 import { pickSchedule } from '../../apiServises/schedules/schedule.logic.js';

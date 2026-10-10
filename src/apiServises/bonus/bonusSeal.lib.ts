@@ -1,7 +1,7 @@
 import type { Types } from 'mongoose';
 import MenuModel from '../menu/menu.model.js';
 import UserModel from '../user/user.model.js';
-import AttendanceModel from '../user/attendance.model.js';
+import AttendanceModel from '../attendanceUser/attendanceUser.model.js';
 import LocalModel from '../local/local.model.js';
 import { getBonusSettings } from './bonusSettings.lib.js';
 import { resolveBonusForNovelty } from './resolveBonus.lib.js';

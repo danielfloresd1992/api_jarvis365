@@ -217,6 +217,14 @@ export default model('Local', new Schema({
     },
 
 
+    // Activa en JARVIS_EXPRESS el registro de los procesos (los registers de la tablet).
+    // Por defecto apagado: se enciende local por local.
+    processRegister: {
+        type: Boolean,
+        default: false
+    },
+
+
     groupId: {
         type: String,
         default: null

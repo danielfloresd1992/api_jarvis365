@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import DvrFailureModel from './dvrFailure.model.js';
 import { captionDeCaida, textoDeListaActivas, parsearDataUrl, TZ_ALERTA } from './dvrAlert.lib.js';
-import { sendMediaToWhatsapp, sendTextToWhatsapp } from '../user/attendanceReport.job.js';
+import { sendMediaToWhatsapp, sendTextToWhatsapp } from '../attendanceUser/report/attendanceReport.job.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // EL AVISO DE UNA CAÍDA AL GRUPO «INFORMACIÓN IMPORTANTE»

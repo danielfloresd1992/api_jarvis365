@@ -1,52 +1,20 @@
 import moment from 'moment-timezone';
-import { esAltaDeHoy } from './newEmployee.lib.js';
-import UserModel from './user.model.js';
-import AttendanceModel from './attendance.model.js';
-import { SYSTEM_USER_ID } from '../../libs/systemUser.js';
-// Solo por el efecto de registrar el modelo 'TabuladorPosition': el populate
-// del corte lo busca por nombre y, si este servicio se carga sin pasar por
-// app.ts (una prueba, un script), Mongoose no lo conoce y el populate falla.
-import '../tabulador/tabulador.model.js';
+import { esAltaDeHoy } from '../services/newEmployee.lib.js';
+import { ATTENDANCE_TIMEZONE } from '../services/attendanceTime.lib.js';
+import { LATE_GRACE_MINUTES, computeDiscountUnits } from '../services/lateness.lib.js';
+import { dayRuleOf, activeOverrideOf, resolveShift, weeklyRuleCount, defaultTimesOf } from '../services/workday.lib.js';
+import UserModel from '../../user/user.model.js';
+import AttendanceModel from '../attendanceUser.model.js';
+import { SYSTEM_USER_ID } from '../../../libs/systemUser.js';
+// Registra el modelo 'TabuladorPosition' para el populate (hace falta fuera de app.ts).
+import '../../tabulador/tabulador.model.js';
 
-// ══════════════════════════════════════════════════════════════════════
-// SERVICIO: Corte diario de asistencia (retardos y ausencias)
-// ══════════════════════════════════════════════════════════════════════
-// Construye la "foto" del día al momento de ejecutarse:
-//   1. Toma todos los empleados ACTIVOS dentro de la estructura de horario
-//      (inabilited:false y workSchedule.outForkSchedule != true).
-//   2. Trae todos los registros de AttendanceModel del día (marcajes).
-//   3. Resuelve el horario EFECTIVO de cada empleado con la misma prioridad
-//      que usa el endpoint de marcado (user.routes.js → /attendance/machine):
-//         scheduleOverride (regla manual del día en Attendance)
-//         → user.workSchedule.scheduleByDay[díaSemana] (horario por defecto)
-//   4. Clasifica a cada empleado en: presente a tiempo, retardo, ausente,
-//      pendiente (su turno aún no inicia), no requerido (descanso/permiso/
-//      vacaciones) o sin horario configurado.
+// Corte diario de asistencia: la "foto" del día al momento de ejecutarse.
+// Clasifica a cada empleado activo en: a tiempo, retardo, ausente, pendiente
+// (su turno no empezó), no requerido (descanso/permiso/vacaciones) o sin horario.
 //
-// REGLA DE NEGOCIO: la falta registrada (manual o automática del corte)
-// PREVALECE sobre el marcaje — pasada la hora de corte del turno
-// (FAULT_CUT_TIMES: 15:00 diurno / 21:00 nocturno), marcar entrada ya no
-// quita la falta; el reporte lo muestra como ausente indicando la hora en
-// que marcó.
-//
-// La fecha del día se calcula en la zona horaria de Venezuela, igual que el
-// marcado (date = medianoche UTC de la fecha civil de Caracas).
-
-const ATTENDANCE_TIMEZONE = 'America/Caracas';
-const LATE_GRACE_MINUTES = 8; // misma tolerancia que el endpoint de marcado
-
-// Descuento por retardo: pasada la tolerancia (8 min), el primer tramo (de 8 a
-// 20 min) ya cuenta 1 unidad, y de ahí en adelante cada 20 min suma otra.
-// Ej. entrada 09:00 (tolerancia hasta 09:08):
-//   hasta 09:08 → 0 · 09:09–09:20 → 1 · 09:21–09:40 → 2 · 09:41–10:00 → 3 …
-const DISCOUNT_BLOCK_MINUTES = 20;
-
-// Exportada: el endpoint de marcado (user.routes.js) la usa para persistir
-// el valor en Attendance.discountUnits al registrar una entrada con retardo.
-export const computeDiscountUnits = (minutesLate) => {
-    if (minutesLate === null || minutesLate <= LATE_GRACE_MINUTES) return 0;
-    return Math.ceil(minutesLate / DISCOUNT_BLOCK_MINUTES);
-};
+// REGLA: la falta registrada PREVALECE sobre el marcaje. Pasada la hora de corte
+// (FAULT_CUT_TIMES), marcar la entrada ya no la quita.
 
 const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const MONTH_NAMES = [
@@ -54,36 +22,19 @@ const MONTH_NAMES = [
     'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
 ];
 
+// Tipos de jornada que no exigen asistencia. Sin 'falta' a propósito (no es
+// DAY_OFF_WORK_TYPES): la falta se clasifica antes, como ausencia, y esta lista
+// también se compara contra record.status.
 const NOT_REQUIRED_TYPES = ['descanso', 'permiso', 'vacaciones'];
-
-// Horas estándar de cada turno (las mismas de dayRoster.service.js). Son el
-// ÚLTIMO eslabón de la cadena de horario: si la regla del día no trae horas
-// propias, se usan estas.
-//
-// Sin este respaldo, un empleado sin documento de asistencia y sin horas en su
-// horario semanal se quedaba con startTime = null, caía en "sin horario
-// configurado" y NUNCA llegaba a la rama que registra la falta. Por eso el
-// corte dejó de marcar inasistencias en cuanto se acabaron los días que tenían
-// documento pre-creado.
-const SHIFT_DEFAULT_TIMES = {
-    Diurno: { startTime: '08:00', endTime: '18:00' },
-    Nocturno: { startTime: '18:00', endTime: '07:00' }
-};
 
 // Tipos de jornada en los que SÍ se espera que el empleado venga a trabajar.
 const WORKING_TYPES = ['laboral', 'extra'];
 
-// Cuántos días tiene configurados el horario semanal. Con documentos de
-// mongoose `scheduleByDay` es un Map (tiene .size); con .lean() es un objeto.
-const weeklyRuleCount = (map) => {
-    if (!map) return 0;
-    if (typeof map.size === 'number') return map.size;
-    return Object.keys(map).length;
-};
 
-
+// Hora en formato 12 h: "09:05 AM".
 const formatTime12 = (m) => m.format('hh:mm A');
 
+// "HH:mm" → minutos desde la medianoche. null si no es una hora válida.
 const toMinutes = (hhmm) => {
     if (!hhmm || typeof hhmm !== 'string' || !hhmm.includes(':')) return null;
     const [h, min] = hhmm.split(':').map(Number);
@@ -92,58 +43,39 @@ const toMinutes = (hhmm) => {
 };
 
 
-// Resuelve la regla efectiva del día para un usuario. Cadena completa:
-//   scheduleOverride del documento del día (cambio manual)
-//     > workSchedule.scheduleByDay[díaSemana] (horario semanal del user)
-//       > workSchedule.shiftType + horas estándar del turno (respaldo)
-//
-// El último eslabón es el que faltaba: sin él, no tener documento de asistencia
-// ni horas en la regla semanal equivalía a no tener horario, y el corte no
-// podía evaluar si la persona faltó.
+// Regla efectiva del día de un empleado: override del día > regla semanal >
+// turno del perfil con sus horas estándar.
 const resolveEffectiveRule = (user, record, dayNumber) => {
-    const override = record?.scheduleOverride;
-    const hasOverride = Boolean(override?.workType);
-
+    const override = activeOverrideOf(record);
     const scheduleByDayMap = user?.workSchedule?.scheduleByDay;
-    const dayRule = scheduleByDayMap?.get?.(String(dayNumber))
-        || scheduleByDayMap?.[String(dayNumber)]
-        || null;
+    const dayRule = dayRuleOf(scheduleByDayMap, dayNumber);
 
-    const workType = (hasOverride && override.workType) || dayRule?.workType || 'laboral';
-    const shift = (hasOverride && override.shift)
-        || dayRule?.shift
-        || user?.workSchedule?.shiftType
-        || 'Diurno';
+    const workType = override?.workType || dayRule?.workType || 'laboral';
+    const shift = resolveShift(override, dayRule, user?.workSchedule);
 
-    const defaults = SHIFT_DEFAULT_TIMES[shift] || SHIFT_DEFAULT_TIMES.Diurno;
-    // Las horas de respaldo solo tienen sentido en un día de trabajo: en un
-    // descanso o unas vacaciones el horario debe seguir vacío.
+    const defaults = defaultTimesOf(shift);
+    // Las horas de respaldo solo aplican en días de trabajo.
     const usesDefaultTimes = WORKING_TYPES.includes(workType);
 
-    const startTime = (hasOverride && override.startTime) || dayRule?.startTime
+    const startTime = override?.startTime || dayRule?.startTime
         || (usesDefaultTimes ? defaults.startTime : null);
-    const endTime = (hasOverride && override.endTime) || dayRule?.endTime
+    const endTime = override?.endTime || dayRule?.endTime
         || (usesDefaultTimes ? defaults.endTime : null);
 
     return {
-        source: hasOverride ? 'manual' : (dayRule ? 'por defecto' : 'turno del perfil'),
+        source: override ? 'manual' : (dayRule ? 'por defecto' : 'turno del perfil'),
         workType,
         shift,
         startTime,
         endTime,
-        // Señales para clasificar más abajo sin volver a leer el horario
+        // Señales para clasificar sin volver a leer el horario
         hasDayRule: Boolean(dayRule),
         hasWeeklySchedule: weeklyRuleCount(scheduleByDayMap) > 0,
-        usedDefaultTimes: usesDefaultTimes && !((hasOverride && override.startTime) || dayRule?.startTime)
     };
 };
 
 
-/**
- * Construye los datos del corte de asistencia del día.
- * @param {Date} [referenceDate] - Momento de referencia (default: ahora).
- * @returns {Promise<object>} Datos clasificados + totales.
- */
+// Arma el corte del día: empleados clasificados y totales. shiftFocus filtra por turno.
 export async function buildDailyAttendanceReport(referenceDate = new Date(), shiftFocus = null) {
     const now = moment.tz(referenceDate, ATTENDANCE_TIMEZONE);
 
@@ -153,11 +85,7 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
     const nowMinutes = (now.hours() * 60) + now.minutes();
 
     const [users, records] = await Promise.all([
-        // El cargo vive en el tabulador y el usuario guarda solo la
-        // referencia; aqui se trae el nombre (mismo criterio que
-        // dayRoster.service.js). El documento sigue hidratado a proposito:
-        // resolveEffectiveRule lee scheduleByDay como Map y no hay razon
-        // para tocar eso por un populate.
+        // Con el nombre del cargo. Sin .lean(): resolveEffectiveRule lee scheduleByDay como Map.
         UserModel.find({ inabilited: false, 'workSchedule.outForkSchedule': { $ne: true } })
             .populate('jobInformation.tabuladorPosition', 'name'),
         AttendanceModel.find({ date: todayMidnight })
@@ -179,8 +107,7 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
         const record = recordByUser.get(String(user._id)) || null;
         const rule = resolveEffectiveRule(user, record, dayNumber);
 
-        // Corte enfocado por turno: si se pide un turno específico (Diurno /
-        // Nocturno) se omiten los empleados cuyo turno efectivo de hoy no coincide.
+        // Corte enfocado en un turno: se omite a quien no es de ese turno hoy.
         if (shiftFocus && rule.shift !== shiftFocus) continue;
         consideredEmployees++;
 
@@ -191,9 +118,7 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
             name: `${user.name || ''} ${user.surName || ''}`.trim(),
             dni: user.dni || '—',
             department: user.jobInformation?.department || '—',
-            // Nombre del cargo del tabulador y nada mas: el usuario ya no
-            // guarda el texto del puesto, solo la referencia. Sin cargo va el
-            // mismo guion que usan las otras columnas vacias.
+            // Nombre del cargo del tabulador ('—' sin cargo).
             position: user.jobInformation?.tabuladorPosition?.name ?? '—',
             shift: rule.shift,
             workType: rule.workType,
@@ -202,17 +127,8 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
             endTime: rule.endTime
         };
 
-        // 0) Dado de alta HOY: su primer día no se le cobra.
-        //
-        // Va ANTES que todo lo demás, incluso antes de la falta ya registrada,
-        // porque es la única regla que habla de si corresponde evaluarlo: a
-        // alguien que entró hoy se le arma el horario el mismo día, a veces
-        // cuando ya empezó a trabajar. Sin esto, el corte de las 15:00 le
-        // registra una falta automática a quien se dio de alta a las 14:00.
-        //
-        // Sale por `notRequired`, que es el cajón de "hoy no se le exige":
-        // aparece en el reporte con su motivo, pero no cuenta como ausente ni
-        // como retardo y no alimenta el registro automático de faltas.
+        // 0) Dado de alta hoy: su primer día no se le exige (ni retardo ni falta).
+        //    Va antes que todo, incluso antes de una falta ya registrada.
         if (esAltaDeHoy(user, referenceDate)) {
             notRequired.push({
                 ...base,
@@ -296,18 +212,13 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
             continue;
         }
 
-        // 5) El empleado tiene horario semanal, pero ESTE día de la semana no
-        //    está configurado → ese día no le toca venir. No es una ausencia:
-        //    marcarla convertiría en falta el día libre de quien tiene el
-        //    horario cargado de lunes a viernes. Solo aplica sin override.
+        // 5) Tiene horario semanal pero este día no está cargado → hoy no le toca.
         if (!rule.hasDayRule && rule.hasWeeklySchedule && !record?.scheduleOverride?.workType) {
             notRequired.push({ ...base, reason: 'descanso', note: 'Día no configurado en su horario semanal' });
             continue;
         }
 
-        // 6) Día laboral/extra sin hora de entrada configurada → no evaluable.
-        //    Con el respaldo del turno esto ya casi no ocurre; queda como red
-        //    de seguridad para un turno desconocido.
+        // 6) Sin hora de entrada → no se puede evaluar (casi no ocurre).
         if (startMinutes === null) {
             noSchedule.push({ ...base, reason: 'Sin hora de entrada configurada para hoy' });
             continue;
@@ -320,10 +231,8 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
             continue;
         }
 
-        // 8) Debía presentarse, ya pasó su hora de entrada y no marcó → ausente.
-        //    autoFaultCandidate: solo ESTA rama es candidata al registro
-        //    automático de falta (las faltas pre-registradas y los marcados
-        //    'ausente' ya tienen su documento; ver registerAbsencesAsFaults).
+        // 8) Debía venir, pasó su hora y no marcó → ausente. Solo esta rama es
+        //    candidata a la falta automática (autoFaultCandidate).
         absents.push({ ...base, reason: 'No ha marcado entrada', autoFaultCandidate: true });
     }
 
@@ -345,7 +254,8 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
         timezone: ATTENDANCE_TIMEZONE,
         shiftFocus: shiftFocus || null,
         totals: {
-            activeEmployees: shiftFocus ? consideredEmployees : users.length,
+            // Sin shiftFocus se consideran todos, así que es users.length.
+            activeEmployees: consideredEmployees,
             expected: presentOnTime.length + lateArrivals.length + absents.length + pending.length,
             presentOnTime: presentOnTime.length,
             late: lateArrivals.length,
@@ -369,56 +279,34 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
 }
 
 
-// ══════════════════════════════════════════════════════════════════════
-// REGISTRO AUTOMÁTICO DE FALTAS
-// ══════════════════════════════════════════════════════════════════════
-// Usuario del sistema que firma las faltas automáticas. La constante se movió a
-// libs/systemUser.js porque ahora también la usa el sistema de notificaciones:
-// dos copias del mismo _id acabarían separándose el día que cambie.
-// Se sigue configurando con ATTENDANCE_SYSTEM_USER_ID en el .env.
+// ─── REGISTRO AUTOMÁTICO DE FALTAS ───────────────────────────────────────────
+// Las firma el usuario del sistema (SYSTEM_USER_ID, en libs/systemUser.js).
 
+// Nota que queda en el horario del día.
 const AUTO_FAULT_NOTE = 'Falta registrada automáticamente: no marcó entrada al corte de asistencia.';
 
-// Comentario que queda en attendance.comments al registrar la falta: visible
-// en el popover de la grilla (con la muesca dorada en la celda), firmado por
-// el usuario del sistema.
+// Comentario visible en la celda de la grilla.
 const AUTO_FAULT_COMMENT = 'Falta automática con Jarvis Vision';
 
-// Hora de corte por turno (hora Venezuela): pasada esta hora, quien no marcó
-// entrada queda con falta FIRME. Es la única fuente de verdad — el scheduler
-// del job (REPORT_CUTS) arma sus cortes desde acá.
+// Hora de corte por turno (hora Venezuela): desde ahí la falta queda firme.
+// El job arma sus envíos a partir de estas mismas horas.
 export const FAULT_CUT_TIMES = {
     Diurno: '15:00',
     Nocturno: '21:00'
 };
 
-// Margen para no perder un corte por unos segundos. setTimeout puede disparar
-// una fracción antes de la hora exacta: sin este margen, un corte que arranca a
-// las 20:59:59 encontraba nowMinutes = 1259 < 1260 y saltaba a TODO el personal
-// nocturno, y como el corte ya quedaba marcado como enviado no se reintentaba
-// hasta el día siguiente.
+// Margen por si el temporizador dispara unos segundos antes de la hora exacta.
 const FAULT_CUT_TOLERANCE_MINUTES = 2;
 
-/**
- * Registra como falta en Attendance a los ausentes del reporte que debían
- * presentarse y no marcaron entrada (autoFaultCandidate). Crea el documento
- * si no existe o escribe el scheduleOverride sobre el existente, replicando
- * la MISMA forma que el endpoint manual de "Editar grupo" (user.routes.js):
- * notas preservadas + nota nueva, createdBy solo al insertar, y editedBy
- * con los campos que realmente cambiaron.
- *
- * @param {object} report - Salida de buildDailyAttendanceReport().
- * @returns {Promise<object>} { attempted, registered, skipped, failed }
- */
+// Registra la falta de los ausentes candidatos del corte, con la misma forma que
+// "Editar grupo". Devuelve { attempted, registered, registeredNames, skipped, failed }.
 export async function registerAbsencesAsFaults(report) {
     const candidates = (report?.absents || []).filter(a => a.autoFaultCandidate);
     const registered = [];
     const skipped = [];
     const failed = [];
 
-    // La falta solo se escribe DESPUÉS de la hora de corte del turno: un
-    // reporte manual a media mañana no debe dejar faltas firmes de gente
-    // que todavía puede llegar (con retardo, pero llega).
+    // Solo después de la hora de corte: antes todavía pueden llegar.
     const nowMoment = moment.tz(ATTENDANCE_TIMEZONE);
     const nowMinutes = (nowMoment.hours() * 60) + nowMoment.minutes();
 
@@ -434,9 +322,7 @@ export async function registerAbsencesAsFaults(report) {
                 .select('scheduleOverride')
                 .lean();
 
-            // Idempotencia: si la falta ya estaba registrada no se toca (evita
-            // duplicar la nota si el corte corre dos veces). Un checkIn tardío
-            // NO la evita: pasada la hora de corte, la falta queda firme.
+            // Si la falta ya estaba, no se toca (el corte puede correr dos veces).
             if (previousRecord?.scheduleOverride?.workType === 'falta') {
                 skipped.push({ userId: absent.userId, name: absent.name, reason: 'falta ya registrada' });
                 continue;
@@ -467,9 +353,7 @@ export async function registerAbsencesAsFaults(report) {
             const updateOp = {
                 $set: { scheduleOverride },
                 $setOnInsert: { createdBy: SYSTEM_USER_ID },
-                // Comentario en el documento (attendance.comments): deja
-                // constancia visible de la falta automática. El guard de
-                // "falta ya registrada" evita duplicarlo si el corte repite.
+                // Constancia visible de la falta automática.
                 $push: {
                     comments: { user: SYSTEM_USER_ID, message: AUTO_FAULT_COMMENT, date: new Date() }
                 }

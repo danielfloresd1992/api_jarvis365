@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import UserModel from './user.model.js';
-import AttendanceModel from './attendance.model.js';
+import AttendanceModel from '../attendanceUser/attendanceUser.model.js';
 import NotificationModel from '../notification/notification.model.js';
 import { io } from '../../services/socket/io.js';
 import { ADMIN_ROOM, userRoom } from '../notification/notification.service.js';

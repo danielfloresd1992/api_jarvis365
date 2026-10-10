@@ -16,7 +16,7 @@ function required(key: string, val?: string): string {
 const NODE_ENV = (process.env.NODE_ENV as Env) || 'development';
 const DEV_PORT = Number(process.env.DEV_PORT || 3000);
 const PROD_PORT = Number(process.env.PROD_PORT || 443);
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/Cortes365';
+const MONGO_URI = NODE_ENV === 'production' ? process.env.MONGO_URI : 'mongodb://localhost:27017/Cortes365';
 const SECRET_SERVER = process.env.SECRET_SERVER || '.bfdpSeth#FCEWG0"80435*';
 const REDIS_URL = process.env.REDIS_URL || '';
 
@@ -24,6 +24,7 @@ const REDIS_URL = process.env.REDIS_URL || '';
 // se le pasa nada, y una página de reporte con sus novedades embebidas cruza ese
 // umbral a partir de unas 29 alertas. Se mide sobre bytes YA descomprimidos.
 const BODY_LIMIT = process.env.BODY_LIMIT || '10mb';
+
 
 // La llave con la que se FIRMAN las API keys (HMAC-SHA256). No tiene default a
 // proposito: firmar con una cadena vacia produciria hashes que cualquiera puede
@@ -35,10 +36,11 @@ const CORS_ORIGINS = (process.env.CORS_ORIGINS || '')
     .map((s) => s.trim())
     .filter(Boolean);
 
+
 export interface Config {
     NODE_ENV: Env;
     PORT: number;
-    MONGO_URI: string;
+    MONGO_URI: string | undefined;
     SECRET_SERVER: string;
     REDIS_URL?: string;
     CORS_ORIGINS: string[];
@@ -54,13 +56,9 @@ const config: Config = {
     SECRET_SERVER,
     REDIS_URL: REDIS_URL || undefined,
     CORS_ORIGINS,
-    COOKIE_SECURE: NODE_ENV === 'production',
+    COOKIE_SECURE: true,
     BODY_LIMIT,
     API_KEY_SECRET,
 };
 
 export default config;
-
-// Uso:
-// import config from './config';
-// console.log(config.PORT, config.MONGO_URI);
