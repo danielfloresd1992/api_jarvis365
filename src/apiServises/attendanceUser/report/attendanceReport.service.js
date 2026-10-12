@@ -1,7 +1,7 @@
 import moment from 'moment-timezone';
 import { esAltaDeHoy } from '../services/newEmployee.lib.js';
 import { ATTENDANCE_TIMEZONE } from '../services/attendanceTime.lib.js';
-import { LATE_GRACE_MINUTES, computeDiscountUnits } from '../services/lateness.lib.js';
+import { LATE_GRACE_MINUTES, computeDiscountUnits, isArrivalUntracked } from '../services/lateness.lib.js';
 import { dayRuleOf, activeOverrideOf, resolveShift, weeklyRuleCount, defaultTimesOf } from '../services/workday.lib.js';
 import UserModel from '../../user/user.model.js';
 import AttendanceModel from '../attendanceUser.model.js';
@@ -232,8 +232,9 @@ export async function buildDailyAttendanceReport(referenceDate = new Date(), shi
         }
 
         // 8) Debía venir, pasó su hora y no marcó → ausente. Solo esta rama es
-        //    candidata a la falta automática (autoFaultCandidate).
-        absents.push({ ...base, reason: 'No ha marcado entrada', autoFaultCandidate: true });
+        //    candidata a la falta automática (autoFaultCandidate), y nunca quien
+        //    tiene la llegada sin seguimiento: sale como ausente, pero sin falta.
+        absents.push({ ...base, reason: 'No ha marcado entrada', autoFaultCandidate: !isArrivalUntracked(user.workSchedule) });
     }
 
     // Orden legible: retardos por minutos desc, ausencias por departamento/nombre

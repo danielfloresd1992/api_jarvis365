@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { registerHooks } from 'node:module';
+import { existsSync } from 'node:fs';
 
 import {
     getZonedDateParts, toUtcMidnightFromZonedParts, utcMidnightOf, addUtcDays, minutesOfDay, hhmmToMinutes,
@@ -7,11 +9,27 @@ import {
 import {
     dayRuleOf, activeOverrideOf, resolveShift, weeklyRuleCount, defaultTimesOf, DAY_OFF_WORK_TYPES,
 } from '../src/apiServises/attendanceUser/services/workday.lib.js';
-import { LATE_GRACE_MINUTES, computeDiscountUnits } from '../src/apiServises/attendanceUser/services/lateness.lib.js';
+import { LATE_GRACE_MINUTES, computeDiscountUnits, appliesLateRule, isArrivalUntracked } from '../src/apiServises/attendanceUser/services/lateness.lib.js';
 import {
     overtimeOfDay, accumulateOvertime, overtimeOnCheckout, resolveMinutesToApprove,
 } from '../src/apiServises/attendanceUser/services/overtime.lib.js';
 import { summarizeAttendance } from '../src/apiServises/attendanceUser/report/userReport.service.js';
+
+// Gancho de resolución, el mismo de nomina.test.ts: el corte diario importa
+// tabulador.model.js, cuya fuente es .ts. Va antes del import dinámico.
+registerHooks({
+    resolve(especificador, contexto, siguiente) {
+        if (especificador.startsWith('.') && especificador.endsWith('.js') && contexto.parentURL) {
+            const enTypeScript = `${especificador.slice(0, -3)}.ts`;
+            if (existsSync(new URL(enTypeScript, contexto.parentURL))) return siguiente(enTypeScript, contexto);
+        }
+        return siguiente(especificador, contexto);
+    },
+});
+
+const { buildDailyAttendanceReport, registerAbsencesAsFaults } = await import('../src/apiServises/attendanceUser/report/attendanceReport.service.js');
+const { default: UserModel } = await import('../src/apiServises/user/user.model.js');
+const { default: AttendanceModel } = await import('../src/apiServises/attendanceUser/attendanceUser.model.js');
 
 // Fecha con hora de Caracas (UTC-4).
 const caracas = (dia: string, hora: string) => new Date(`${dia}T${hora}:00-04:00`);
@@ -98,6 +116,82 @@ test('regla del retardo', async (t) => {
         for (const [minutos, unidades] of casos) {
             assert.equal(computeDiscountUnits(minutos), unidades, `${minutos} min`);
         }
+    });
+
+    await t.test('sin control ni seguimiento no se evalúa el retardo, ni con horario especial', () => {
+        const exento = { lateArrivalControl: false, lateArrivalTracking: false };
+        assert.equal(appliesLateRule({ workSchedule: exento, hasOverride: false, isNewToday: false }), false);
+        assert.equal(appliesLateRule({ workSchedule: exento, hasOverride: true, isNewToday: false }), false);
+    });
+
+    await t.test('con una sola bandera apagada se mantiene la regla de siempre', () => {
+        const sinControl = { lateArrivalControl: false, lateArrivalTracking: true };
+        assert.equal(appliesLateRule({ workSchedule: sinControl, hasOverride: false, isNewToday: false }), false);
+        assert.equal(appliesLateRule({ workSchedule: sinControl, hasOverride: true, isNewToday: false }), true, 'el horario especial sigue forzando el control');
+
+        const sinSeguimiento = { lateArrivalControl: true, lateArrivalTracking: false };
+        assert.equal(appliesLateRule({ workSchedule: sinSeguimiento, hasOverride: false, isNewToday: false }), true);
+    });
+
+    await t.test('el primer día de un empleado nuevo nunca cuenta', () => {
+        const controlado = { lateArrivalControl: true, lateArrivalTracking: true };
+        assert.equal(appliesLateRule({ workSchedule: controlado, hasOverride: true, isNewToday: true }), false);
+    });
+
+    await t.test('sin workSchedule no se evalúa, salvo con horario especial', () => {
+        assert.equal(appliesLateRule({ workSchedule: undefined, hasOverride: false, isNewToday: false }), false);
+        assert.equal(appliesLateRule({ workSchedule: undefined, hasOverride: true, isNewToday: false }), true);
+    });
+
+    await t.test('la llegada queda sin seguimiento solo con las dos banderas en false', () => {
+        assert.equal(isArrivalUntracked({ lateArrivalControl: false, lateArrivalTracking: false }), true);
+        assert.equal(isArrivalUntracked({ lateArrivalControl: false, lateArrivalTracking: true }), false);
+        assert.equal(isArrivalUntracked({ lateArrivalControl: true, lateArrivalTracking: false }), false);
+        assert.equal(isArrivalUntracked(undefined), false, 'sin banderas valen los defaults del modelo (true)');
+    });
+});
+
+
+test('falta automática del corte', async (t) => {
+    // Tres diurnos (08:00) que no marcaron al corte de las 15:00. Sin Mongo: se
+    // sustituyen las estáticas de los modelos ya importados, como en exchangeRate.test.ts.
+    const empleado = (nombre: string, banderas: object) => ({
+        _id: nombre,
+        name: nombre,
+        surName: '',
+        dni: nombre,
+        jobInformation: { department: 'Operaciones' },
+        createdOn: new Date('2026-01-01T12:00:00Z'),
+        workSchedule: { shiftType: 'Diurno', ...banderas },
+    });
+    const usuarios = [
+        empleado('seguido', { lateArrivalControl: true, lateArrivalTracking: true }),
+        empleado('exento', { lateArrivalControl: false, lateArrivalTracking: false }),
+        empleado('sinControl', { lateArrivalControl: false, lateArrivalTracking: true }),
+    ];
+    t.mock.method(UserModel, 'find', () => ({ populate: async () => usuarios }));
+    t.mock.method(AttendanceModel, 'find', async () => []);
+
+    const report = await buildDailyAttendanceReport(caracas('2026-09-23', '15:00'));
+    const candidatos = Object.fromEntries(report.absents.map((a: any) => [a.name, a.autoFaultCandidate]));
+
+    await t.test('solo queda fuera quien tiene las dos banderas en false', () => {
+        assert.deepEqual(candidatos, { exento: false, seguido: true, sinControl: true });
+    });
+
+    await t.test('el exento sigue saliendo como ausente en el informe', () => {
+        assert.equal(report.totals.absent, 3);
+    });
+
+    await t.test('al exento no se le escribe la falta', async () => {
+        const escritura = t.mock.method(AttendanceModel, 'findOneAndUpdate', async () => null);
+        const soloExento = { ...report, absents: report.absents.filter((a: any) => a.name === 'exento') };
+
+        const faults = await registerAbsencesAsFaults(soloExento);
+
+        assert.equal(faults.attempted, 0);
+        assert.equal(faults.registered, 0);
+        assert.equal(escritura.mock.callCount(), 0);
     });
 });
 

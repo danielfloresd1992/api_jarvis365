@@ -1,6 +1,6 @@
 import AttendanceModel from '../attendanceUser.model.js';
 import { emitCloseSessionForUser } from '../../../services/socket/sessionEvents.js';
-import { LATE_GRACE_MINUTES, computeDiscountUnits } from './lateness.lib.js';
+import { LATE_GRACE_MINUTES, computeDiscountUnits, appliesLateRule } from './lateness.lib.js';
 import { getZonedDateParts, toUtcMidnightFromZonedParts, addUtcDays, minutesOfDay, hhmmToMinutes } from './attendanceTime.lib.js';
 import { dayRuleOf, activeOverrideOf, resolveShift } from './workday.lib.js';
 import { overtimeOnCheckout } from './overtime.lib.js';
@@ -123,11 +123,13 @@ function resolveTodaySchedule(user, todayRecord, today) {
 
 
 // Calcula si la entrada llega tarde y cuántas unidades se descuentan.
-// El primer día de un empleado nuevo nunca cuenta como retardo.
+// Quién queda exento del retardo lo decide appliesLateRule (lateness.lib).
 function evaluateArrival(user, schedule, nowMinutes, now) {
-    const checksLate = esAltaDeHoy(user, now)
-        ? false
-        : (schedule.override ? true : user?.workSchedule?.lateArrivalControl);
+    const checksLate = appliesLateRule({
+        workSchedule: user?.workSchedule,
+        hasOverride: Boolean(schedule.override),
+        isNewToday: esAltaDeHoy(user, now),
+    });
 
     const isLate = checksLate ? nowMinutes > (schedule.startMinutes + LATE_GRACE_MINUTES) : false;
 

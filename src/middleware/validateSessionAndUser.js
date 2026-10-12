@@ -49,7 +49,6 @@ function validateSession(req, res, next){
     const userAgent = req.get('User-Agent');
     const ip = req.ip;
 
-    console.log(req.session);
 
     if (userAgent === 'node' && (`${ip}` === process.env.SERVER_JARVIS365DEV || `${ip}` === process.env.SERVER_JARVIS365PROD)){
         if(SHOW_CONSOLE) console.log(colors.bgBlue(`Text accessed a resource\norigen: ${req.ip}\nrouter: ${req.originalUrl}\ndate: ${new Date()}\norigin: ${req.headers.origin}\n`.white));

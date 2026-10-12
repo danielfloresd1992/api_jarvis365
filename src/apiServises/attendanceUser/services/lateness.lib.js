@@ -7,6 +7,27 @@ export const LATE_GRACE_MINUTES = 8;
 export const DISCOUNT_BLOCK_MINUTES = 20;
 
 
+// Sin control (lateArrivalControl) ni seguimiento (lateArrivalTracking) de su
+// llegada: no se le cuenta retardo ni se le marca la falta automática del corte.
+// Hacen falta las DOS banderas en false; con una sola manda la regla de siempre.
+export const isArrivalUntracked = (workSchedule) =>
+    workSchedule?.lateArrivalControl === false && workSchedule?.lateArrivalTracking === false;
+
+
+// ¿Se le evalúa el retardo a esta entrada? Si no, la entrada se guarda con
+// isLate en false y sin unidades de descuento.
+//   - El primer día de un empleado nuevo nunca cuenta (ver newEmployee.lib).
+//   - Con la llegada sin seguimiento (isArrivalUntracked) nunca cuenta, ni
+//     siquiera en un día con horario especial del administrador.
+//   - Con horario especial se evalúa aunque lateArrivalControl esté en false.
+//   - Si no, manda lateArrivalControl.
+export const appliesLateRule = ({ workSchedule, hasOverride, isNewToday }) => {
+    if (isNewToday) return false;
+    if (isArrivalUntracked(workSchedule)) return false;
+    return hasOverride ? true : Boolean(workSchedule?.lateArrivalControl);
+};
+
+
 // Unidades a descontar por un retardo. Pasada la tolerancia, el primer tramo
 // (de 8 a 20 min) ya cuenta 1 unidad y cada 20 min más suma otra. Ej. entrada 09:00:
 //   hasta 09:08 → 0 · 09:09–09:20 → 1 · 09:21–09:40 → 2 · 09:41–10:00 → 3 …
