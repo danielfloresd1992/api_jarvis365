@@ -1,4 +1,6 @@
 import { Schema, model } from 'mongoose';
+import { isTakeOutTable } from './rotation.lib.js';
+import { SHIFTS } from './rotation.schema.js';
 
 
 
@@ -28,7 +30,7 @@ const timeField = () => ({ type: String, default: '' });
 
 // ── UN PROCESO: un pedido de la mesa ──────────────────────────────────
 // Los cuatro primeros los lee la IA de la tablet; listo en cocina y entrega se
-// anotan a mano. Sin _id propio: un proceso no existe fuera de su rotación.
+// anotan a mano. Lleva su propio _id para poder corregirlo una vez guardado.
 const Process = new Schema({
     ticketNumber:        { type: String, default: '' },
     dishType:            { type: String, default: '' },   // APPETIZER, PF, POSTRE… la lista vive en Jarvis-express365
@@ -36,7 +38,7 @@ const Process = new Schema({
     markedReadyOnTablet: timeField(),
     readyInTheKitchen:   timeField(),
     dishDelivery:        timeField(),
-}, { _id: false });
+});
 
 
 
@@ -45,11 +47,28 @@ const Process = new Schema({
 // (Local.touchs) y no de un documento de Manager: entonces `name` es su placa,
 // 'G1', 'A2'… `createdAt` es el momento real del clic, que no cambia aunque
 // `hourTouch` se corrija a mano. Los toques anteriores a ese campo lo traen null.
+// Como el proceso, lleva su propio _id para poder corregirlo una vez guardado.
 const Touch = new Schema({
     ref:       { type: Schema.Types.ObjectId, ref: 'Manager', default: null },
     name:      { type: String, default: '' },
     hourTouch: timeField(),
     createdAt: { type: Date, default: null },
+});
+
+
+
+// ── UN CAMBIO: lo que alguien corrigió después de guardarla ───────────
+// Una línea por dato cambiado: quién, cuándo, en qué (`target`: el _id de la
+// rotación, de uno de sus procesos o de uno de sus toques), qué propiedad, y el
+// valor de antes y el nuevo. El usuario va como referencia y no como nombre:
+// pesa menos y se trae con populate cuando haga falta.
+const Change = new Schema({
+    user:      { type: Schema.Types.ObjectId, ref: 'user', required: true },
+    changedAt: { type: Date, default: Date.now },
+    target:    { type: Schema.Types.ObjectId, required: true },
+    property:  { type: String, required: true },
+    oldValue:  { type: Schema.Types.Mixed, default: null },
+    newValue:  { type: Schema.Types.Mixed, default: null },
 }, { _id: false });
 
 
@@ -73,6 +92,19 @@ const Rotation = new Schema({
     operationalDate: { type: Date, required: true },
 
     tableNumber:        { type: String, required: true, trim: true },
+
+    // Pedido para llevar: una rotación hueca, que no es una mesa ocupada y solo
+    // contiene el proceso del pedido. Su mesa es el ticket con '#' ('#110'), y no
+    // lleva Ocupa, Primera atención, Desocupa, Limpieza ni toques. NO se manda en
+    // el body: sale de tableNumber antes de validar (el pre('validate') de abajo),
+    // así nunca contradice a la mesa, tampoco cuando se corrige.
+    takeOut: { type: Boolean, default: false },
+
+    // El turno de la rotación: de día ('day') o de noche ('night'), y nada más
+    // (SHIFTS, en rotation.schema.js). null es «todavía no se dijo»: así nacen
+    // las que se guardan sin él y las de antes de existir el campo.
+    shift: { type: String, enum: [...SHIFTS, null], default: null },
+
     hourOccupies:       timeField(),   // Ocupa
     hourFirstAttention: timeField(),   // Primera atención
     breakUp:            timeField(),   // Desocupa
@@ -81,11 +113,26 @@ const Rotation = new Schema({
     process: { type: [Process], default: [] },
     touch:   { type: [Touch],   default: [] },
 
+    // Los cambios hechos después de guardarla, del más viejo al más nuevo. Los
+    // escribe el servidor: el body no los trae (rotation.schema.js no los tiene).
+    changes: { type: [Change], default: [] },
+
 }, { timestamps: true });
+
+
+// takeOut sigue siempre a la mesa: con '#' delante es un pedido para llevar (isTakeOutTable).
+Rotation.pre('validate', function () {
+    this.takeOut = isTakeOutTable(this.tableNumber);
+});
 
 
 Rotation.index({ establishment: 1, clientId: 1 }, { unique: true });
 Rotation.index({ establishment: 1, operationalDate: 1 });
+
+// El PUT busca la rotación por el _id de lo que se corrige, que puede ser el de
+// uno de sus procesos o toques: sin estos, cada corrección recorrería la colección.
+Rotation.index({ 'process._id': 1 });
+Rotation.index({ 'touch._id': 1 });
 
 
 

@@ -23,6 +23,11 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 // podría pedir años de rotaciones en una sola respuesta.
 export const MAX_RANGE_DAYS = 62;
 
+// SHIFTS = «los turnos de una rotación»: de día ('day') o de noche ('night'). Vive
+// aquí y no en rotation.lib.js porque lo usan este esquema y el modelo, y la lib
+// ya importa de este archivo: al revés sería un import circular.
+export const SHIFTS = ['day', 'night'];
+
 
 
 // objectId = «un ObjectId de Mongo». Sin el `addMethod` de local.schema.js, que
@@ -58,7 +63,7 @@ const processValidate = yup.object({
     dishDelivery:        time(),
 });
 
-const touchValidate = yup.object({
+export const touchValidate = yup.object({
     ref:       objectId('El gerente del toque debe ser un ObjectId válido').nullable().default(null),
     name:      yup.string().default(''),
     hourTouch: time(),
@@ -71,6 +76,9 @@ export const rotationValidate = yup.object({
     date:          yup.date().required('Falta la fecha de la rotación'),
     tableNumber:   yup.string().trim().required('Falta el número de mesa'),
 
+    // El turno: solo 'day' o 'night'. Sin mandarlo queda en null, «todavía no se dijo».
+    shift: yup.string().nullable().oneOf([...SHIFTS, null], `El turno solo puede ser ${SHIFTS.map(shift => `«${shift}»`).join(' o ')}`).default(null),
+
     hourOccupies:       time(),
     hourFirstAttention: time(),
     breakUp:            time(),
@@ -79,6 +87,31 @@ export const rotationValidate = yup.object({
     process: yup.array().of(processValidate).default([]),
     touch:   yup.array().of(touchValidate).default([]),
 });
+
+
+
+// ── PUT: corregir lo guardado ─────────────────────────────────────────
+//
+//     PUT /rotation/id=<_id>      body: { propiedad: valorNuevo, … }
+//
+// El _id es el de lo que se corrige: la rotación, uno de sus procesos o uno de
+// sus toques. Se corrige lo mismo con que se guardó, menos lo que lo identifica
+// —el local, el clientId y la fecha de la rotación; el gerente y el momento del
+// clic de un toque— y las listas, que se corrigen elemento por elemento. Por eso
+// se arma QUITANDO campos (`omit`) y no listándolos: un campo nuevo en los
+// esquemas de arriba queda corregible sin tocar esto.
+//
+// Se valida SOLO lo que viene en el body (ver applyEdit en rotation.lib.js): con
+// el esquema entero, los valores por defecto pisarían lo que no se mandó.
+
+export const rotationTargetValidate = objectId('El id de lo que se corrige debe ser un ObjectId válido')
+    .required('Falta el id de lo que se corrige');
+
+export const editableValidate = {
+    rotation: rotationValidate.omit(['establishment', 'clientId', 'date', 'process', 'touch']),
+    process:  processValidate,
+    touch:    touchValidate.omit(['ref', 'createdAt']),
+};
 
 
 

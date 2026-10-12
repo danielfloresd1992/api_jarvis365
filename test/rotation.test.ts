@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { rotationValidate, rotationQueryValidate, dayToDate, MAX_RANGE_DAYS } from '../src/apiServises/rotation/rotation.schema.js';
+import { rotationValidate, rotationQueryValidate, rotationTargetValidate, dayToDate, MAX_RANGE_DAYS, SHIFTS } from '../src/apiServises/rotation/rotation.schema.js';
+import { applyEdit, targetOf, isTakeOutTable, rotationEvent, ROTATION_METHODS, PEOPLE, addTouchTo, removeTouchFrom } from '../src/apiServises/rotation/rotation.lib.js';
 import RotationModel from '../src/apiServises/rotation/rotation.model.js';
 import { operationalDateOf } from '../src/apiServises/dvrFailure/dvrFailure.lib.ts';
 
@@ -94,4 +95,204 @@ test('el modelo: referencias, autor inmutable y la misma rotación una sola vez 
     const unico = esquema.indexes().find(([campos]) => campos.establishment === 1 && campos.clientId === 1);
     assert.ok(unico, 'falta el índice de establishment + clientId');
     assert.equal(unico[1].unique, true);
+});
+
+test('los cambios: nacen vacíos, no se mandan en el body, y procesos y toques tienen _id para señalarlos', async () => {
+    const valida = await rotationValidate.validate({ ...ROTACION, changes: [{ user: ID, property: 'tableNumber' }] }, OPC);
+    assert.equal('changes' in valida, false);
+
+    const rotacion = new RotationModel({ ...valida, operationalDate: operationalDateOf(valida.date), createdBy: ID });
+    assert.deepEqual(rotacion.changes.toObject(), []);
+    assert.ok(rotacion.process[0]._id, 'el proceso no tiene _id');
+    assert.ok(rotacion.touch[0]._id, 'el toque no tiene _id');
+
+    const cambio = RotationModel.schema.path('changes').schema;
+    assert.equal(cambio.path('user').options.ref, 'user');
+    assert.deepEqual(Object.keys(cambio.paths).sort(), ['changedAt', 'newValue', 'oldValue', 'property', 'target', 'user']);
+});
+
+
+
+// ── PUT /rotation/id=:id — corregir lo guardado (applyEdit, sin Mongo) ──
+
+const OTRO = '507f1f77bcf86cd799439022';
+
+// guardada = «una rotación como la que devuelve findOne»: un documento de Mongoose, con _id en sus procesos y toques
+const guardada = async () => {
+    const valida = await rotationValidate.validate(ROTACION, OPC);
+    return new RotationModel({ ...valida, operationalDate: operationalDateOf(valida.date), createdBy: ID });
+};
+
+
+test('corregir la rotación: cambia la propiedad y anota quién, en qué, y el antes y el después', async () => {
+    const rotacion = await guardada();
+    const cambios = await applyEdit(rotacion, String(rotacion._id), { tableNumber: ' 33 ', hourOccupies: '10:09:12' }, OTRO);
+
+    assert.equal(rotacion.tableNumber, '33');
+    assert.equal(cambios.length, 1, 'Ocupa no cambió: no se anota');
+    assert.equal(rotacion.changes.length, 1);
+
+    const linea = rotacion.changes[0];
+    assert.equal(String(linea.user), OTRO);
+    assert.equal(String(linea.target), String(rotacion._id));
+    assert.equal(linea.property, 'tableNumber');
+    assert.equal(linea.oldValue, '30');
+    assert.equal(linea.newValue, '33');
+    assert.ok(linea.changedAt instanceof Date);
+});
+
+test('corregir un proceso o un toque por su _id, sin tocar lo demás', async () => {
+    const rotacion = await guardada();
+    const proceso = rotacion.process[0];
+    const toque = rotacion.touch[0];
+
+    await applyEdit(rotacion, String(proceso._id), { dishDelivery: '10:59:00', dishType: 'POSTRE' }, OTRO);
+    await applyEdit(rotacion, String(toque._id), { hourTouch: '10:45:00' }, OTRO);
+
+    assert.equal(proceso.dishDelivery, '10:59:00');
+    assert.equal(proceso.dishType, 'POSTRE');
+    assert.equal(proceso.ticketNumber, '118', 'lo que no se mandó sigue igual');
+    assert.equal(toque.hourTouch, '10:45:00');
+    assert.deepEqual(rotacion.changes.map(linea => [linea.property, linea.oldValue, linea.newValue]), [
+        ['dishDelivery', '', '10:59:00'],
+        ['dishType', 'PF', 'POSTRE'],
+        ['hourTouch', '10:03:07', '10:45:00'],
+    ]);
+    assert.equal(String(rotacion.changes[2].target), String(toque._id));
+});
+
+test('lo que identifica no se corrige: el local, el clientId, la fecha, el gerente y el momento del toque', async () => {
+    const rotacion = await guardada();
+    const local = String(rotacion.establishment);
+    await applyEdit(rotacion, String(rotacion._id), { establishment: OTRO, clientId: 'otro', tableNumber: '31' }, OTRO);
+    assert.equal(String(rotacion.establishment), local);
+    assert.equal(rotacion.clientId, ROTACION.clientId);
+    assert.deepEqual(rotacion.changes.map(linea => linea.property), ['tableNumber']);
+
+    const toque = rotacion.touch[0];
+    await assert.rejects(applyEdit(rotacion, String(toque._id), { ref: OTRO, createdAt: '2020-01-01' }, OTRO), /nada que corregir/);
+    assert.equal(String(toque.ref), ID);
+});
+
+test('rechaza un valor que no vale, un body sin nada que corregir, la mesa vacía y un id ajeno', async () => {
+    const rotacion = await guardada();
+    await assert.rejects(applyEdit(rotacion, String(rotacion._id), { hourOccupies: '25:00:00' }, OTRO), /HH:MM:SS/);
+    await assert.rejects(applyEdit(rotacion, String(rotacion._id), { tableNumber: '   ' }, OTRO), /número de mesa/);
+    await assert.rejects(applyEdit(rotacion, String(rotacion._id), {}, OTRO), /nada que corregir/);
+    await assert.rejects(applyEdit(rotacion, OTRO, { tableNumber: '31' }, OTRO), /no es de esta rotación/);
+    assert.equal(rotacion.changes.length, 0, 'nada rechazado deja rastro');
+
+    assert.equal(targetOf(rotacion, OTRO), null);
+    await assert.rejects(rotationTargetValidate.validate('mesa-30'), /ObjectId/);
+});
+
+
+test('pedido para llevar: la mesa con «#» delante es un ticket, no una mesa', () => {
+    assert.equal(isTakeOutTable('#110'), true);
+    assert.equal(isTakeOutTable(' #110 '), true);
+    assert.equal(isTakeOutTable('33'), false);
+    assert.equal(isTakeOutTable('B7'), false);
+    assert.equal(isTakeOutTable(''), false);
+    assert.equal(isTakeOutTable(undefined), false);
+});
+
+test('takeOut sale de la mesa al validar: no se manda, y no puede contradecirla', async () => {
+    const paraLlevar = await rotationValidate.validate({ ...ROTACION, tableNumber: '#110', hourOccupies: '' }, OPC);
+    const rotacion = new RotationModel({ ...paraLlevar, operationalDate: operationalDateOf(paraLlevar.date), createdBy: ID });
+    assert.equal(rotacion.takeOut, false, 'nace en false');
+    await rotacion.validate();
+    assert.equal(rotacion.takeOut, true);
+
+    const mentirosa = new RotationModel({ ...paraLlevar, tableNumber: '30', takeOut: true, operationalDate: operationalDateOf(paraLlevar.date), createdBy: ID });
+    await mentirosa.validate();
+    assert.equal(mentirosa.takeOut, false, 'una mesa de verdad no es para llevar aunque el body diga que sí');
+
+    const valida = await rotationValidate.validate({ ...ROTACION, takeOut: true }, OPC);
+    assert.equal('takeOut' in valida, false, 'el body no lo trae: lo decide la mesa');
+});
+
+test('corregir la mesa cambia takeOut con ella', async () => {
+    const rotacion = await guardada();
+    await applyEdit(rotacion, String(rotacion._id), { tableNumber: '#110' }, OTRO);
+    await rotacion.validate();
+    assert.equal(rotacion.takeOut, true);
+
+    await applyEdit(rotacion, String(rotacion._id), { tableNumber: '28' }, OTRO);
+    await rotacion.validate();
+    assert.equal(rotacion.takeOut, false);
+});
+
+test('el aviso en vivo: un evento por local y por método, con las personas del GET', () => {
+    assert.deepEqual(ROTATION_METHODS, ['post', 'put']);
+    assert.equal(rotationEvent('post', 'Francisca Doral'), 'Francisca Doral-post');
+    assert.equal(rotationEvent('put', 'Francisca Doral'), 'Francisca Doral-put');
+    assert.deepEqual(PEOPLE.map(person => person.path), ['createdBy', 'changes.user']);
+});
+
+test('añadir un toque a una rotación guardada: con su _id, su momento y su línea en los cambios', async () => {
+    const rotacion = await guardada();
+    const toque = await addTouchTo(rotacion, { ref: ID, name: 'Daniel Flores', hourTouch: '10:45:00', createdBy: OTRO }, OTRO);
+
+    assert.equal(rotacion.touch.length, 2);
+    assert.ok(toque._id, 'nace con _id, para poder corregirlo o quitarlo');
+    assert.ok(toque.createdAt instanceof Date, 'sin createdAt se toma ahora');
+    assert.deepEqual(rotacion.changes.map(linea => [linea.property, linea.oldValue, linea.newValue, String(linea.target)]), [
+        ['touch', null, 'Daniel Flores · 10:45:00', String(toque._id)],
+    ]);
+});
+
+test('no se añade un toque sin hora, ni a un pedido para llevar', async () => {
+    const rotacion = await guardada();
+    await assert.rejects(addTouchTo(rotacion, { name: 'Daniel Flores' }, OTRO), /hora del toque/);
+    await assert.rejects(addTouchTo(rotacion, { name: 'Daniel Flores', hourTouch: '25:00:00' }, OTRO), /HH:MM:SS/);
+
+    rotacion.tableNumber = '#110';
+    await assert.rejects(addTouchTo(rotacion, { name: 'Daniel Flores', hourTouch: '10:45:00' }, OTRO), /para llevar/);
+    assert.equal(rotacion.touch.length, 1);
+    assert.equal(rotacion.changes.length, 0, 'nada rechazado deja rastro');
+});
+
+test('quitar un toque: sale de la lista y deja su línea en los cambios; uno ajeno no se quita', async () => {
+    const rotacion = await guardada();
+    const toque = rotacion.touch[0];
+
+    assert.throws(() => removeTouchFrom(rotacion, OTRO, OTRO), /no es de esta rotación/);
+    assert.equal(rotacion.changes.length, 0);
+
+    removeTouchFrom(rotacion, String(toque._id), OTRO);
+    assert.equal(rotacion.touch.length, 0);
+    assert.deepEqual(rotacion.changes.map(linea => [linea.property, linea.oldValue, linea.newValue, String(linea.target)]), [
+        ['touch', 'Daylin Acosta · 10:03:07', null, String(toque._id)],
+    ]);
+});
+
+test('el turno: solo «day» o «night», y sin mandarlo queda en null', async () => {
+    assert.deepEqual(SHIFTS, ['day', 'night']);
+
+    assert.equal((await rotationValidate.validate({ ...ROTACION, shift: 'day' }, OPC)).shift, 'day');
+    assert.equal((await rotationValidate.validate({ ...ROTACION, shift: 'night' }, OPC)).shift, 'night');
+    assert.equal((await rotationValidate.validate(ROTACION, OPC)).shift, null, 'sin mandarlo');
+    assert.equal((await rotationValidate.validate({ ...ROTACION, shift: null }, OPC)).shift, null);
+
+    for (const malo of ['nigth', 'Day', 'tarde', '']) {
+        await assert.rejects(rotationValidate.validate({ ...ROTACION, shift: malo }, OPC), /turno solo puede ser/, JSON.stringify(malo));
+    }
+});
+
+test('el turno en el modelo: el enum rechaza lo que no sea day o night, y se corrige con el PUT', async () => {
+    const valida = await rotationValidate.validate(ROTACION, OPC);
+    const base = { ...valida, operationalDate: operationalDateOf(valida.date), createdBy: ID };
+
+    const sinTurno = new RotationModel(base);
+    assert.equal(sinTurno.shift, null);
+    await sinTurno.validate();
+
+    await new RotationModel({ ...base, shift: 'night' }).validate();
+    await assert.rejects(new RotationModel({ ...base, shift: 'nigth' }).validate(), /shift/);
+
+    const rotacion = await guardada();
+    await applyEdit(rotacion, String(rotacion._id), { shift: 'night' }, OTRO);
+    assert.equal(rotacion.shift, 'night');
+    assert.deepEqual(rotacion.changes.map(linea => [linea.property, linea.oldValue, linea.newValue]), [['shift', null, 'night']]);
+    await assert.rejects(applyEdit(rotacion, String(rotacion._id), { shift: 'tarde' }, OTRO), /turno solo puede ser/);
 });
