@@ -88,6 +88,12 @@ export const rotationValidate = yup.object({
     breakUp:            time(),
     tableCleaning:      time(),
 
+    // Las demoras reportadas: el ObjectId de la novedad que se envió por su primera atención y por su limpieza
+    // (el modelo las referencia a 'Noveltie'). Jarvis-express365 lo apunta en la fila al enviar la alerta desde el
+    // reloj rojo, y llega aquí con el disquete. Sin mandarlas, null. También se corrigen con el PUT.
+    firstAttentionDelay: objectId('La demora de primera atención debe ser el ObjectId de una novedad').nullable().default(null),
+    cleaningDelay:       objectId('La demora de limpieza debe ser el ObjectId de una novedad').nullable().default(null),
+
     process: yup.array().of(processValidate).default([]),
     touch:   yup.array().of(touchValidate).default([]),
 });

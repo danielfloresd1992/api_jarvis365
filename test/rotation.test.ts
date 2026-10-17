@@ -331,3 +331,40 @@ test('recovered en el modelo: nace en false, se guarda, y se corrige con el PUT 
     const nuevo = await addTouchTo(rotacion, { name: 'G1', hourTouch: '10:50:00', recovered: true }, OTRO);
     assert.equal(nuevo.recovered, true, 'un toque añadido después también la lleva');
 });
+
+test('las demoras reportadas: firstAttentionDelay y cleaningDelay referencian Noveltie y nacen en null', async () => {
+    for (const campo of ['firstAttentionDelay', 'cleaningDelay']) {
+        const ruta = RotationModel.schema.path(campo);
+        assert.equal(ruta.instance.toLowerCase(), 'objectid', campo);   //  Mongoose 6 lo llama 'ObjectID'
+        assert.equal(ruta.options.ref, 'Noveltie', campo);
+    }
+
+    const valida = await rotationValidate.validate(ROTACION, OPC);
+    const base = { ...valida, operationalDate: operationalDateOf(valida.date), createdBy: ID };
+
+    const sinDemoras = new RotationModel(base);
+    assert.equal(sinDemoras.firstAttentionDelay, null);
+    assert.equal(sinDemoras.cleaningDelay, null);
+    await sinDemoras.validate();
+
+    const conDemoras = new RotationModel({ ...base, firstAttentionDelay: ID, cleaningDelay: OTRO });
+    await conDemoras.validate();
+    assert.equal(String(conDemoras.firstAttentionDelay), ID);
+    assert.equal(String(conDemoras.cleaningDelay), OTRO);
+    await assert.rejects(new RotationModel({ ...base, cleaningDelay: 'no-es-un-id' }).validate(), /cleaningDelay/);
+
+    //  El POST las acepta (las apunta Jarvis-express365 al enviar la alerta), sin mandarlas son null, y un id falso no pasa
+    const mandadas = await rotationValidate.validate({ ...ROTACION, firstAttentionDelay: ID, cleaningDelay: OTRO }, OPC);
+    assert.equal(mandadas.firstAttentionDelay, ID);
+    assert.equal(mandadas.cleaningDelay, OTRO);
+    const sinMandar = await rotationValidate.validate(ROTACION, OPC);
+    assert.equal(sinMandar.firstAttentionDelay, null);
+    assert.equal(sinMandar.cleaningDelay, null);
+    await assert.rejects(rotationValidate.validate({ ...ROTACION, cleaningDelay: 'novedad-12' }, OPC), /demora de limpieza/);
+
+    //  Y se corrigen con el PUT, con su línea en los cambios
+    const rotacion = await guardada();
+    await applyEdit(rotacion, String(rotacion._id), { firstAttentionDelay: ID }, OTRO);
+    assert.equal(String(rotacion.firstAttentionDelay), ID);
+    assert.deepEqual(rotacion.changes.map(linea => linea.property), ['firstAttentionDelay']);
+});

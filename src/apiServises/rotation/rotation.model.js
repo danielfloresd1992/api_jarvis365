@@ -121,6 +121,15 @@ const Rotation = new Schema({
     breakUp:            timeField(),   // Desocupa
     tableCleaning:      timeField(),   // Limpieza
 
+    // Las demoras REPORTADAS de esta rotación: la novedad (la alerta de Demoras) que se envió por su primera
+    // atención (de Ocupa a Primera atención) y la que se envió por su limpieza (de Desocupa a Limpieza). Como
+    // el rastro de dvrFailure, solo la REFERENCIA: se traen con populate('firstAttentionDelay cleaningDelay')
+    // sin duplicar aquí lo que la novedad ya guarda. null mientras no se haya reportado ninguna.
+    // Las rellena Jarvis-express365: al enviar la alerta desde el reloj rojo de una fila de Mesas, apunta en ella
+    // el ObjectId de la novedad creada, y llega aquí con el POST de la rotación (o se corrige con el PUT).
+    firstAttentionDelay: { type: Schema.Types.ObjectId, ref: 'Noveltie', default: null },
+    cleaningDelay:       { type: Schema.Types.ObjectId, ref: 'Noveltie', default: null },
+
     process: { type: [Process], default: [] },
     touch:   { type: [Touch],   default: [] },
 
