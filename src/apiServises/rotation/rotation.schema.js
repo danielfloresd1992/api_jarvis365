@@ -68,6 +68,7 @@ export const touchValidate = yup.object({
     name:      yup.string().default(''),
     hourTouch: time(),
     createdAt: yup.date().nullable().default(null),
+    recovered: yup.boolean().typeError('«recovered» del toque es true o false').default(false),
 });
 
 export const rotationValidate = yup.object({
@@ -78,6 +79,9 @@ export const rotationValidate = yup.object({
 
     // El turno: solo 'day' o 'night'. Sin mandarlo queda en null, «todavía no se dijo».
     shift: yup.string().nullable().oneOf([...SHIFTS, null], `El turno solo puede ser ${SHIFTS.map(shift => `«${shift}»`).join(' o ')}`).default(null),
+
+    // Recuperada: anotada a mano después, desde Registros (la de cada toque, en touchValidate). Sin mandarla, false.
+    recovered: yup.boolean().typeError('«recovered» de la rotación es true o false').default(false),
 
     hourOccupies:       time(),
     hourFirstAttention: time(),

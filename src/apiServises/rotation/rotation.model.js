@@ -47,12 +47,17 @@ const Process = new Schema({
 // (Local.touchs) y no de un documento de Manager: entonces `name` es su placa,
 // 'G1', 'A2'… `createdAt` es el momento real del clic, que no cambia aunque
 // `hourTouch` se corrija a mano. Los toques anteriores a ese campo lo traen null.
+// `recovered` es true cuando el toque se apuntó DESPUÉS, desde la pestaña
+// Registros de Jarvis-express365 (en una rotación ya guardada), y no en vivo desde
+// Mesas. false por defecto. Los toques anteriores al campo no lo traen: el GET usa
+// lean(), que no pone el valor por defecto, así que quien lee trata su ausencia como false.
 // Como el proceso, lleva su propio _id para poder corregirlo una vez guardado.
 const Touch = new Schema({
     ref:       { type: Schema.Types.ObjectId, ref: 'Manager', default: null },
     name:      { type: String, default: '' },
     hourTouch: timeField(),
     createdAt: { type: Date, default: null },
+    recovered: { type: Boolean, default: false },
 });
 
 
@@ -104,6 +109,12 @@ const Rotation = new Schema({
     // (SHIFTS, en rotation.schema.js). null es «todavía no se dijo»: así nacen
     // las que se guardan sin él y las de antes de existir el campo.
     shift: { type: String, enum: [...SHIFTS, null], default: null },
+
+    // Rotación recuperada: true cuando no se guardó en su momento desde Mesas y se
+    // anotó a mano después, desde la pestaña Registros de Jarvis-express365. false
+    // por defecto. Como la del toque: las de antes de existir el campo no la traen
+    // en el GET (lean), y su ausencia es false.
+    recovered: { type: Boolean, default: false },
 
     hourOccupies:       timeField(),   // Ocupa
     hourFirstAttention: timeField(),   // Primera atención

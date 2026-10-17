@@ -296,3 +296,38 @@ test('el turno en el modelo: el enum rechaza lo que no sea day o night, y se cor
     assert.deepEqual(rotacion.changes.map(linea => [linea.property, linea.oldValue, linea.newValue]), [['shift', null, 'night']]);
     await assert.rejects(applyEdit(rotacion, String(rotacion._id), { shift: 'tarde' }, OTRO), /turno solo puede ser/);
 });
+
+test('recovered: una marca de la rotación y de cada toque, false si no se manda', async () => {
+    const sinMarca = await rotationValidate.validate(ROTACION, OPC);
+    assert.equal(sinMarca.recovered, false, 'la rotación, sin mandarla');
+    assert.equal(sinMarca.touch[0].recovered, false, 'el toque, sin mandarla');
+
+    const conMarca = await rotationValidate.validate({ ...ROTACION, recovered: true, touch: [{ ...ROTACION.touch[0], recovered: true }] }, OPC);
+    assert.equal(conMarca.recovered, true);
+    assert.equal(conMarca.touch[0].recovered, true);
+
+    await assert.rejects(rotationValidate.validate({ ...ROTACION, recovered: 'quizás' }, OPC), /recovered» de la rotación/);
+    await assert.rejects(rotationValidate.validate({ ...ROTACION, touch: [{ ...ROTACION.touch[0], recovered: 'quizás' }] }, OPC), /recovered» del toque/);
+});
+
+test('recovered en el modelo: nace en false, se guarda, y se corrige con el PUT en la rotación y en el toque', async () => {
+    const valida = await rotationValidate.validate(ROTACION, OPC);
+    const base = { ...valida, operationalDate: operationalDateOf(valida.date), createdBy: ID };
+
+    const { recovered, touch, ...sinMarcas } = base;
+    const vieja = new RotationModel({ ...sinMarcas, touch: touch.map(({ recovered: marca, ...resto }) => resto) });
+    assert.equal(vieja.recovered, false, 'una rotación que llega sin el campo');
+    assert.equal(vieja.touch[0].recovered, false, 'un toque que llega sin el campo');
+
+    const rotacion = await guardada();
+    await applyEdit(rotacion, String(rotacion._id), { recovered: true }, OTRO);
+    assert.equal(rotacion.recovered, true);
+
+    const toque = rotacion.touch[0];
+    await applyEdit(rotacion, String(toque._id), { recovered: true }, OTRO);
+    assert.equal(rotacion.touch[0].recovered, true);
+    assert.deepEqual(rotacion.changes.map(linea => [linea.property, linea.oldValue, linea.newValue]), [['recovered', false, true], ['recovered', false, true]]);
+
+    const nuevo = await addTouchTo(rotacion, { name: 'G1', hourTouch: '10:50:00', recovered: true }, OTRO);
+    assert.equal(nuevo.recovered, true, 'un toque añadido después también la lleva');
+});
