@@ -95,6 +95,12 @@ export const rotationValidate = yup.object({
     firstAttentionDelay: objectId('La demora de primera atención debe ser el ObjectId de una novedad').nullable().default(null),
     cleaningDelay:       objectId('La demora de limpieza debe ser el ObjectId de una novedad').nullable().default(null),
 
+    // Los avisos enviados mientras la mesa seguía esperando (sin primera atención, o sin limpiar): el ObjectId de su
+    // novedad, como las demoras. Jarvis-express365 lo apunta al enviar el aviso desde el triángulo amarillo. Sin
+    // mandarlos, null. También se corrigen con el PUT.
+    firstAttentionWarning: objectId('El aviso de primera atención debe ser el ObjectId de una novedad').nullable().default(null),
+    cleaningWarning:       objectId('El aviso de limpieza debe ser el ObjectId de una novedad').nullable().default(null),
+
     process: yup.array().of(processValidate).default([]),
     touch:   yup.array().of(touchValidate).default([]),
 });

@@ -133,6 +133,15 @@ const Rotation = new Schema({
     firstAttentionDelay: { type: Schema.Types.ObjectId, ref: 'Noveltie', default: null },
     cleaningDelay:       { type: Schema.Types.ObjectId, ref: 'Noveltie', default: null },
 
+    // Los AVISOS de esta rotación: la novedad que se envió MIENTRAS la mesa seguía esperando, antes de que pasara.
+    // «Mesa no recibe protocolo de PA1 aún (aviso)», con Ocupa y todavía sin Primera atención, y «Mesa sin ser
+    // limpiada aún (aviso)», con Desocupa y todavía sin Limpieza. Como las demoras, solo la REFERENCIA (populate
+    // 'firstAttentionWarning cleaningWarning'), null mientras no se haya enviado ninguno.
+    // Las rellena Jarvis-express365: al enviar el aviso desde el triángulo amarillo de Ocupa o Desocupa de una fila de
+    // Mesas, apunta en ella el ObjectId de la novedad creada, y llega aquí con el POST de la rotación (o con el PUT).
+    firstAttentionWarning: { type: Schema.Types.ObjectId, ref: 'Noveltie', default: null },
+    cleaningWarning:       { type: Schema.Types.ObjectId, ref: 'Noveltie', default: null },
+
     process: { type: [Process], default: [] },
     touch:   { type: [Touch],   default: [] },
 

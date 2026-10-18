@@ -387,3 +387,45 @@ test('las demoras reportadas: firstAttentionDelay y cleaningDelay referencian No
     assert.equal(String(rotacion.firstAttentionDelay), ID);
     assert.deepEqual(rotacion.changes.map(linea => linea.property), ['firstAttentionDelay']);
 });
+
+test('los avisos: firstAttentionWarning y cleaningWarning referencian Noveltie y nacen en null, como las demoras', async () => {
+    for (const campo of ['firstAttentionWarning', 'cleaningWarning']) {
+        const ruta = RotationModel.schema.path(campo);
+        assert.equal(ruta.instance.toLowerCase(), 'objectid', campo);
+        assert.equal(ruta.options.ref, 'Noveltie', campo);
+    }
+
+    const valida = await rotationValidate.validate(ROTACION, OPC);
+    const base = { ...valida, operationalDate: operationalDateOf(valida.date), createdBy: ID };
+
+    const sinAvisos = new RotationModel(base);
+    assert.equal(sinAvisos.firstAttentionWarning, null);
+    assert.equal(sinAvisos.cleaningWarning, null);
+    await sinAvisos.validate();
+
+    const conAvisos = new RotationModel({ ...base, firstAttentionWarning: ID, cleaningWarning: OTRO });
+    await conAvisos.validate();
+    assert.equal(String(conAvisos.firstAttentionWarning), ID);
+    assert.equal(String(conAvisos.cleaningWarning), OTRO);
+    await assert.rejects(new RotationModel({ ...base, cleaningWarning: 'no-es-un-id' }).validate(), /cleaningWarning/);
+
+    //  El POST los acepta (los apunta Jarvis-express365 al enviar el aviso), sin mandarlos son null, y un id falso no pasa
+    const mandados = await rotationValidate.validate({ ...ROTACION, firstAttentionWarning: ID, cleaningWarning: OTRO }, OPC);
+    assert.equal(mandados.firstAttentionWarning, ID);
+    assert.equal(mandados.cleaningWarning, OTRO);
+    const sinMandar = await rotationValidate.validate(ROTACION, OPC);
+    assert.equal(sinMandar.firstAttentionWarning, null);
+    assert.equal(sinMandar.cleaningWarning, null);
+    await assert.rejects(rotationValidate.validate({ ...ROTACION, firstAttentionWarning: 'aviso-3' }, OPC), /aviso de primera atención/);
+
+    //  Un aviso no es una demora: cada uno va a su propiedad
+    const ambos = await rotationValidate.validate({ ...ROTACION, firstAttentionDelay: ID, firstAttentionWarning: OTRO }, OPC);
+    assert.equal(ambos.firstAttentionDelay, ID);
+    assert.equal(ambos.firstAttentionWarning, OTRO);
+
+    //  Y se corrigen con el PUT, con su línea en los cambios
+    const rotacion = await guardada();
+    await applyEdit(rotacion, String(rotacion._id), { cleaningWarning: ID }, OTRO);
+    assert.equal(String(rotacion.cleaningWarning), ID);
+    assert.deepEqual(rotacion.changes.map(linea => linea.property), ['cleaningWarning']);
+});
