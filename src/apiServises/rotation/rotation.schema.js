@@ -67,6 +67,7 @@ export const touchValidate = yup.object({
     ref:       objectId('El gerente del toque debe ser un ObjectId válido').nullable().default(null),
     name:      yup.string().default(''),
     hourTouch: time(),
+    hourTouchFinish: time(),   //  cuándo terminó el toque; la pone Jarvis-express365 al apuntarlo. Sin mandarla, ''.
     createdAt: yup.date().nullable().default(null),
     recovered: yup.boolean().typeError('«recovered» del toque es true o false').default(false),
 });

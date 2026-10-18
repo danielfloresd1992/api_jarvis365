@@ -51,13 +51,16 @@ const Process = new Schema({
 // Registros de Jarvis-express365 (en una rotación ya guardada), y no en vivo desde
 // Mesas. false por defecto. Los toques anteriores al campo no lo traen: el GET usa
 // lean(), que no pone el valor por defecto, así que quien lee trata su ausencia como false.
+// `hourTouchFinish` es cuándo terminó el toque: Jarvis-express365 la pone al apuntarlo, de 5 segundos a un minuto
+// después de `hourTouch`, al azar (libs/date_time/touchFinish.js). '' en los toques de antes de existir el campo.
 // Como el proceso, lleva su propio _id para poder corregirlo una vez guardado.
 const Touch = new Schema({
-    ref:       { type: Schema.Types.ObjectId, ref: 'Manager', default: null },
-    name:      { type: String, default: '' },
-    hourTouch: timeField(),
-    createdAt: { type: Date, default: null },
-    recovered: { type: Boolean, default: false },
+    ref:             { type: Schema.Types.ObjectId, ref: 'Manager', default: null },
+    name:            { type: String, default: '' },
+    hourTouch:       timeField(),
+    hourTouchFinish: timeField(),
+    createdAt:       { type: Date, default: null },
+    recovered:       { type: Boolean, default: false },
 });
 
 

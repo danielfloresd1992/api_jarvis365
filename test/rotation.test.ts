@@ -332,6 +332,25 @@ test('recovered en el modelo: nace en false, se guarda, y se corrige con el PUT 
     assert.equal(nuevo.recovered, true, 'un toque añadido después también la lleva');
 });
 
+test('hourTouchFinish: la hora de fin del toque, se guarda, se valida y se corrige con el PUT', async () => {
+    const sinFin = await rotationValidate.validate(ROTACION, OPC);
+    assert.equal(sinFin.touch[0].hourTouchFinish, '', 'sin mandarla, vacía');
+
+    const conFin = await rotationValidate.validate({ ...ROTACION, touch: [{ ...ROTACION.touch[0], hourTouchFinish: '10:31:15' }] }, OPC);
+    assert.equal(conFin.touch[0].hourTouchFinish, '10:31:15');
+    await assert.rejects(rotationValidate.validate({ ...ROTACION, touch: [{ ...ROTACION.touch[0], hourTouchFinish: '25:00:00' }] }, OPC), /HH:MM:SS/);
+
+    const base = { ...conFin, operationalDate: operationalDateOf(conFin.date), createdBy: ID };
+    assert.equal(new RotationModel(base).touch[0].hourTouchFinish, '10:31:15', 'el modelo la guarda');
+
+    const rotacion = await guardada();
+    await applyEdit(rotacion, String(rotacion.touch[0]._id), { hourTouchFinish: '10:32:00' }, OTRO);
+    assert.equal(rotacion.touch[0].hourTouchFinish, '10:32:00', 'se corrige con el PUT');
+
+    const nuevo = await addTouchTo(rotacion, { name: 'G1', hourTouch: '10:50:00', hourTouchFinish: '10:50:40' }, OTRO);
+    assert.equal(nuevo.hourTouchFinish, '10:50:40', 'un toque añadido después también la lleva');
+});
+
 test('las demoras reportadas: firstAttentionDelay y cleaningDelay referencian Noveltie y nacen en null', async () => {
     for (const campo of ['firstAttentionDelay', 'cleaningDelay']) {
         const ruta = RotationModel.schema.path(campo);
