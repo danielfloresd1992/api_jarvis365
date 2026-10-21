@@ -430,6 +430,33 @@ test('los avisos: firstAttentionWarning y cleaningWarning referencian Noveltie y
     assert.deepEqual(rotacion.changes.map(linea => linea.property), ['cleaningWarning']);
 });
 
+test('la demora de preparación: preparationDelay del proceso referencia Noveltie, nace en null y se corrige con el PUT', async () => {
+    const ruta = RotationModel.schema.path('process').schema.path('preparationDelay');
+    assert.equal(ruta.instance.toLowerCase(), 'objectid');
+    assert.equal(ruta.options.ref, 'Noveltie');
+
+    //  Sin mandarla, null; mandada, se queda; un id falso no pasa
+    const sinMandar = await rotationValidate.validate(ROTACION, OPC);
+    assert.equal(sinMandar.process[0].preparationDelay, null);
+    const conDemora = { ...ROTACION, process: [{ ...ROTACION.process[0], preparationDelay: ID }] };
+    const mandada = await rotationValidate.validate(conDemora, OPC);
+    assert.equal(mandada.process[0].preparationDelay, ID);
+    await assert.rejects(rotationValidate.validate({ ...ROTACION, process: [{ ...ROTACION.process[0], preparationDelay: 'demora-1' }] }, OPC), /demora de preparación/);
+
+    //  En el modelo
+    const base = { ...sinMandar, operationalDate: operationalDateOf(sinMandar.date), createdBy: ID };
+    const nueva = new RotationModel(base);
+    assert.equal(nueva.process[0].preparationDelay, null);
+    await nueva.validate();
+
+    //  Y se corrige con el PUT del proceso, con su línea en los cambios
+    const rotacion = await guardada();
+    const proceso = rotacion.process[0];
+    await applyEdit(rotacion, String(proceso._id), { preparationDelay: OTRO }, OTRO);
+    assert.equal(String(rotacion.process[0].preparationDelay), OTRO);
+    assert.deepEqual(rotacion.changes.map(linea => linea.property), ['preparationDelay']);
+});
+
 // marcar = «la marca de una rotación que empezó en 'cuando' y se guarda en 'ahora'», como la calcula el POST
 const marcar = (cuando, ahora) => abandonedOf({ operationalDate: operationalDateOf(cuando), savedOperationalDate: operationalDateOf(ahora), savedBy: ID, savedAt: ahora });
 

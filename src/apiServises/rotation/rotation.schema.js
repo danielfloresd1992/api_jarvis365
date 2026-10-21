@@ -61,6 +61,9 @@ const processValidate = yup.object({
     markedReadyOnTablet: time(),
     readyInTheKitchen:   time(),
     dishDelivery:        time(),
+    //  La demora de preparación reportada: el ObjectId de su novedad. Jarvis-express365 lo apunta en el proceso al
+    //  enviarla desde Mesas, y llega con el disquete. Sin mandarla, null. También se corrige con el PUT del proceso.
+    preparationDelay:    objectId('La demora de preparación debe ser el ObjectId de una novedad').nullable().default(null),
 });
 
 export const touchValidate = yup.object({

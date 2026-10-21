@@ -31,13 +31,19 @@ const timeField = () => ({ type: String, default: '' });
 // ── UN PROCESO: un pedido de la mesa ──────────────────────────────────
 // Los cuatro primeros los lee la IA de la tablet; listo en cocina y entrega se
 // anotan a mano. Lleva su propio _id para poder corregirlo una vez guardado.
+// `preparationDelay` es la demora de PREPARACIÓN reportada (de la toma de orden a
+// listo en tablet, contra el timeLimit del plato): como firstAttentionDelay en la
+// rotación, solo la referencia a la novedad («Demora de tablet»). La apunta
+// Jarvis-express365 al enviarla desde el icono de cocina del proceso en Mesas;
+// null mientras no se haya reportado.
 const Process = new Schema({
     ticketNumber:        { type: String, default: '' },
-    dishType:            { type: String, default: '' },   // APPETIZER, PF, POSTRE… la lista vive en Jarvis-express365
+    dishType:            { type: String, default: '' },   // el plato de la carta del local (Local.dishes) o, sin carta, APPETIZER, PF, POSTRE…: las listas viven en Jarvis-express365
     orderTaking:         timeField(),
     markedReadyOnTablet: timeField(),
     readyInTheKitchen:   timeField(),
     dishDelivery:        timeField(),
+    preparationDelay:    { type: Schema.Types.ObjectId, ref: 'Noveltie', default: null },
 });
 
 
