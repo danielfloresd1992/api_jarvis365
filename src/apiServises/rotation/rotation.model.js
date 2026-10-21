@@ -80,6 +80,18 @@ const Change = new Schema({
 }, { _id: false });
 
 
+// Una rotación ABANDONADA: se quedó en Mesas de Jarvis-express365 sin guardar y se guardó en un día operativo
+// posterior al suyo. Lo calcula el servidor al guardarla (abandonedOf, en rotation.lib.js), con su reloj: el
+// body no lo trae ni el PUT lo corrige. De qué día era, en qué día se guardó, cuántos días tarde, cuándo y quién.
+const Abandoned = new Schema({
+    operationalDate:      { type: Date,   required: true },
+    savedOperationalDate: { type: Date,   required: true },
+    daysLate:             { type: Number, required: true, min: 1 },
+    savedAt:              { type: Date,   required: true },
+    savedBy:              { type: Schema.Types.ObjectId, ref: 'user', default: null },
+}, { _id: false });
+
+
 
 const Rotation = new Schema({
 
@@ -141,6 +153,9 @@ const Rotation = new Schema({
     // Mesas, apunta en ella el ObjectId de la novedad creada, y llega aquí con el POST de la rotación (o con el PUT).
     firstAttentionWarning: { type: Schema.Types.ObjectId, ref: 'Noveltie', default: null },
     cleaningWarning:       { type: Schema.Types.ObjectId, ref: 'Noveltie', default: null },
+
+    // null si se guardó en su día operativo; si se guardó después, la marca de abandonada (Abandoned, arriba).
+    abandoned: { type: Abandoned, default: null },
 
     process: { type: [Process], default: [] },
     touch:   { type: [Touch],   default: [] },

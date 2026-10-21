@@ -24,12 +24,34 @@ export const isTakeOutTable = (tableNumber) => String(tableNumber ?? '').trim().
 
 
 
-// PEOPLE = «las personas que viajan con cada rotación», con su nombre y su foto: quién la guardó y
-// quién hizo cada corrección (Jarvis-express365 las enseña en «Creador», «Edición» y la lista de
-// cambios). Lo usan el GET, el PUT y el aviso en vivo, para que las tres den la misma forma.
+// ── UNA ROTACIÓN GUARDADA FUERA DE SU DÍA ──────────────────────────────
+// Jarvis-express365 bloquea en Mesas las rotaciones de un día operativo anterior y solo deja guardarlas o
+// eliminarlas. Al guardar una, el servidor la marca como abandonada: se quedó sin guardar a tiempo.
+
+// DAY_MS = «los milisegundos de un día»: los días operativos se guardan como medianoche UTC
+const DAY_MS = 24 * 3600 * 1000;
+
+// abandonedOf = «la marca de abandonada de una rotación que se guarda», o null si se guarda en su día
+// Recibe los dos días operativos ya calculados —el de la rotación y el del momento del guardado, con
+// operationalDateOf (dvrFailure.lib.ts)—, quién la guarda y cuándo: así es pura y se prueba sin reloj.
+// Una rotación de un día POSTERIOR al del guardado (un reloj mal puesto en el equipo) tampoco se marca.
+export function abandonedOf({ operationalDate, savedOperationalDate, savedBy = null, savedAt = new Date() }) {
+    const daysLate = Math.round((savedOperationalDate.getTime() - operationalDate.getTime()) / DAY_MS);
+
+    if (!(daysLate >= 1)) return null;
+    return { operationalDate, savedOperationalDate, daysLate, savedAt, savedBy };
+}
+
+
+
+// PEOPLE = «las personas que viajan con cada rotación», con su nombre y su foto: quién la guardó,
+// quién hizo cada corrección y, si se guardó tarde, quién la guardó así (Jarvis-express365 las enseña en
+// «Creador», «Edición», la lista de cambios y la marca de abandonada). Lo usan el GET, el PUT y el aviso
+// en vivo, para que las tres den la misma forma.
 export const PEOPLE = [
     { path: 'createdBy', select: 'name surName img' },
     { path: 'changes.user', select: 'name surName img' },
+    { path: 'abandoned.savedBy', select: 'name surName img' },
 ];
 
 

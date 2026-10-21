@@ -1,7 +1,7 @@
 import RotationModel from './rotation.model.js';
 import LocalModel from '../local/local.model.js';
 import { rotationValidate, rotationQueryValidate, rotationTargetValidate, dayToDate } from './rotation.schema.js';
-import { applyEdit, addTouchTo, removeTouchFrom, PEOPLE } from './rotation.lib.js';
+import { applyEdit, addTouchTo, removeTouchFrom, abandonedOf, PEOPLE } from './rotation.lib.js';
 import { emitRotation } from './rotation.socket.js';
 import { operationalDateOf } from '../dvrFailure/dvrFailure.lib.js';
 
@@ -28,10 +28,16 @@ controller.setRotation = async (req, res) => {
 
     const rotationValidated = await rotationValidate.validate(req.body, OPTIONS);
 
+    //  'abandoned': si su día operativo ya pasó, se guarda marcada como abandonada (abandonedOf), con el reloj
+    //  del servidor y no con lo que diga el equipo que la manda.
+    const now = new Date();
+    const operationalDate = operationalDateOf(rotationValidated.date);
+
     const rotation = new RotationModel({
         ...rotationValidated,
-        operationalDate: operationalDateOf(rotationValidated.date),
+        operationalDate,
         createdBy: req.session.userId,
+        abandoned: abandonedOf({ operationalDate, savedOperationalDate: operationalDateOf(now), savedBy: req.session.userId, savedAt: now }),
     });
     await rotation.save();
 

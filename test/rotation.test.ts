@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { rotationValidate, rotationQueryValidate, rotationTargetValidate, dayToDate, MAX_RANGE_DAYS, SHIFTS } from '../src/apiServises/rotation/rotation.schema.js';
-import { applyEdit, targetOf, isTakeOutTable, rotationEvent, ROTATION_METHODS, PEOPLE, addTouchTo, removeTouchFrom } from '../src/apiServises/rotation/rotation.lib.js';
+import { applyEdit, targetOf, isTakeOutTable, rotationEvent, ROTATION_METHODS, PEOPLE, addTouchTo, removeTouchFrom, abandonedOf } from '../src/apiServises/rotation/rotation.lib.js';
 import RotationModel from '../src/apiServises/rotation/rotation.model.js';
 import { operationalDateOf } from '../src/apiServises/dvrFailure/dvrFailure.lib.ts';
 
@@ -226,7 +226,7 @@ test('el aviso en vivo: un evento por local y por método, con las personas del 
     assert.deepEqual(ROTATION_METHODS, ['post', 'put']);
     assert.equal(rotationEvent('post', 'Francisca Doral'), 'Francisca Doral-post');
     assert.equal(rotationEvent('put', 'Francisca Doral'), 'Francisca Doral-put');
-    assert.deepEqual(PEOPLE.map(person => person.path), ['createdBy', 'changes.user']);
+    assert.deepEqual(PEOPLE.map(person => person.path), ['createdBy', 'changes.user', 'abandoned.savedBy']);
 });
 
 test('añadir un toque a una rotación guardada: con su _id, su momento y su línea en los cambios', async () => {
@@ -428,4 +428,55 @@ test('los avisos: firstAttentionWarning y cleaningWarning referencian Noveltie y
     await applyEdit(rotacion, String(rotacion._id), { cleaningWarning: ID }, OTRO);
     assert.equal(String(rotacion.cleaningWarning), ID);
     assert.deepEqual(rotacion.changes.map(linea => linea.property), ['cleaningWarning']);
+});
+
+// marcar = «la marca de una rotación que empezó en 'cuando' y se guarda en 'ahora'», como la calcula el POST
+const marcar = (cuando, ahora) => abandonedOf({ operationalDate: operationalDateOf(cuando), savedOperationalDate: operationalDateOf(ahora), savedBy: ID, savedAt: ahora });
+
+test('abandonedOf: la marca de una rotación guardada fuera de su día operativo, calculada por el servidor', () => {
+    //  El día operativo va de 08:00 a 07:00 en Caracas (UTC-4): las 19:00 del 16 de octubre son las 23:00 UTC
+    const del16 = new Date('2026-10-16T23:00:00.000Z');
+
+    //  Guardada el mismo día operativo, también de madrugada (las 02:00 del 17 aún son del 16): no se marca
+    assert.equal(marcar(del16, new Date('2026-10-17T00:30:00.000Z')), null);
+    assert.equal(marcar(del16, new Date('2026-10-17T06:00:00.000Z')), null);
+
+    //  Guardada cinco días después
+    const tarde = new Date('2026-10-21T23:04:12.000Z');
+    const marca = marcar(del16, tarde);
+    assert.equal(marca.operationalDate.toISOString(), '2026-10-16T00:00:00.000Z');
+    assert.equal(marca.savedOperationalDate.toISOString(), '2026-10-21T00:00:00.000Z');
+    assert.equal(marca.daysLate, 5);
+    assert.equal(marca.savedAt, tarde);
+    assert.equal(marca.savedBy, ID);
+
+    //  A las 08:00 del 17 ya es otro día operativo: un día tarde
+    assert.equal(marcar(del16, new Date('2026-10-17T12:00:00.000Z')).daysLate, 1);
+
+    //  Una rotación con fecha del futuro (un reloj mal puesto) no se marca
+    assert.equal(marcar(new Date('2026-10-25T23:00:00.000Z'), tarde), null);
+});
+
+test('abandoned en el modelo: nace en null, guarda la marca entera y el body no la puede traer', async () => {
+    const valida = await rotationValidate.validate(ROTACION, OPC);
+    const base = { ...valida, operationalDate: operationalDateOf(valida.date), createdBy: ID };
+
+    const aTiempo = new RotationModel(base);
+    assert.equal(aTiempo.abandoned, null);
+    await aTiempo.validate();
+
+    const marca = marcar(new Date('2026-10-16T23:00:00.000Z'), new Date('2026-10-21T23:04:12.000Z'));
+    const tarde = new RotationModel({ ...base, abandoned: marca });
+    await tarde.validate();
+    assert.equal(tarde.abandoned.daysLate, 5);
+    assert.equal(String(tarde.abandoned.savedBy), ID);
+    await assert.rejects(new RotationModel({ ...base, abandoned: { ...marca, daysLate: 0 } }).validate(), /daysLate/);
+
+    //  El body no la trae: el esquema del POST no la tiene, y stripUnknown la quita
+    const mandada = await rotationValidate.validate({ ...ROTACION, abandoned: marca }, OPC);
+    assert.equal('abandoned' in mandada, false);
+
+    //  Ni el PUT la corrige
+    const rotacion = await guardada();
+    await assert.rejects(applyEdit(rotacion, String(rotacion._id), { abandoned: marca }, OTRO), /No hay nada que corregir/);
 });
