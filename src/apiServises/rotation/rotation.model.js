@@ -36,6 +36,9 @@ const timeField = () => ({ type: String, default: '' });
 // rotación, solo la referencia a la novedad («Demora de tablet»). La apunta
 // Jarvis-express365 al enviarla desde el icono de cocina del proceso en Mesas;
 // null mientras no se haya reportado.
+// `earlyMarkDelay` es lo mismo para «Marcada antes de estar listo»: el pedido se
+// sacó de la pantalla de la tablet antes de estar listo en cocina. La apunta
+// Jarvis-express365 al enviarla desde el menú contextual del proceso en Mesas.
 const Process = new Schema({
     ticketNumber:        { type: String, default: '' },
     dishType:            { type: String, default: '' },   // el plato de la carta del local (Local.dishes) o, sin carta, APPETIZER, PF, POSTRE…: las listas viven en Jarvis-express365
@@ -44,6 +47,7 @@ const Process = new Schema({
     readyInTheKitchen:   timeField(),
     dishDelivery:        timeField(),
     preparationDelay:    { type: Schema.Types.ObjectId, ref: 'Noveltie', default: null },
+    earlyMarkDelay:      { type: Schema.Types.ObjectId, ref: 'Noveltie', default: null },
 });
 
 
