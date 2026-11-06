@@ -44,12 +44,13 @@ export function abandonedOf({ operationalDate, savedOperationalDate, savedBy = n
 
 
 
-// PEOPLE = «las personas que viajan con cada rotación», con su nombre y su foto: quién la guardó,
-// quién hizo cada corrección y, si se guardó tarde, quién la guardó así (Jarvis-express365 las enseña en
-// «Creador», «Edición», la lista de cambios y la marca de abandonada). Lo usan el GET, el PUT y el aviso
-// en vivo, para que las tres den la misma forma.
+// PEOPLE = «las personas que viajan con cada rotación», con su nombre y su foto: quién la creó, quién hizo
+// el último cambio mientras estaba abierta, quién hizo cada corrección y, si se guardó tarde, quién la guardó
+// así (Jarvis-express365 las enseña en «Creador», «Edición», el title de la fila de Mesas, la lista de cambios y
+// la marca de abandonada). Lo usan el GET, el PUT y los avisos en vivo, para que todos den la misma forma.
 export const PEOPLE = [
     { path: 'createdBy', select: 'name surName img' },
+    { path: 'updatedBy', select: 'name surName img' },
     { path: 'changes.user', select: 'name surName img' },
     { path: 'abandoned.savedBy', select: 'name surName img' },
 ];
@@ -63,6 +64,57 @@ export const ROTATION_METHODS = ['post', 'put'];
 // '<nombre del local>-put' ('Francisca Doral-post'). Con el nombre del local dentro, cada pantalla escucha
 // solo el suyo (el nombre es único en Local, y es con lo que Jarvis-express365 pide las rotaciones guardadas).
 export const rotationEvent = (method, localName) => `${localName}-${method}`;
+
+
+
+// ── MESAS EN VIVO: la rotación abierta que se sube mientras se trabaja ──
+
+// SYNC_ACTIONS = «lo que se avisa de una rotación de Mesas»: que se subió (creada, cambiada o cerrada) o que se quitó
+export const SYNC_ACTIONS = ['upsert', 'remove'];
+
+// rotationSyncEvent = «el evento en vivo de las rotaciones de Mesas de un local»: 'rotation-sync:<_id del local>'.
+// Por el _id y no por el nombre: lo escuchan Mesas de Jarvis-express365 y las verificaciones de Client365, y las dos
+// tienen el _id a mano; un local renombrado no deja a nadie escuchando un evento viejo.
+export const rotationSyncEvent = (establishmentId) => `rotation-sync:${establishmentId}`;
+
+
+// syncOutcome = «qué hacer con una rotación que sube Mesas» (PUT /rotation/client=)
+// Recibe la que ya hay (un documento, o null) y la que llega, ya validada (syncValidate). Devuelve:
+//   'create'    no existe todavía: se crea
+//   'update'    existe, sigue abierta y lo que llega es igual de nuevo o más: se reemplaza (y se cierra, si llega cerrada)
+//   'stale'     existe abierta, pero lo que llega cambió ANTES que lo guardado (una subida atrasada de un equipo que
+//               estuvo sin internet, o de otro equipo): no se toca, y se responde la del servidor para que la adopte
+//   'repeated'  ya está cerrada y lo que llega también la cierra: un reintento del disquete; no se toca
+//   'closed'    ya está cerrada y lo que llega la quiere abierta: es de Registros, ya no de Mesas
+// Las de antes de existir `status` cuentan como cerradas. Sin clientUpdatedAt en lo que llega, gana lo que llega.
+export function syncOutcome(existing, incoming) {
+    if (!existing) return 'create';
+
+    if (existing.status !== 'open') return incoming.status === 'closed' ? 'repeated' : 'closed';
+
+    const stored = existing.clientUpdatedAt ? new Date(existing.clientUpdatedAt).getTime() : -Infinity;
+    const arriving = incoming.clientUpdatedAt ? new Date(incoming.clientUpdatedAt).getTime() : Infinity;
+    return arriving < stored ? 'stale' : 'update';
+}
+
+
+// applySync = «poner en una rotación (un documento de Mongoose) lo que sube Mesas»
+// Reemplaza todo lo que se anota —horas, procesos, toques, demoras y avisos…— con lo que llega (ya validado con
+// syncValidate) y apunta lo que pone el servidor: su día operativo, quién hizo el cambio (updatedBy) y cuándo cambió
+// en el equipo (clientUpdatedAt; sin él, ahora). Si llega cerrada, la cierra: cuándo (closedAt) y la marca de
+// abandonada que le toque (null si se cierra en su día). Lo que la identifica —el local, el clientId— y su autor
+// no se tocan. Los cálculos con el reloj (operationalDateOf) los hace quien llama: así esto se prueba sin él.
+// No guarda, ni anota en `changes`: mientras está abierta se reemplaza entera; el historial de correcciones
+// empieza cuando se guarda (applyEdit).
+export function applySync(rotation, incoming, { userId, now = new Date(), operationalDate, abandoned = null }) {
+
+    // data = «lo que se anota», sin lo que identifica la rotación ni lo que decide el servidor
+    const { establishment, clientId, status, clientUpdatedAt, ...data } = incoming;
+
+    rotation.set({ ...data, operationalDate, status, updatedBy: userId, clientUpdatedAt: clientUpdatedAt ?? now });
+    if (status === 'closed') rotation.set({ closedAt: now, abandoned });
+    return rotation;
+}
 
 
 

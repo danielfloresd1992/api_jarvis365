@@ -1,7 +1,7 @@
 import { io } from '../../services/socket/io.js';
 import RotationModel from './rotation.model.js';
 import LocalModel from '../local/local.model.js';
-import { PEOPLE, ROTATION_METHODS, rotationEvent } from './rotation.lib.js';
+import { PEOPLE, ROTATION_METHODS, rotationEvent, SYNC_ACTIONS, rotationSyncEvent } from './rotation.lib.js';
 
 
 
@@ -38,11 +38,50 @@ export async function emitRotation(method, rotation) {
             RotationModel.findById(rotation._id).populate(PEOPLE).lean(),
         ]);
 
-        if (!local?.name || !payload) return;
+        //  Una abierta no se avisa a Registros: es de Mesas, y Mesas tiene su propio aviso (emitRotationSync)
+        if (!local?.name || !payload || payload.status === 'open') return;
 
         io.emit(rotationEvent(method, local.name), payload);
     }
     catch (error) {
         console.log(`[rotation] No se pudo avisar en vivo (${method}):`, error?.message ?? error);
+    }
+}
+
+
+
+// ── MESAS EN VIVO ─────────────────────────────────────────────────────
+// Cada vez que Mesas sube una rotación (PUT /rotation/client=) o quita una abierta (DELETE), los demás equipos
+// de ese local —otra Mesas, las verificaciones de Client365— lo ven al momento, con quién la creó y quién hizo
+// el último cambio:
+//
+//     'rotation-sync:<_id del local>'   { action: 'upsert', clientId, rotation }   la rotación entera, como el GET
+//                                       { action: 'remove', clientId }             se quitó de Mesas sin guardar
+//
+// La que se cierra con el disquete llega como 'upsert' con status 'closed', y ADEMÁS como '<local>-post', el aviso
+// de siempre de una rotación guardada, para que la pestaña «Registros» la meta en su lista sin cambiar nada.
+// El equipo que la subió también recibe su propio aviso: lo reconoce por clientUpdatedAt y no hace nada.
+
+// emitRotationSync = «avisar en vivo de una rotación de Mesas»
+// Recibe: action ('upsert' | 'remove', SYNC_ACTIONS) y { establishment, clientId, rotationId } (rotationId, el
+// _id del documento, solo con 'upsert'). NUNCA lanza, como emitRotation: se llama sin esperarla, después de guardar.
+export async function emitRotationSync(action, { establishment, clientId, rotationId = null }) {
+    try {
+        if (!SYNC_ACTIONS.includes(action)) throw new Error(`acción desconocida «${action}»`);
+
+        const event = rotationSyncEvent(establishment);
+        if (action === 'remove') {
+            io.emit(event, { action, clientId });
+            return;
+        }
+
+        // rotation = «la rotación como la devuelve el GET», con quién la creó y quién la cambió (PEOPLE)
+        const rotation = await RotationModel.findById(rotationId).populate(PEOPLE).lean();
+        if (!rotation) return;
+
+        io.emit(event, { action, clientId, rotation });
+    }
+    catch (error) {
+        console.log(`[rotation] No se pudo avisar en vivo a Mesas (${action}):`, error?.message ?? error);
     }
 }

@@ -28,6 +28,10 @@ export const MAX_RANGE_DAYS = 62;
 // ya importa de este archivo: al revés sería un import circular.
 export const SHIFTS = ['day', 'night'];
 
+// ROTATION_STATUSES = «dónde está una rotación»: 'open', todavía en Mesas de Jarvis-express365, que la va subiendo
+// mientras se trabaja; 'closed', guardada con el disquete, la de «Registros». Vive aquí por lo mismo que SHIFTS.
+export const ROTATION_STATUSES = ['open', 'closed'];
+
 
 
 // objectId = «un ObjectId de Mongo». Sin el `addMethod` de local.schema.js, que
@@ -67,6 +71,13 @@ const processValidate = yup.object({
     //  «Marcada antes de estar listo» reportada (se sacó de la pantalla de la tablet antes de estar listo en cocina):
     //  el ObjectId de su novedad, igual que la demora de preparación. Sin mandarla, null.
     earlyMarkDelay:      objectId('«Marcada antes de estar listo» debe ser el ObjectId de una novedad').nullable().default(null),
+
+    //  Lo que Mesas necesita para rehacer el proceso tal cual al cargarlo desde aquí: su id en Jarvis-express365
+    //  (un UUIDv4), el pedido de la tablet del que sale ('tk-102·appetizer') y lo que se corrigió a mano y la IA ya
+    //  no pisa. No se corrigen con el PUT (editableValidate).
+    clientId:            yup.string().default(''),
+    key:                 yup.string().default(''),
+    edited:              yup.array().of(yup.string()).default([]),
 });
 
 export const touchValidate = yup.object({
@@ -76,6 +87,7 @@ export const touchValidate = yup.object({
     hourTouchFinish: time(),   //  cuándo terminó el toque; la pone Jarvis-express365 al apuntarlo. Sin mandarla, ''.
     createdAt: yup.date().nullable().default(null),
     recovered: yup.boolean().typeError('«recovered» del toque es true o false').default(false),
+    clientId:  yup.string().default(''),   //  su id en Jarvis-express365 (UUIDv4), para rehacerlo en Mesas. No se corrige.
 });
 
 export const rotationValidate = yup.object({
@@ -132,9 +144,30 @@ export const rotationTargetValidate = objectId('El id de lo que se corrige debe 
 
 export const editableValidate = {
     rotation: rotationValidate.omit(['establishment', 'clientId', 'date', 'process', 'touch']),
-    process:  processValidate,
-    touch:    touchValidate.omit(['ref', 'createdAt']),
+    process:  processValidate.omit(['clientId', 'key', 'edited']),
+    touch:    touchValidate.omit(['ref', 'createdAt', 'clientId']),
 };
+
+
+
+// ── PUT /rotation/client=<clientId>: Mesas sube la rotación mientras se trabaja ──
+//
+// El cuerpo es la rotación entera, como la del POST, y además:
+//
+//     status            'open' mientras sigue en Mesas; 'closed' la cierra (el disquete). Sin mandarlo, 'open'.
+//     clientUpdatedAt   cuándo cambió en el equipo: el servidor se queda con la más nueva, así una subida
+//                       atrasada (la de un equipo que estuvo sin internet) no pisa una posterior.
+
+export const syncValidate = rotationValidate.shape({
+    status:          yup.string().oneOf(ROTATION_STATUSES, `El estado solo puede ser ${ROTATION_STATUSES.map(status => `«${status}»`).join(' o ')}`).default('open'),
+    clientUpdatedAt: yup.date().nullable().default(null),
+});
+
+// DELETE /rotation/client=<clientId>?establishment=<id>: el local va en la consulta, porque el clientId es único
+// por local y no en toda la colección
+export const rotationRemoveValidate = yup.object({
+    establishment: objectId('El establecimiento debe ser un ObjectId válido').required('Falta el establecimiento'),
+});
 
 
 
@@ -146,11 +179,18 @@ export const editableValidate = {
 // El establecimiento, por su id o por su nombre (único en Local); con los dos,
 // manda el id. `from` y `to` son DÍAS OPERATIVOS, los dos incluidos. Sin `to` se
 // pide solo el día `from`. Como mucho MAX_RANGE_DAYS días.
+//
+// `status` separa Mesas de Registros: 'closed' (sin mandarlo) son las guardadas;
+// 'open', las que siguen en Mesas. Con 'open' las fechas no hacen falta: sin
+// ellas vienen todas las abiertas del local, también las de días anteriores.
 
 export const rotationQueryValidate = yup.object({
     establishment: objectId('El establecimiento debe ser un ObjectId válido'),
     name: yup.string().trim(),
-    from: yup.string().required('Falta la fecha «from» (AAAA-MM-DD)').test('day', '«from» debe ser un día AAAA-MM-DD que exista', isRealDay),
+    status: yup.string().oneOf(ROTATION_STATUSES, `El estado solo puede ser ${ROTATION_STATUSES.map(status => `«${status}»`).join(' o ')}`).default('closed'),
+    from: yup.string()
+        .when('status', { is: 'open', then: schema => schema.notRequired(), otherwise: schema => schema.required('Falta la fecha «from» (AAAA-MM-DD)') })
+        .test('day', '«from» debe ser un día AAAA-MM-DD que exista', isRealDay),
     to:   yup.string().test('day', '«to» debe ser un día AAAA-MM-DD que exista', isRealDay),
 })
 .test('establishment', 'Falta el establecimiento: su id («establishment») o su nombre («name»)', (query) => Boolean(query?.establishment || query?.name))

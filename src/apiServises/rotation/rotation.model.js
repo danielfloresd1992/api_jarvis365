@@ -1,6 +1,6 @@
 import { Schema, model } from 'mongoose';
 import { isTakeOutTable } from './rotation.lib.js';
-import { SHIFTS } from './rotation.schema.js';
+import { SHIFTS, ROTATION_STATUSES } from './rotation.schema.js';
 
 
 
@@ -9,8 +9,9 @@ import { SHIFTS } from './rotation.schema.js';
 // ══════════════════════════════════════════════════════════════════════
 // Una mesa desde que se ocupa hasta que se limpia, con los pedidos que se
 // hicieron en ella (los procesos) y los toques de gerente. La anota el operador
-// en Jarvis-express365, donde se llama «rotación», y la guarda con el botón del
-// disquete de su fila.
+// en Jarvis-express365, donde se llama «rotación». Mesas la va subiendo mientras
+// se trabaja, ABIERTA (status 'open'), y el botón del disquete de su fila la
+// CIERRA ('closed'): desde ahí es de «Registros».
 //
 // Las horas van como texto 'HH:MM:SS', no como fechas: así las anota el operador
 // y así se leen en el Excel de monitoreo. '' es «todavía no pasó». Las
@@ -48,6 +49,13 @@ const Process = new Schema({
     dishDelivery:        timeField(),
     preparationDelay:    { type: Schema.Types.ObjectId, ref: 'Noveltie', default: null },
     earlyMarkDelay:      { type: Schema.Types.ObjectId, ref: 'Noveltie', default: null },
+
+    // Para que Mesas rehaga el proceso tal cual cuando lo carga desde aquí: su id en Jarvis-express365 (UUIDv4), el
+    // pedido de la tablet del que sale ('tk-102·appetizer'; '' si se anotó a mano) y lo de la tablet corregido a mano,
+    // que la IA ya no pisa. Los de antes de existir los campos los traen vacíos.
+    clientId: { type: String, default: '' },
+    key:      { type: String, default: '' },
+    edited:   { type: [String], default: [] },
 });
 
 
@@ -71,6 +79,7 @@ const Touch = new Schema({
     hourTouchFinish: timeField(),
     createdAt:       { type: Date, default: null },
     recovered:       { type: Boolean, default: false },
+    clientId:        { type: String, default: '' },   // su id en Jarvis-express365 (UUIDv4), para rehacerlo en Mesas
 });
 
 
@@ -167,6 +176,17 @@ const Rotation = new Schema({
     // null si se guardó en su día operativo; si se guardó después, la marca de abandonada (Abandoned, arriba).
     abandoned: { type: Abandoned, default: null },
 
+    // DÓNDE ESTÁ: 'open' mientras sigue en Mesas de Jarvis-express365, que la va subiendo con cada cambio
+    // (PUT /rotation/client=); 'closed' cuando se guarda con el disquete, y entonces es de «Registros». Las de antes
+    // de existir el campo están guardadas: el GET de Registros las pide como «no abiertas» ($ne 'open').
+    status: { type: String, enum: ROTATION_STATUSES, default: 'closed' },
+
+    // QUIÉN Y CUÁNDO, mientras está abierta: quien hizo el último cambio que llegó (sale de la sesión, nunca del body)
+    // y cuándo cambió en su equipo, que es con lo que se decide cuál de dos subidas es la más nueva. Y cuándo se cerró.
+    updatedBy:       { type: Schema.Types.ObjectId, ref: 'user', default: null },
+    clientUpdatedAt: { type: Date, default: null },
+    closedAt:        { type: Date, default: null },
+
     process: { type: [Process], default: [] },
     touch:   { type: [Touch],   default: [] },
 
@@ -185,6 +205,9 @@ Rotation.pre('validate', function () {
 
 Rotation.index({ establishment: 1, clientId: 1 }, { unique: true });
 Rotation.index({ establishment: 1, operationalDate: 1 });
+
+// Mesas pide al abrir todas las abiertas de su local (GET ?status=open), de cualquier día
+Rotation.index({ establishment: 1, status: 1 });
 
 // El PUT busca la rotación por el _id de lo que se corrige, que puede ser el de
 // uno de sus procesos o toques: sin estos, cada corrección recorrería la colección.

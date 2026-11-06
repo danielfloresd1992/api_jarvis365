@@ -13,14 +13,26 @@ const routerRotation = express.Router();
 //
 //   GET  /rotation?establishment=<id>&from=AAAA-MM-DD&to=AAAA-MM-DD
 //   GET  /rotation?name=<nombre del local>&from=AAAA-MM-DD&to=AAAA-MM-DD
-//        Las rotaciones de un establecimiento —por su id o por su nombre— entre
+//        Las rotaciones GUARDADAS de un establecimiento —por su id o por su nombre— entre
 //        dos DÍAS OPERATIVOS (08:00 a 07:00 en America/Caracas), los dos
 //        incluidos. Sin `to`, solo `from`. Como mucho 62 días. Un nombre que no
-//        existe responde 404. Responde { establishment, name, from, to, total, documents }.
+//        existe responde 404. Responde { establishment, name, status, from, to, total, documents }.
+//   GET  /rotation?establishment=<id>&status=open
+//        Las que siguen ABIERTAS en Mesas, de cualquier día (las fechas son opcionales).
 //
 //   POST /rotation
 //        Guarda una rotación. El autor sale de la sesión. Repetir el mismo
 //        `clientId` en el mismo establecimiento responde 409: ya estaba guardada.
+//        Si estaba abierta (subida por Mesas), la cierra.
+//
+//   PUT  /rotation/client=<clientId>
+//        MESAS EN VIVO: sube la rotación entera mientras se trabaja (status 'open') o la
+//        cierra (status 'closed', el disquete). Crea, reemplaza, o no toca si lo que llega
+//        es más viejo (clientUpdatedAt). Responde { outcome, rotation }. 409 si ya estaba
+//        guardada y lo que llega la quiere abierta.
+//
+//   DELETE /rotation/client=<clientId>?establishment=<id>
+//        Quita una rotación ABIERTA que Mesas eliminó o dejó en blanco. Una guardada no: 409.
 //
 //   PUT  /rotation/id=<_id>
 //        Corrige una rotación guardada. El _id es el de lo que se corrige —la
@@ -40,6 +52,7 @@ const routerRotation = express.Router();
 //
 // Los que escriben (POST, PUT, añadir y quitar toques) avisan en vivo por socket
 // a los que tienen abierto ese local: '<nombre del local>-post' o '-put' (rotation.socket.js).
+// Los de Mesas (PUT y DELETE /rotation/client=) avisan con 'rotation-sync:<_id del local>'.
 //
 // `validateSession` y no un guard de administrador: quien guarda y corrige es el operador.
 
@@ -50,6 +63,10 @@ routerRotation.get(`${nameApi}/rotation`, extendSession, validateSession, asyncH
 routerRotation.post(`${nameApi}/rotation`, extendSession, validateSession, asyncHandler(controller.setRotation));
 
 routerRotation.put(`${nameApi}/rotation/id=:id`, extendSession, validateSession, asyncHandler(controller.editRotation));
+
+routerRotation.put(`${nameApi}/rotation/client=:clientId`, extendSession, validateSession, asyncHandler(controller.syncRotation));
+
+routerRotation.delete(`${nameApi}/rotation/client=:clientId`, extendSession, validateSession, asyncHandler(controller.removeOpenRotation));
 
 routerRotation.post(`${nameApi}/rotation/id=:id/touch`, extendSession, validateSession, asyncHandler(controller.addTouch));
 

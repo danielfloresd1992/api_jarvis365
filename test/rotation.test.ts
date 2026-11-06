@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { rotationValidate, rotationQueryValidate, rotationTargetValidate, dayToDate, MAX_RANGE_DAYS, SHIFTS } from '../src/apiServises/rotation/rotation.schema.js';
-import { applyEdit, targetOf, isTakeOutTable, rotationEvent, ROTATION_METHODS, PEOPLE, addTouchTo, removeTouchFrom, abandonedOf } from '../src/apiServises/rotation/rotation.lib.js';
+import { rotationValidate, rotationQueryValidate, rotationTargetValidate, dayToDate, MAX_RANGE_DAYS, SHIFTS, ROTATION_STATUSES, syncValidate, rotationRemoveValidate, editableValidate } from '../src/apiServises/rotation/rotation.schema.js';
+import { applyEdit, targetOf, isTakeOutTable, rotationEvent, ROTATION_METHODS, PEOPLE, addTouchTo, removeTouchFrom, abandonedOf, syncOutcome, applySync, SYNC_ACTIONS, rotationSyncEvent } from '../src/apiServises/rotation/rotation.lib.js';
 import RotationModel from '../src/apiServises/rotation/rotation.model.js';
 import { operationalDateOf } from '../src/apiServises/dvrFailure/dvrFailure.lib.ts';
 
@@ -226,7 +226,7 @@ test('el aviso en vivo: un evento por local y por método, con las personas del 
     assert.deepEqual(ROTATION_METHODS, ['post', 'put']);
     assert.equal(rotationEvent('post', 'Francisca Doral'), 'Francisca Doral-post');
     assert.equal(rotationEvent('put', 'Francisca Doral'), 'Francisca Doral-put');
-    assert.deepEqual(PEOPLE.map(person => person.path), ['createdBy', 'changes.user', 'abandoned.savedBy']);
+    assert.deepEqual(PEOPLE.map(person => person.path), ['createdBy', 'updatedBy', 'changes.user', 'abandoned.savedBy']);
 });
 
 test('añadir un toque a una rotación guardada: con su _id, su momento y su línea en los cambios', async () => {
@@ -534,4 +534,142 @@ test('abandoned en el modelo: nace en null, guarda la marca entera y el body no 
     //  Ni el PUT la corrige
     const rotacion = await guardada();
     await assert.rejects(applyEdit(rotacion, String(rotacion._id), { abandoned: marca }, OTRO), /No hay nada que corregir/);
+});
+
+
+
+// ══════════════════════════════════════════════════════════════════════
+// MESAS EN VIVO: la rotación abierta que se sube mientras se trabaja
+// ══════════════════════════════════════════════════════════════════════
+
+const CAMBIO = '2026-10-11T14:05:00.000Z';
+const ABIERTA = {
+    ...ROTACION,
+    status: 'open',
+    clientUpdatedAt: CAMBIO,
+    process: [{ ...ROTACION.process[0], clientId: 'p-1', key: 'tk-118·pf', edited: ['dishType'] }],
+    touch: [{ ...ROTACION.touch[0], clientId: 't-1' }],
+};
+
+
+test('la subida de Mesas: abierta si no se dice, con los ids de cliente de procesos y toques, y sin autor en el body', async () => {
+    assert.deepEqual(ROTATION_STATUSES, ['open', 'closed']);
+
+    const sinEstado = await syncValidate.validate(ROTACION, OPC);
+    assert.equal(sinEstado.status, 'open');
+    assert.equal(sinEstado.clientUpdatedAt, null);
+
+    const valida = await syncValidate.validate({ ...ABIERTA, createdBy: ID, updatedBy: ID }, OPC);
+    assert.equal(valida.status, 'open');
+    assert.equal(valida.clientUpdatedAt.toISOString(), CAMBIO);
+    assert.equal(valida.process[0].clientId, 'p-1');
+    assert.equal(valida.process[0].key, 'tk-118·pf');
+    assert.deepEqual(valida.process[0].edited, ['dishType']);
+    assert.equal(valida.touch[0].clientId, 't-1');
+    assert.equal('createdBy' in valida, false);
+    assert.equal('updatedBy' in valida, false);
+
+    assert.equal((await syncValidate.validate({ ...ABIERTA, status: 'closed' }, OPC)).status, 'closed');
+    await assert.rejects(syncValidate.validate({ ...ABIERTA, status: 'pendiente' }, OPC), /El estado solo puede ser/);
+});
+
+
+test('los ids de cliente, el pedido de la tablet y lo corregido a mano no se corrigen con el PUT', () => {
+    for (const campo of ['clientId', 'key', 'edited']) assert.equal(campo in editableValidate.process.fields, false, campo);
+    assert.equal('clientId' in editableValidate.touch.fields, false);
+    assert.equal('ticketNumber' in editableValidate.process.fields, true);
+});
+
+
+test('la consulta separa Mesas de Registros: sin status, las guardadas; con status=open, las abiertas y sin fechas', async () => {
+    const guardadas = await rotationQueryValidate.validate({ establishment: ID, from: '2026-10-11' }, OPC);
+    assert.equal(guardadas.status, 'closed');
+
+    const abiertas = await rotationQueryValidate.validate({ establishment: ID, status: 'open' }, OPC);
+    assert.equal(abiertas.status, 'open');
+    assert.equal(abiertas.from, undefined);
+
+    await assert.rejects(rotationQueryValidate.validate({ establishment: ID }, OPC), /Falta la fecha «from»/);
+    await assert.rejects(rotationQueryValidate.validate({ establishment: ID, status: 'todas', from: '2026-10-11' }, OPC), /El estado solo puede ser/);
+});
+
+
+test('syncOutcome: crear, reemplazar, o no tocar la más nueva, la repetida y la ya guardada', () => {
+    const abierta = { status: 'open', clientUpdatedAt: new Date(CAMBIO) };
+    const antes = new Date('2026-10-11T14:00:00.000Z');
+    const despues = new Date('2026-10-11T14:10:00.000Z');
+
+    assert.equal(syncOutcome(null, { status: 'open' }), 'create');
+    assert.equal(syncOutcome(abierta, { status: 'open', clientUpdatedAt: despues }), 'update');
+    assert.equal(syncOutcome(abierta, { status: 'open', clientUpdatedAt: new Date(CAMBIO) }), 'update');
+    assert.equal(syncOutcome(abierta, { status: 'open', clientUpdatedAt: antes }), 'stale');
+    assert.equal(syncOutcome(abierta, { status: 'closed', clientUpdatedAt: despues }), 'update');
+    assert.equal(syncOutcome(abierta, { status: 'open', clientUpdatedAt: null }), 'update');
+    assert.equal(syncOutcome({ status: 'open', clientUpdatedAt: null }, { status: 'open', clientUpdatedAt: antes }), 'update');
+
+    assert.equal(syncOutcome({ status: 'closed' }, { status: 'closed' }), 'repeated');
+    assert.equal(syncOutcome({ status: 'closed' }, { status: 'open' }), 'closed');
+    //  Las de antes de existir el campo están guardadas
+    assert.equal(syncOutcome({}, { status: 'open' }), 'closed');
+});
+
+
+test('applySync: reemplaza lo anotado, apunta quién y cuándo, y no toca el autor ni el historial', async () => {
+    const dia = operationalDateOf(new Date(ROTACION.date));
+    const rotacion = new RotationModel({ establishment: ID, clientId: ABIERTA.clientId, createdBy: ID });
+
+    applySync(rotacion, await syncValidate.validate(ABIERTA, OPC), { userId: OTRO, operationalDate: dia });
+    await rotacion.validate();
+    assert.equal(rotacion.status, 'open');
+    assert.equal(rotacion.tableNumber, '30');
+    assert.equal(String(rotacion.createdBy), ID);
+    assert.equal(String(rotacion.updatedBy), OTRO);
+    assert.equal(rotacion.clientUpdatedAt.toISOString(), CAMBIO);
+    assert.equal(rotacion.process[0].clientId, 'p-1');
+    assert.equal(rotacion.touch[0].clientId, 't-1');
+    assert.equal(rotacion.closedAt, null);
+    assert.equal(rotacion.abandoned, null);
+    assert.equal(rotacion.changes.length, 0);
+
+    //  La siguiente subida reemplaza la lista de procesos entera
+    applySync(rotacion, await syncValidate.validate({ ...ABIERTA, tableNumber: '31', process: [] }, OPC), { userId: ID, operationalDate: dia });
+    assert.equal(rotacion.tableNumber, '31');
+    assert.equal(rotacion.process.length, 0);
+    assert.equal(String(rotacion.updatedBy), ID);
+
+    //  Cerrarla: cuándo, y la marca de abandonada que le toque
+    const ahora = new Date('2026-10-12T15:00:00.000Z');
+    const marca = abandonedOf({ operationalDate: dia, savedOperationalDate: operationalDateOf(ahora), savedBy: ID, savedAt: ahora });
+    applySync(rotacion, await syncValidate.validate({ ...ABIERTA, status: 'closed' }, OPC), { userId: ID, operationalDate: dia, abandoned: marca, now: ahora });
+    await rotacion.validate();
+    assert.equal(rotacion.status, 'closed');
+    assert.equal(rotacion.closedAt.toISOString(), ahora.toISOString());
+    assert.equal(rotacion.abandoned.daysLate, 1);
+});
+
+
+test('el estado en el modelo: nace guardada, solo open o closed, y con índice para pedir las abiertas de un local', async () => {
+    const esquema = RotationModel.schema;
+    assert.equal(esquema.path('updatedBy').options.ref, 'user');
+    assert.ok(esquema.indexes().find(([campos]) => campos.establishment === 1 && campos.status === 1), 'falta el índice de establishment + status');
+
+    const valida = await rotationValidate.validate(ROTACION, OPC);
+    const base = { ...valida, operationalDate: operationalDateOf(valida.date), createdBy: ID };
+    const rotacion = new RotationModel(base);
+    assert.equal(rotacion.status, 'closed');
+    assert.equal(rotacion.updatedBy, null);
+    assert.equal(rotacion.process[0].clientId, '');
+    assert.deepEqual([...rotacion.process[0].edited], []);
+    assert.equal(rotacion.touch[0].clientId, '');
+    await assert.rejects(new RotationModel({ ...base, status: 'borrador' }).validate(), /status/);
+});
+
+
+test('el aviso en vivo de Mesas: un evento por _id de local, para subir y para quitar', async () => {
+    assert.deepEqual(SYNC_ACTIONS, ['upsert', 'remove']);
+    assert.equal(rotationSyncEvent(ID), `rotation-sync:${ID}`);
+
+    assert.equal((await rotationRemoveValidate.validate({ establishment: ID }, OPC)).establishment, ID);
+    await assert.rejects(rotationRemoveValidate.validate({}, OPC), /Falta el establecimiento/);
+    await assert.rejects(rotationRemoveValidate.validate({ establishment: 'nada' }, OPC), /ObjectId/);
 });
