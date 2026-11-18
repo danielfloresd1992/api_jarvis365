@@ -1,5 +1,5 @@
 import * as yup from 'yup';
-import { editableValidate, touchValidate } from './rotation.schema.js';
+import { editableValidate, touchValidate, dayToDate } from './rotation.schema.js';
 
 
 
@@ -40,6 +40,20 @@ export function abandonedOf({ operationalDate, savedOperationalDate, savedBy = n
 
     if (!(daysLate >= 1)) return null;
     return { operationalDate, savedOperationalDate, daysLate, savedAt, savedBy };
+}
+
+
+// operationalDaysOf = «el día operativo de una rotación que llega y el del momento en que llega», como Date (la
+// medianoche UTC de ese día, la forma de operationalDate)
+// Mandan los del EQUIPO, con la hora de Windows (`day` y `today`; pedido del usuario, 2026-11-14): la rotación se
+// guarda en el día en que se vio en Mesas, sin recalcularlo con la hora de Caracas. Un Jarvis Express de antes no
+// los manda, y entonces valen los que calcula quien llama con operationalDateOf (dvrFailure.lib.ts), de `date` y de
+// su reloj: llegan ya hechos (fromDate, fromNow), y así esto es puro y se prueba sin reloj.
+export function operationalDaysOf({ day = null, today = null } = {}, { fromDate, fromNow }) {
+    return {
+        operationalDate: day ? dayToDate(day) : fromDate,
+        savedOperationalDate: today ? dayToDate(today) : fromNow,
+    };
 }
 
 
@@ -108,8 +122,9 @@ export function syncOutcome(existing, incoming) {
 // empieza cuando se guarda (applyEdit).
 export function applySync(rotation, incoming, { userId, now = new Date(), operationalDate, abandoned = null }) {
 
-    // data = «lo que se anota», sin lo que identifica la rotación ni lo que decide el servidor
-    const { establishment, clientId, status, clientUpdatedAt, ...data } = incoming;
+    // data = «lo que se anota», sin lo que identifica la rotación ni lo que decide el servidor. Sus días (day, today)
+    // tampoco: ya están en operationalDate y en la marca de abandonada (operationalDaysOf).
+    const { establishment, clientId, status, clientUpdatedAt, day, today, ...data } = incoming;
 
     rotation.set({ ...data, operationalDate, status, updatedBy: userId, clientUpdatedAt: clientUpdatedAt ?? now });
     if (status === 'closed') rotation.set({ closedAt: now, abandoned });

@@ -1,7 +1,7 @@
 import RotationModel from './rotation.model.js';
 import LocalModel from '../local/local.model.js';
 import { rotationValidate, rotationQueryValidate, rotationTargetValidate, syncValidate, rotationRemoveValidate, dayToDate } from './rotation.schema.js';
-import { applyEdit, addTouchTo, removeTouchFrom, abandonedOf, syncOutcome, applySync, PEOPLE } from './rotation.lib.js';
+import { applyEdit, addTouchTo, removeTouchFrom, abandonedOf, operationalDaysOf, syncOutcome, applySync, PEOPLE } from './rotation.lib.js';
 import { emitRotation, emitRotationSync } from './rotation.socket.js';
 import { operationalDateOf } from '../dvrFailure/dvrFailure.lib.js';
 
@@ -16,15 +16,20 @@ const controller = {};
 const OPTIONS = { abortEarly: false, stripUnknown: true };
 
 
-// syncContext = «lo que pone el servidor al subir una rotación de Mesas»: quién, su día operativo y, por si se
-// cierra, la marca de abandonada (abandonedOf), con el reloj del servidor y no con el del equipo que la manda
-const syncContext = (date, userId, now = new Date()) => {
-    const operationalDate = operationalDateOf(date);
+// syncContext = «lo que pone el servidor al guardar o subir una rotación de Mesas»: quién, su día operativo y, por si
+// se cierra, la marca de abandonada (abandonedOf). Los días son los que vio el equipo con la hora de Windows (`day` y
+// `today`, pedido del usuario); un Jarvis Express de antes no los manda, y salen de `date` y del reloj del servidor,
+// en Caracas (operationalDaysOf).
+const syncContext = (incoming, userId, now = new Date()) => {
+    const { operationalDate, savedOperationalDate } = operationalDaysOf(incoming, {
+        fromDate: operationalDateOf(incoming.date),
+        fromNow: operationalDateOf(now),
+    });
     return {
         userId,
         now,
         operationalDate,
-        abandoned: abandonedOf({ operationalDate, savedOperationalDate: operationalDateOf(now), savedBy: userId, savedAt: now }),
+        abandoned: abandonedOf({ operationalDate, savedOperationalDate, savedBy: userId, savedAt: now }),
     };
 };
 
@@ -45,23 +50,23 @@ controller.setRotation = async (req, res) => {
 
     const open = await RotationModel.findOne({ establishment: rotationValidated.establishment, clientId: rotationValidated.clientId, status: 'open' });
     if (open) {
-        applySync(open, { ...rotationValidated, status: 'closed', clientUpdatedAt: null }, syncContext(rotationValidated.date, req.session.userId));
+        applySync(open, { ...rotationValidated, status: 'closed', clientUpdatedAt: null }, syncContext(rotationValidated, req.session.userId));
         await open.save();
         emitRotationSync('upsert', { establishment: rotationValidated.establishment, clientId: rotationValidated.clientId, rotationId: open._id });
         emitRotation('post', open);
         return res.status(201).json(open);
     }
 
-    //  'abandoned': si su día operativo ya pasó, se guarda marcada como abandonada (abandonedOf), con el reloj
-    //  del servidor y no con lo que diga el equipo que la manda.
-    const now = new Date();
-    const operationalDate = operationalDateOf(rotationValidated.date);
+    //  Su día operativo es el que vio el equipo, y 'abandoned' dice si se guarda después de él (syncContext). Los
+    //  días mismos no se guardan aparte: ya están en operationalDate y en la marca.
+    const { day, today, ...fields } = rotationValidated;
+    const { operationalDate, abandoned } = syncContext(rotationValidated, req.session.userId);
 
     const rotation = new RotationModel({
-        ...rotationValidated,
+        ...fields,
         operationalDate,
         createdBy: req.session.userId,
-        abandoned: abandonedOf({ operationalDate, savedOperationalDate: operationalDateOf(now), savedBy: req.session.userId, savedAt: now }),
+        abandoned,
     });
     await rotation.save();
 
@@ -128,7 +133,7 @@ controller.syncRotation = async (req, res) => {
     //  409, que Mesas lee como «ya está guardada».
     if (outcome === 'create') {
         const created = new RotationModel({ establishment, clientId, createdBy: req.session.userId });
-        applySync(created, incoming, syncContext(incoming.date, req.session.userId));
+        applySync(created, incoming, syncContext(incoming, req.session.userId));
         try {
             await created.save();
             emitRotationSync('upsert', { establishment, clientId, rotationId: created._id });
@@ -155,7 +160,7 @@ controller.syncRotation = async (req, res) => {
     }
 
     const rotation = existing;
-    applySync(rotation, incoming, syncContext(incoming.date, req.session.userId));
+    applySync(rotation, incoming, syncContext(incoming, req.session.userId));
     await rotation.save();
 
     //  En vivo, sin esperar: a Mesas y a las verificaciones, y a Registros si se acaba de cerrar

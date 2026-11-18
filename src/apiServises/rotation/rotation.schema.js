@@ -36,11 +36,11 @@ export const ROTATION_STATUSES = ['open', 'closed'];
 
 // objectId = «un ObjectId de Mongo». Sin el `addMethod` de local.schema.js, que
 // cambia yup para todos y depende de que ese archivo se cargue primero.
-const objectId = (message = 'Debe ser un ObjectId válido') =>
+export const objectId = (message = 'Debe ser un ObjectId válido') =>
     yup.string().test('objectId', message, value => value == null || Types.ObjectId.isValid(value));
 
 // time = «una hora de la rotación»: 'HH:MM:SS', o '' si todavía no pasó
-const time = () => yup.string()
+export const time = () => yup.string()
     .matches(TIME, { message: 'Las horas van con formato HH:MM:SS', excludeEmptyString: true })
     .default('');
 
@@ -52,7 +52,7 @@ export const dayToDate = (day) => new Date(`${day}T00:00:00.000Z`);
 
 // isRealDay = «el día existe»: '2026-02-30' tiene el formato pero no existe, y
 // Date lo convertiría en silencio en el 2 de marzo.
-const isRealDay = (day) => day == null || (DAY.test(day) && !Number.isNaN(dayToDate(day).getTime()) && dayToDate(day).toISOString().startsWith(day));
+export const isRealDay = (day) => day == null || (DAY.test(day) && !Number.isNaN(dayToDate(day).getTime()) && dayToDate(day).toISOString().startsWith(day));
 
 
 
@@ -94,6 +94,15 @@ export const rotationValidate = yup.object({
     establishment: objectId('El establecimiento debe ser un ObjectId válido').required('Falta el establecimiento'),
     clientId:      yup.string().trim().required('Falta el id de la rotación'),
     date:          yup.date().required('Falta la fecha de la rotación'),
+
+    // Los días operativos que vio el EQUIPO, con la hora de Windows (pedido del usuario, 2026-11-14: la rotación
+    // trabaja con la hora del computador donde corre Jarvis-express365, porque hay equipos en zonas horarias
+    // distintas): `day`, el de la rotación —en ese se guarda, sin recalcularlo—, y `today`, el del momento en que se
+    // sube —con él se decide si se guarda tarde (abandonedOf)—. Un Jarvis Express de antes no los manda: entonces el
+    // servidor los saca de `date` y de su reloj, en Caracas (operationalDaysOf, en rotation.lib.js).
+    day:   yup.string().nullable().default(null).test('day', 'El día de la rotación debe ser AAAA-MM-DD y existir', isRealDay),
+    today: yup.string().nullable().default(null).test('day', '«today» debe ser un día AAAA-MM-DD que exista', isRealDay),
+
     tableNumber:   yup.string().trim().required('Falta el número de mesa'),
 
     // El turno: solo 'day' o 'night'. Sin mandarlo queda en null, «todavía no se dijo».
@@ -131,8 +140,8 @@ export const rotationValidate = yup.object({
 //
 // El _id es el de lo que se corrige: la rotación, uno de sus procesos o uno de
 // sus toques. Se corrige lo mismo con que se guardó, menos lo que lo identifica
-// —el local, el clientId y la fecha de la rotación; el gerente y el momento del
-// clic de un toque— y las listas, que se corrigen elemento por elemento. Por eso
+// —el local, el clientId, la fecha de la rotación y sus días; el gerente y el
+// momento del clic de un toque— y las listas, que se corrigen elemento por elemento. Por eso
 // se arma QUITANDO campos (`omit`) y no listándolos: un campo nuevo en los
 // esquemas de arriba queda corregible sin tocar esto.
 //
@@ -143,7 +152,7 @@ export const rotationTargetValidate = objectId('El id de lo que se corrige debe 
     .required('Falta el id de lo que se corrige');
 
 export const editableValidate = {
-    rotation: rotationValidate.omit(['establishment', 'clientId', 'date', 'process', 'touch']),
+    rotation: rotationValidate.omit(['establishment', 'clientId', 'date', 'day', 'today', 'process', 'touch']),
     process:  processValidate.omit(['clientId', 'key', 'edited']),
     touch:    touchValidate.omit(['ref', 'createdAt', 'clientId']),
 };

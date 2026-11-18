@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { rotationValidate, rotationQueryValidate, rotationTargetValidate, dayToDate, MAX_RANGE_DAYS, SHIFTS, ROTATION_STATUSES, syncValidate, rotationRemoveValidate, editableValidate } from '../src/apiServises/rotation/rotation.schema.js';
-import { applyEdit, targetOf, isTakeOutTable, rotationEvent, ROTATION_METHODS, PEOPLE, addTouchTo, removeTouchFrom, abandonedOf, syncOutcome, applySync, SYNC_ACTIONS, rotationSyncEvent } from '../src/apiServises/rotation/rotation.lib.js';
+import { applyEdit, targetOf, isTakeOutTable, rotationEvent, ROTATION_METHODS, PEOPLE, addTouchTo, removeTouchFrom, abandonedOf, operationalDaysOf, syncOutcome, applySync, SYNC_ACTIONS, rotationSyncEvent } from '../src/apiServises/rotation/rotation.lib.js';
 import RotationModel from '../src/apiServises/rotation/rotation.model.js';
 import { operationalDateOf } from '../src/apiServises/dvrFailure/dvrFailure.lib.ts';
 
@@ -672,4 +672,59 @@ test('el aviso en vivo de Mesas: un evento por _id de local, para subir y para q
     assert.equal((await rotationRemoveValidate.validate({ establishment: ID }, OPC)).establishment, ID);
     await assert.rejects(rotationRemoveValidate.validate({}, OPC), /Falta el establecimiento/);
     await assert.rejects(rotationRemoveValidate.validate({ establishment: 'nada' }, OPC), /ObjectId/);
+});
+
+
+
+//  ── LOS DÍAS DEL EQUIPO: la rotación trabaja con la hora de Windows (pedido del usuario, 2026-11-14) ──
+
+test('los días del equipo: day y today se aceptan como días AAAA-MM-DD que existen, y sin mandarlos quedan en null', async () => {
+    const valida = await rotationValidate.validate({ ...ROTACION, day: '2026-11-14', today: '2026-11-15' }, OPC);
+    assert.equal(valida.day, '2026-11-14');
+    assert.equal(valida.today, '2026-11-15');
+
+    const sinDias = await rotationValidate.validate(ROTACION, OPC);
+    assert.equal(sinDias.day, null);
+    assert.equal(sinDias.today, null);
+
+    await assert.rejects(rotationValidate.validate({ ...ROTACION, day: '2026-02-30' }, OPC), /AAAA-MM-DD y existir/);
+    await assert.rejects(syncValidate.validate({ ...ROTACION, today: '14/11/2026' }, OPC), /«today»/);
+});
+
+test('los días del equipo no se corrigen con el PUT de Registros', () => {
+    const fields = Object.keys(editableValidate.rotation.fields);
+    assert.equal(fields.includes('day'), false);
+    assert.equal(fields.includes('today'), false);
+});
+
+test('operationalDaysOf: mandan los días del equipo; sin ellos, los que calcula el servidor', () => {
+    const fromDate = dayToDate('2026-11-13');
+    const fromNow = dayToDate('2026-11-13');
+
+    //  Un equipo en otra zona horaria: para él ya es el 14, y en Caracas todavía el 13. Vale lo suyo.
+    assert.deepEqual(
+        operationalDaysOf({ day: '2026-11-14', today: '2026-11-14' }, { fromDate, fromNow }),
+        { operationalDate: dayToDate('2026-11-14'), savedOperationalDate: dayToDate('2026-11-14') },
+    );
+
+    //  Un Jarvis Express de antes, sin días: los del servidor
+    assert.deepEqual(operationalDaysOf({ day: null, today: null }, { fromDate, fromNow }), { operationalDate: fromDate, savedOperationalDate: fromNow });
+    assert.deepEqual(operationalDaysOf(undefined, { fromDate, fromNow }), { operationalDate: fromDate, savedOperationalDate: fromNow });
+});
+
+test('abandonada según los días del equipo: cerrada en su día no se marca, aunque en Caracas ya fuera el siguiente', () => {
+    const enSuDia = operationalDaysOf({ day: '2026-11-13', today: '2026-11-13' }, { fromDate: dayToDate('2026-11-13'), fromNow: dayToDate('2026-11-14') });
+    assert.equal(abandonedOf({ ...enSuDia, savedBy: ID }), null);
+
+    const tarde = operationalDaysOf({ day: '2026-11-13', today: '2026-11-15' }, { fromDate: dayToDate('2026-11-13'), fromNow: dayToDate('2026-11-13') });
+    assert.equal(abandonedOf({ ...tarde, savedBy: ID }).daysLate, 2);
+});
+
+test('applySync no apunta los días del equipo en la rotación: ya están en operationalDate', async () => {
+    const rotacion = new RotationModel({ establishment: ID, clientId: ABIERTA.clientId, createdBy: ID });
+    applySync(rotacion, await syncValidate.validate({ ...ABIERTA, day: '2026-11-14', today: '2026-11-14' }, OPC), { userId: OTRO, operationalDate: dayToDate('2026-11-14') });
+    await rotacion.validate();
+    assert.equal(rotacion.operationalDate.toISOString(), '2026-11-14T00:00:00.000Z');
+    assert.equal(rotacion.get('day'), undefined);
+    assert.equal(rotacion.get('today'), undefined);
 });
