@@ -14,6 +14,10 @@ import {
     overtimeOfDay, accumulateOvertime, overtimeOnCheckout, resolveMinutesToApprove,
 } from '../src/apiServises/attendanceUser/services/overtime.lib.js';
 import { summarizeAttendance } from '../src/apiServises/attendanceUser/report/userReport.service.js';
+import {
+    REPEAT_MARK_SECONDS, lastMarkMs, repeatedMarkSeconds, repeatedMarkMessage,
+} from '../src/apiServises/attendanceUser/services/repeatMark.lib.js';
+import { oneAtATime } from '../src/libs/oneAtATime.js';
 
 // Gancho de resolución, el mismo de nomina.test.ts: el corte diario importa
 // tabulador.model.js, cuya fuente es .ts. Va antes del import dinámico.
@@ -240,6 +244,81 @@ test('horas extras', async (t) => {
         assert.match(resolveMinutesToApprove('approved', 0, 180).error, /entero mayor que cero/);
         assert.match(resolveMinutesToApprove('approved', 1.5, 180).error, /entero mayor que cero/);
         assert.match(resolveMinutesToApprove('approved', 200, 180).error, /solo generó 180/);
+    });
+});
+
+
+test('el mismo marcaje dos veces no se registra dos veces', async (t) => {
+    const entrada = caracas('2026-11-18', '08:00');
+    const segundosDespues = (desde: Date, s: number) => new Date(desde.getTime() + s * 1000);
+    const hoy = [{ checkIn: entrada, checkOut: null }];
+
+    await t.test('menos de un minuto después de la entrada: es la misma (antes cerraba la jornada)', () => {
+        assert.equal(repeatedMarkSeconds(hoy, segundosDespues(entrada, 0)), 0);
+        assert.equal(repeatedMarkSeconds(hoy, segundosDespues(entrada, 7.6)), 7);
+        assert.equal(repeatedMarkSeconds(hoy, segundosDespues(entrada, REPEAT_MARK_SECONDS - 1)), REPEAT_MARK_SECONDS - 1);
+    });
+
+    await t.test('pasado el minuto, es un marcaje nuevo (la salida)', () => {
+        assert.equal(repeatedMarkSeconds(hoy, segundosDespues(entrada, REPEAT_MARK_SECONDS)), null);
+        assert.equal(repeatedMarkSeconds(hoy, caracas('2026-11-18', '17:00')), null);
+    });
+
+    await t.test('cuenta la más reciente, de la entrada o la salida, de ayer u hoy', () => {
+        const salidaNocturna = caracas('2026-11-18', '06:00');
+        const nocturnoCerrado = [
+            { checkIn: caracas('2026-11-17', '22:00'), checkOut: salidaNocturna },
+            { checkIn: null, checkOut: null },
+        ];
+        assert.equal(repeatedMarkSeconds(nocturnoCerrado, segundosDespues(salidaNocturna, 20)), 20, 'tras la salida del nocturno no abre la jornada de hoy');
+        assert.equal(lastMarkMs(nocturnoCerrado, caracas('2026-11-18', '07:00')), salidaNocturna.getTime());
+    });
+
+    await t.test('sin marcajes, o con una hora futura puesta a mano, no hay anterior', () => {
+        assert.equal(repeatedMarkSeconds([], entrada), null);
+        assert.equal(repeatedMarkSeconds(undefined, entrada), null);
+        assert.equal(repeatedMarkSeconds([{ checkIn: caracas('2026-11-18', '08:30') }], entrada), null);
+    });
+
+    await t.test('el aviso dice hace cuánto', () => {
+        assert.equal(repeatedMarkMessage(12), 'Ya registramos tu marcaje hace 12 s. No hace falta marcar otra vez.');
+        assert.match(repeatedMarkMessage(0), /hace un instante/);
+    });
+});
+
+
+test('los marcajes de una misma persona van de a uno', async (t) => {
+    const pausa = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    await t.test('el segundo espera a que termine el primero; otra persona no espera', async () => {
+        const colas = new Map();
+        const orden: string[] = [];
+        const trabajo = (nombre: string, ms: number) => async () => {
+            orden.push(`${nombre}:empieza`);
+            await pausa(ms);
+            orden.push(`${nombre}:termina`);
+            return nombre;
+        };
+
+        const resultados = await Promise.all([
+            oneAtATime(colas, 'ana', trabajo('ana-1', 30)),
+            oneAtATime(colas, 'ana', trabajo('ana-2', 1)),
+            oneAtATime(colas, 'luis', trabajo('luis', 1)),
+        ]);
+
+        assert.deepEqual(resultados, ['ana-1', 'ana-2', 'luis']);
+        assert.ok(orden.indexOf('ana-2:empieza') > orden.indexOf('ana-1:termina'), 'el segundo de Ana empezó después del primero');
+        assert.ok(orden.indexOf('luis:termina') < orden.indexOf('ana-1:termina'), 'Luis no esperó a Ana');
+        await pausa(5);
+        assert.equal(colas.size, 0, 'no queda nada en cola');
+    });
+
+    await t.test('si el primero falla, el segundo igual se hace', async () => {
+        const colas = new Map();
+        const falla = oneAtATime(colas, 'ana', async () => { throw new Error('base caída'); });
+        const sigue = oneAtATime(colas, 'ana', async () => 'ok');
+        await assert.rejects(falla, /base caída/);
+        assert.equal(await sigue, 'ok');
     });
 });
 

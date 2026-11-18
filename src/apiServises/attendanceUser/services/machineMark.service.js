@@ -6,9 +6,12 @@ import { dayRuleOf, activeOverrideOf, resolveShift } from './workday.lib.js';
 import { overtimeOnCheckout } from './overtime.lib.js';
 import { esAltaDeHoy } from './newEmployee.lib.js';
 import { publishAttendanceMark } from './attendanceMark.service.js';
+import { repeatedMarkSeconds, repeatedMarkMessage } from './repeatMark.lib.js';
+import { oneAtATime } from '../../../libs/oneAtATime.js';
 
 // Marcaje desde la máquina (bioJarvis). Una sola llamada decide si es ENTRADA o
 // SALIDA, en este orden:
+//   0. el mismo marcaje enviado dos veces (menos de un minuto): no se registra
 //   1. salida del turno nocturno de ayer, si sigue abierto
 //   2. horario efectivo de hoy (descanso, horas configuradas)
 //   3. turno nocturno: entrada de hoy
@@ -29,11 +32,25 @@ const reply = (status, body) => ({ status, body });
 const badRequest = (message) => reply(400, { status: 400, message, error: 'Bad request' });
 
 
+// Marcajes en curso, por persona (ver libs/oneAtATime.js).
+const marksInProgress = new Map();
+
+
 // Registra el marcaje del empleado y devuelve { status, body } para responder.
-export async function registerMachineMark(user, imageReference, now = new Date()) {
+// Los de la misma persona van de a uno; la hora es la de cuando le toca.
+export function registerMachineMark(user, imageReference, now) {
+    return oneAtATime(marksInProgress, String(user._id), () => markNow(user, imageReference, now ?? new Date()));
+}
+
+
+async function markNow(user, imageReference, now) {
     const nowParts = getZonedDateParts(now);
     const today = toUtcMidnightFromZonedParts(nowParts);
     const nowMinutes = minutesOfDay(nowParts);
+
+    // 0. Antes que nada: si es el mismo marcaje otra vez, no se toca la jornada.
+    const repeated = await repeatedMark(user, today, now);
+    if (repeated) return repeated;
 
     // 1. Va primero: hoy puede ser descanso y aun así tiene que cerrar lo de anoche.
     const nightCheckout = await closeYesterdayNightShift({ user, today, now, nowMinutes, imageReference });
@@ -49,6 +66,19 @@ export async function registerMachineMark(user, imageReference, now = new Date()
 
     // 3 y 4.
     return schedule.shift === 'Nocturno' ? markNightShift(mark) : markDayShift(mark);
+}
+
+
+// El marcaje anterior de la persona fue hace menos de un minuto: es el mismo,
+// enviado otra vez. Devuelve la respuesta, o null si es un marcaje nuevo.
+async function repeatedMark(user, today, now) {
+    const records = await AttendanceModel.find(
+        { userId: user._id, date: { $in: [addUtcDays(today, -1), today] } },
+        'checkIn checkOut'
+    ).lean();
+    const secondsAgo = repeatedMarkSeconds(records, now);
+    if (secondsAgo === null) return null;
+    return reply(409, { status: 409, repeated: true, secondsAgo, message: repeatedMarkMessage(secondsAgo) });
 }
 
 
