@@ -131,6 +131,18 @@ app_dev.use(express.static(join(__dirname, '../public')));
 
 
 
+// Cada servicio arranca por su cuenta: si uno lanza, se anota cuál y los demás
+// siguen. Antes iban seguidos en este callback y, como uncaughtException deja el
+// proceso vivo, un error en uno salteaba en silencio a todos los de después (la
+// escucha biométrica y el servidor de :8080): la API respondía, pero sin ellos.
+const startService = (name: string, start: () => void): void => {
+    try {
+        start();
+    } catch (error) {
+        console.error(`[arranque] no se pudo iniciar ${name}:`, error);
+    }
+};
+
 server.listen(httpPort, () => {
 
     logBanner();
@@ -138,17 +150,17 @@ server.listen(httpPort, () => {
     io.init(server);
     logSocketStart();
 
-    if(appConfig.NODE_ENV === 'production') {
-        console.log('Running in production mode');
-        startAttendanceReportScheduler();
-        startMonitoringWatcher();
-        startDvrAlertScheduler();
-    }
-
     // Escucha del terminal biométrico → kiosco. Decide sola si se enciende
     // (BIOMETRIC_LISTENER; por defecto solo en producción). Va después de
     // io.init porque avisa al kiosco por socket.
-    startBiometricListener();
+    startService('la escucha biométrica', startBiometricListener);
+
+    if(appConfig.NODE_ENV === 'production') {
+        console.log('Running in production mode');
+        startService('el reporte de asistencia', startAttendanceReportScheduler);
+        startService('el monitoreo', startMonitoringWatcher);
+        startService('las alertas de DVR', startDvrAlertScheduler);
+    }
 
 
     const httpPortDev: number = 8080;
