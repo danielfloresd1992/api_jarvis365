@@ -115,6 +115,8 @@ import { routerPublisher } from './services/publisher/publisher.routes.js'
 import { routerFranchise } from './apiServises/franchise/franchise.routes.js';
 import { routerLocal } from './apiServises/local/local.routes.js';
 import { routerRotation } from './apiServises/rotation/rotation.routes.js';
+import { routerShiftVerification } from './apiServises/shiftVerification/shiftVerification.routes.js';
+import { routerVerificationSession } from './apiServises/verificationSession/verificationSession.routes.js';
 import { routerManager } from './apiServises/manager/manager.routes.js';
 import { routerCorte } from './apiServises/corte/corte.routes.js';
 import { routerMenu } from './apiServises/menu/menu.routes.js';
@@ -168,6 +170,8 @@ app
     .use(routerFranchise)
     .use(routerLocal)
     .use(routerRotation)
+    .use(routerShiftVerification)
+    .use(routerVerificationSession)
     .use(routerCorte)
     .use(routerMenu)
     .use(routerManager)
