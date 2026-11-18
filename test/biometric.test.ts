@@ -248,6 +248,39 @@ test('Errores: cada fallo del terminal tiene su código, y lo inesperado no filt
     assert.doesNotMatch(unexpected.message, /detalle interno/);
 });
 
+test('Errores: un BiometricError es un Error con su tipo', () => {
+    const error = new BiometricError('not_found', 'No hay ningún terminal.');
+    assert.ok(error instanceof BiometricError);
+    assert.ok(error instanceof Error);
+    assert.equal(error.name, 'BiometricError');
+    assert.equal(error.kind, 'not_found');
+    assert.equal(error.message, 'No hay ningún terminal.');
+    assert.match(error.stack ?? '', /No hay ningún terminal/);
+});
+
+// En producción corre dist/, que arma babel.config.json: transform-classes (loose) +
+// minify-simplify. Con `class BiometricError extends Error` el compilado usaba `_this`
+// antes de asignarlo y CADA `new BiometricError` reventaba (2026-11-18), mientras estas
+// pruebas, que corren la fuente, pasaban. Esta compila el archivo como el build y lo usa.
+test('Errores: BiometricError también funciona compilado como en producción (Babel de dist/)', async () => {
+    const { default: babel } = await import('@babel/core');
+    const { writeFileSync, rmSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const source = fileURLToPath(new URL('../src/apiServises/biometric/biometric.lib.js', import.meta.url));
+    const { code } = babel.transformFileSync(source, { cwd: fileURLToPath(new URL('..', import.meta.url)) });
+    const compiled = new URL(`./.compilado-biometric-${process.pid}.mjs`, import.meta.url);
+    writeFileSync(compiled, code);
+    try {
+        const built = await import(compiled.href);
+        const error = new built.BiometricError('login_required', 'Esta tablet no tiene permiso.');
+        assert.ok(error instanceof built.BiometricError && error instanceof Error);
+        assert.equal(error.kind, 'login_required');
+        assert.equal(built.errorResponse(error).status, 401, 'un error esperado sale con su código, no como 500');
+    } finally {
+        rmSync(compiled, { force: true });
+    }
+});
+
 
 
 // ══════════════════════════════════════════════════════════════════════

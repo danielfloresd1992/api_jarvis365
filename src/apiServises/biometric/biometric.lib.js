@@ -30,14 +30,26 @@ export const PAGE_SIZE = 30;
 
 // ─── Errores ─────────────────────────────────────────────────────────────
 
-// BiometricError = «un fallo al hablar con el terminal», con su tipo para elegir el código HTTP
-export class BiometricError extends Error {
-    constructor(kind, message) {
-        super(message);
-        this.name = 'BiometricError';
-        this.kind = kind;
-    }
+// BiometricError = «un fallo al hablar con el terminal», con su tipo para elegir el código HTTP.
+// Se usa con `new BiometricError(kind, message)` y se reconoce con `instanceof`.
+//
+// NO es `class … extends Error` a propósito. El build de producción (babel.config.json)
+// pasa las clases a funciones (transform-classes, loose) y después minify-simplify junta
+// el constructor en una sola expresión: con `super(message); this.kind = kind` dejaba
+// `_this.kind = kind` ANTES de que existiera `_this`, y en dist/ cada `new BiometricError`
+// reventaba con «Cannot set properties of undefined (setting 'kind')» (visto en producción
+// el 2026-11-18: un 401 esperado de /auth/biometric/start salía como 500). Una función
+// constructora no pasa por esa transformación.
+export function BiometricError(kind, message) {
+    const error = new Error(message);
+    error.name = 'BiometricError';
+    error.kind = kind;
+    Object.setPrototypeOf(error, BiometricError.prototype);
+    return error;
 }
+BiometricError.prototype = Object.create(Error.prototype, {
+    constructor: { value: BiometricError, writable: true, configurable: true },
+});
 
 const ERROR_STATUS = {
     bad_request: 400,
