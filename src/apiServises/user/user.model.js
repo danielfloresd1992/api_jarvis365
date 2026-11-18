@@ -20,7 +20,7 @@ const UpdateByUserSchema = new Schema({
 
 
 
-export default model('user', new Schema({
+const UserSchema = new Schema({
     dni: {
         type: String,
         unique: true,
@@ -195,12 +195,33 @@ export default model('user', new Schema({
         default: [],
         select: false
     },
+
+    // Vínculo con el terminal biométrico (Hikvision): el número de empleado de
+    // esta persona en el terminal. Solo lo escribe el módulo /biometric, al
+    // confirmar un administrador. Sin vincular, el campo no existe (no se guarda
+    // vacío). Reglas en apiServises/biometric/biometricLink.lib.js.
+    biometric: {
+        employeeNo: { type: String, trim: true },
+        linkedAt: { type: Date },
+        linkedBy: { type: Schema.Types.ObjectId, ref: 'user' },
+    },
+
     img: {
         type: String,
         unique: true,
         default: null
     }
-}));
+});
+
+// Un número del terminal por usuario y un usuario por número. Es PARCIAL a
+// propósito: solo entran los usuarios vinculados. Un `unique` normal indexaría
+// a todos los demás como null y chocarían entre sí (es lo que pasa con dni e img).
+UserSchema.index(
+    { 'biometric.employeeNo': 1 },
+    { unique: true, partialFilterExpression: { 'biometric.employeeNo': { $type: 'string' } } },
+);
+
+export default model('user', UserSchema);
 
 
 

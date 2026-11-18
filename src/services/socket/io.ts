@@ -3,6 +3,7 @@ const app = express();
 import { Server as HttpServer } from 'http'
 
 import { Server, Socket } from "socket.io";
+import { JOIN_KIOSK_EVENT, kioskRoomOf, joinedTerminalOf } from '../../apiServises/biometric/biometricStream.lib.js';
 
 
 
@@ -10,6 +11,11 @@ class SocketManager {
 
     private static instance: SocketManager
     private io: Server | null = null
+
+    // Cómo está la escucha de un terminal biométrico: el kiosco lo pregunta al
+    // entrar a su sala. La escucha lo registra al arrancar
+    // (biometricListener.js); así este módulo no tiene que importarla a ella.
+    private kioskStatusProvider: (terminal: string) => unknown = () => null
 
 
     private constructor() {
@@ -67,6 +73,23 @@ class SocketManager {
                     const userId = typeof payload === 'string' ? payload : payload?.userId;
                     if (userId) socket.leave(`user:${userId}`);
                     socket.leave('admins');
+                });
+
+                // ── Kiosco de marcaje (bioJarvis) ─────────────────────
+                // El kiosco entra a la sala de SU terminal para recibir sus
+                // huellas con la cédula de quien marcó (ver
+                // apiServises/biometric/biometricListener.js). Así la cédula
+                // no viaja a todos los clientes, ni la huella de una oficina
+                // al kiosco de otra. Como el resto de las salas, la entrada no
+                // se autentica.
+                //
+                // Llega ({ terminal }, ack). Los kioscos de antes mandan solo
+                // (ack), o nada: entran a la sala del terminal principal.
+                socket.on(JOIN_KIOSK_EVENT, (payload?: unknown, ack?: unknown) => {
+                    const callback = typeof payload === 'function' ? payload : ack;
+                    const terminal = joinedTerminalOf(typeof payload === 'function' ? null : payload);
+                    socket.join(kioskRoomOf(terminal));
+                    if (typeof callback === 'function') callback(this.kioskStatusProvider(terminal));
                 });
 
 
@@ -127,6 +150,10 @@ class SocketManager {
         else {
             console.error('Socket.IO no está inicializado. No se pueden emitir eventos.');
         }
+    }
+
+    setKioskStatusProvider(provider: (terminal: string) => unknown): void {
+        this.kioskStatusProvider = provider;
     }
 
     emitToRoom(room: string, event: string, data: any): void {

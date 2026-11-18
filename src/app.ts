@@ -135,6 +135,7 @@ import { routerChat } from './apiServises/chat/router.js';
 import { routerAiChat } from './apiServises/aiChat/aiChat.routes.js';
 import { routerUser } from './apiServises/user/user.routes.js';
 import { routerAttendanceUser } from './apiServises/attendanceUser/attendanceUser.routes.js';
+import { routerBiometric } from './apiServises/biometric/biometric.routes.js';
 import { routerNotification } from './apiServises/notification/notification.routes.js';
 import { routerBonus } from './apiServises/bonus/bonus.routes.js';
 import { routerTabulador } from './apiServises/tabulador/tabulador.routes.js';
@@ -164,6 +165,7 @@ const apiRouter = express.Router();
 app
     .use(routerUser)
     .use(routerAttendanceUser)
+    .use(routerBiometric)
     .use(routerNotification)
     .use(routerMultimedia)
     .use(routerPublisher)

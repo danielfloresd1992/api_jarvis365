@@ -10,6 +10,7 @@ import { logBanner, logServerStart, logHttpStart, logSocketStart } from './util/
 import { startAttendanceReportScheduler } from './apiServises/attendanceUser/report/attendanceReport.job.js';
 import { startMonitoringWatcher } from './services/monitoring/monitoringWatcher.js';
 import { startDvrAlertScheduler } from './apiServises/dvrFailure/dvrAlert.job.js';
+import { startBiometricListener } from './apiServises/biometric/biometricListener.js';
 import { join } from 'path';
 import * as url from 'url';
 import appConfig from './config/index.js';
@@ -143,7 +144,12 @@ server.listen(httpPort, () => {
         startMonitoringWatcher();
         startDvrAlertScheduler();
     }
-    
+
+    // Escucha del terminal biométrico → kiosco. Decide sola si se enciende
+    // (BIOMETRIC_LISTENER; por defecto solo en producción). Va después de
+    // io.init porque avisa al kiosco por socket.
+    startBiometricListener();
+
 
     const httpPortDev: number = 8080;
     app_dev.listen(httpPortDev, () => {

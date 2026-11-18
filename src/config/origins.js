@@ -54,6 +54,7 @@ const origins = process.env.NODE_ENV === 'development' ?
         'https://jarvis-express.netlify.app',
         'https://client365.vercel.app',
           'http://localhost:5174',
+          'https://72.68.60.201:5173'
     ];
 
 
