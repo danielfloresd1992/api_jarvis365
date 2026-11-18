@@ -113,7 +113,10 @@ authRouter.post(`${nameApi}/auth/login`, asyncHandler(async (req, res, next) => 
 
 
 authRouter.post(`${nameApi}/auth/singin`, asyncHandler(async (req, res) => {
-    const dateValidate = await userSchema.validate(req.body);
+    // El registro es anónimo: solo entra lo que declara el esquema. Sin
+    // stripUnknown, yup deja pasar cualquier clave y un body con
+    // `admin: true, super: true` creaba una cuenta con todos los permisos.
+    const dateValidate = await userSchema.validate(req.body, { stripUnknown: true });
     const findEmail = await UserModel.findOne({ email: dateValidate.email });
     if(findEmail) return res.status(409).json({ error: 'Conflict', status: 409, message: 'The email is not available.' });
 
@@ -125,7 +128,8 @@ authRouter.post(`${nameApi}/auth/singin`, asyncHandler(async (req, res) => {
     dateValidate.password = await bcrypt.hash(dateValidate.password, 10);
 
 
-    const newUser = new UserModel(dateValidate);
+    // Los permisos los da un administrador después, nunca el propio registro.
+    const newUser = new UserModel({ ...dateValidate, admin: false, super: false });
     const resultCreateUser = await newUser.save();
 
     const resData = { ...resultCreateUser._doc }
