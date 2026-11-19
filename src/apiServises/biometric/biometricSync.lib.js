@@ -5,7 +5,7 @@ import { normalizeName, nameTokens, tokensMatch, nameMatch, fullNameOf } from '.
 // ══════════════════════════════════════════════════════════════════════
 // Cada terminal guarda sus personas (nº de empleado y nombre) y sus huellas.
 // Sincronizar es copiar a cada terminal lo que le falta de los demás: personas
-// y huellas. SOLO AGREGA: no borra ni cambia a nadie.
+// y huellas. Copiar solo agrega: no borra ni cambia a nadie.
 //
 // La regla de todo el sistema es «una persona, un número en todos los
 // terminales»: el vínculo con Jarvis (user.biometric.employeeNo) es por número.
@@ -15,7 +15,9 @@ import { normalizeName, nameTokens, tokensMatch, nameMatch, fullNameOf } from '.
 //     terminal de Oficina 2 se cargó aparte y cuatro números chocan.
 //   - DUPLICADO: la misma persona con un número distinto en cada terminal.
 //     Copiarla la dejaría dos veces en cada uno.
-// Para esos hay que cambiarle el número a alguien en un terminal.
+// Cuando una de las personas está vinculada en Jarvis, su número manda y se
+// corrige antes de copiar (planCorrections, más abajo). Sin nadie vinculado no
+// se sabe quién se queda el número, y queda apartado.
 //
 // Comprobado contra los DS-K1A8503MF (firmware V1.4.0), solo leyendo:
 //   - FingerPrintUpload entrega cada huella con su plantilla (512 bytes), una
@@ -187,6 +189,94 @@ export function buildSyncPlan({ terminals, links = [] }) {
 
     conflicts.sort((a, b) => byNumber(a.employeeNo, b.employeeNo));
     return { copies, conflicts, duplicates, same };
+}
+
+// ─── Correcciones: manda el número que la persona tiene en Jarvis ────────
+// Pedido del usuario (2026-11-19): si una persona está vinculada en Jarvis, su
+// número es el bueno en todos los terminales. Así se resuelven, antes de copiar:
+//   - «otra_persona»: el número vinculado a Ana es, en un terminal, otra persona
+//     (Pedro): Pedro pasa a un número nuevo, libre en todos los terminales y en
+//     Jarvis, con sus huellas. Después se copia Ana con su número.
+//   - «mismo_jarvis»: la misma persona está en un terminal con otro número que
+//     el vinculado: sus huellas pasan a su número de Jarvis y el otro se quita.
+// Cambiar el número de alguien en un terminal es crearlo con el número nuevo,
+// borrar el viejo (el terminal no deja la misma huella en dos números) y
+// guardarle sus huellas (biometricSync.service.js, renumberPerson). Lo que
+// choca sin nadie vinculado (dos personas con el mismo número) sigue sin tocarse:
+// no se sabe quién se queda el número hasta que se vincule a una.
+
+// fullNameMatch = «todas las palabras del nombre del terminal (al menos dos)
+// están en el nombre completo de Jarvis»: la misma prueba que las sugerencias.
+const fullNameMatch = (deviceName, user) => {
+    const match = nameMatch(deviceName, fullNameOf(user));
+    return match.total >= 2 && match.matched === match.total;
+};
+
+const isNumeric = (text) => /^\d+$/.test(text);
+
+// planCorrections = «qué números cambiar antes de copiar, y el plan de copia
+// que queda después». Recibe lo mismo que buildSyncPlan y devuelve lo suyo más
+// `renumbers`: [{ terminal, from, to, name, fingerprints, reason, linkedName, targetExists, menuAccess }]
+export function planCorrections({ terminals, links = [] }) {
+    const model = terminals.map((t) => ({
+        ...t,
+        people: t.people.map((p) => ({ ...p, employeeNo: String(p.employeeNo), fingerprints: [...new Set(p.fingerprints ?? [])].sort((a, b) => a - b) })),
+    }));
+    const linked = new Map(links.map((l) => [String(l.employeeNo), l.user]));
+
+    // Números libres: ni en un terminal ni vinculados en Jarvis, desde el mayor + 1.
+    const used = new Set([...model.flatMap((t) => t.people.map((p) => p.employeeNo)), ...linked.keys()]);
+    let next = Math.max(0, ...[...used].filter(isNumeric).map(Number)) + 1;
+    const freeNumber = () => {
+        while (used.has(String(next))) next++;
+        used.add(String(next));
+        return String(next++);
+    };
+
+    const renumbers = [];
+
+    // 1) El número vinculado a alguien es otra persona en un terminal: esa se va a uno nuevo.
+    for (const terminal of model) {
+        for (const person of terminal.people) {
+            const user = linked.get(person.employeeNo);
+            if (!user || !linkMismatch(person.name, user)) continue;
+            const to = freeNumber();
+            renumbers.push({
+                terminal: terminal.code, from: person.employeeNo, to, name: person.name, fingerprints: [...person.fingerprints],
+                reason: 'otra_persona', linkedName: fullNameOf(user), targetExists: false, menuAccess: person.menuAccess === true,
+            });
+            person.employeeNo = to;
+        }
+    }
+
+    // 2) La misma persona con otro número que el suyo de Jarvis: pasa a ese.
+    for (const terminal of model) {
+        for (const person of [...terminal.people]) {
+            const own = linked.get(person.employeeNo);
+            if (own && !linkMismatch(person.name, own)) continue;   // ya está en un número vinculado a ella
+            // Su número de Jarvis: vinculado a alguien con su nombre completo, y que en
+            // otro terminal es la misma persona (dos pruebas: el nombre solo no alcanza).
+            const candidates = [...linked.entries()].filter(([number, user]) => number !== person.employeeNo
+                && fullNameMatch(person.name, user)
+                && model.some((other) => other.code !== terminal.code && other.people.some((p) => p.employeeNo === number && sameDeviceName(p.name, person.name))));
+            if (candidates.length !== 1) continue;
+            const [to, user] = candidates[0];
+            const target = terminal.people.find((p) => p.employeeNo === to);
+            if (target && !sameDeviceName(target.name, person.name)) continue;   // ahí hay otra persona: no se mezcla
+            renumbers.push({
+                terminal: terminal.code, from: person.employeeNo, to, name: person.name, fingerprints: [...person.fingerprints],
+                reason: 'mismo_jarvis', linkedName: fullNameOf(user), targetExists: Boolean(target), menuAccess: person.menuAccess === true,
+            });
+            terminal.people = terminal.people.filter((p) => p !== person);
+            if (target) {
+                target.fingerprints = [...new Set([...target.fingerprints, ...person.fingerprints])].sort((a, b) => a - b);
+            } else {
+                terminal.people.push({ ...person, employeeNo: to });
+            }
+        }
+    }
+
+    return { renumbers, ...buildSyncPlan({ terminals: model, links }) };
 }
 
 // planSummary = «cuánto se copia a cada terminal»

@@ -111,7 +111,8 @@ test('Guardado: 1 es éxito; los demás códigos del terminal se explican', () =
     const duplicate = fingerprintSaveResult({ FingerPrintStatus: { StatusList: [{ id: 1, cardReaderRecvStatus: 5, errorMsg: '' }] } });
     assert.equal(duplicate.ok, false);
     assert.equal(duplicate.status, 5);
-    assert.match(duplicate.message, /ya está registrada .* para otra persona/);
+    assert.match(duplicate.message, /ya está registrada en el terminal con otro número/);
+    assert.match(duplicate.message, /esta misma cargada antes con otro número/, 'el caso de Daniel Flores en Oficina 2 (2026-11-19): era él mismo, con el nº 4');
     assert.match(fingerprintSaveResult({ FingerPrintStatus: { StatusList: [{ id: 1, cardReaderRecvStatus: 3 }] } }).message, /mala calidad/);
     assert.match(fingerprintSaveResult({ FingerPrintStatus: { StatusList: [{ id: 1, cardReaderRecvStatus: 9, errorMsg: 'x' }] } }).message, /código 9: x/);
     assert.equal(fingerprintSaveResult({}).ok, false, 'sin confirmación no se da por guardada');

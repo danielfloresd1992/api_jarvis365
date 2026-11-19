@@ -2,13 +2,14 @@ import UserModel from '../user/user.model.js';
 import { oneAtATime } from '../../libs/oneAtATime.js';
 import { BiometricError } from './biometric.lib.js';
 import {
-    listDeviceUsers, listFingerprints, readFingerprints, createDeviceUser, saveFingerprint, deleteDeviceUser,
+    listDeviceUsers, listFingerprints, readFingerprints, createDeviceUser, saveFingerprint, deleteDeviceUser, findDeviceUser,
 } from './biometric.service.js';
 import { activeTerminals, resolveTerminal, checkTerminal } from './biometricTerminal.service.js';
 import { forgetDeviceNames } from './biometricListener.js';
-import { buildSyncPlan, planSummary, copyOutcome, linkMismatch } from './biometricSync.lib.js';
+import { planCorrections, buildSyncPlan, planSummary, copyOutcome, linkMismatch } from './biometricSync.lib.js';
 import { fullNameOf } from './biometricLink.lib.js';
 import { isTerminalCode } from './biometricTerminal.lib.js';
+import { freeFingerSlot } from './biometricEnroll.lib.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // VER Y SINCRONIZAR LOS DATOS DE LOS TERMINALES
@@ -23,8 +24,11 @@ import { isTerminalCode } from './biometricTerminal.lib.js';
 // consultas de eventos no chocan con estas.
 //
 // Las reglas (qué falta, qué no se puede copiar) están en biometricSync.lib.js.
-// Solo agrega: no borra ni cambia a nadie. La única persona que puede borrar es
-// una que esta copia acaba de crear y no sirvió (ver copyItem).
+// Antes de copiar, corrige números según Jarvis (planCorrections): cambiarle el
+// número a alguien en un terminal es lo único que borra a una persona, y solo
+// después de tener sus huellas en el número nuevo (renumberPerson). Fuera de
+// eso solo agrega; la otra persona que puede borrar es una que esta copia acaba
+// de crear y no sirvió (ver copyItem).
 
 
 
@@ -173,16 +177,28 @@ function publicPlan(plan, terminals) {
             ...d,
             entries: d.entries.map((e) => ({ ...e, terminal: terminalName(terminals, e.code) })),
         })),
+        renumbers: plan.renumbers.map((r) => ({ ...r, terminalName: terminalName(terminals, r.terminal) })),
         same: plan.same,
         persons: summary.reduce((sum, t) => sum + t.persons, 0),
         fingerprints: summary.reduce((sum, t) => sum + t.fingerprints, 0),
     };
 }
 
-async function planFor(terminals) {
+// Todos los números vinculados en Jarvis: deciden quién se queda cada número, y
+// ninguno se usa como número nuevo aunque no esté en ningún terminal.
+async function allLinks() {
+    const users = await UserModel.find({ 'biometric.employeeNo': { $type: 'string' } }, 'name surName inabilited biometric.employeeNo').lean();
+    return users.map((user) => ({ employeeNo: String(user.biometric.employeeNo), user }));
+}
+
+// `corrections: false`: solo lo que se puede copiar tal como están hoy los
+// terminales (después de corregir: una corrección que falló no se da por hecha).
+async function planFor(terminals, { corrections = true } = {}) {
     const withPeople = terminals.map((t) => ({ code: t.code, name: t.name, people: inventories.get(t.code).people }));
-    const numbers = [...new Set(withPeople.flatMap((t) => t.people.map((p) => p.employeeNo)))];
-    return buildSyncPlan({ terminals: withPeople, links: await linksOf(numbers) });
+    const links = await allLinks();
+    return corrections
+        ? planCorrections({ terminals: withPeople, links })
+        : { renumbers: [], ...buildSyncPlan({ terminals: withPeople, links }) };
 }
 
 // getSyncPlan = «qué se copiaría a cada terminal y qué no se puede copiar».
@@ -204,13 +220,13 @@ export async function getSyncPlan(codes, { refresh = false } = {}) {
 const publicJob = (j) => ({
     id: j.id,
     status: j.status,               // running | done | failed
-    phase: j.phase,                 // reading | copying | finishing
+    phase: j.phase,                 // reading | correcting | copying | finishing
     startedAt: j.startedAt,
     finishedAt: j.finishedAt,
     terminals: j.terminals,
     progress: { ...j.progress },
     current: j.current,
-    results: { ...j.results, skipped: [...j.results.skipped], errors: [...j.results.errors] },
+    results: { ...j.results, corrected: [...j.results.corrected], skipped: [...j.results.skipped], errors: [...j.results.errors] },
     error: j.error,
 });
 
@@ -232,7 +248,7 @@ export async function startSync({ codes, adminId = null }) {
         terminals: [],
         progress: { done: 0, total: 0 },
         current: 'Preparando…',
-        results: { persons: 0, fingerprints: 0, skipped: [], errors: [] },
+        results: { renumbered: 0, persons: 0, fingerprints: 0, corrected: [], skipped: [], errors: [] },
         error: null,
     };
     job = current;   // antes de esperar nada: dos clics no arrancan dos
@@ -256,7 +272,7 @@ function finish(j, error = null) {
     j.error = error ? (error?.message ?? String(error)) : null;
     j.finishedAt = new Date().toISOString();
     const r = j.results;
-    console.log(`[biometric] sincronización ${error ? `con error (${j.error})` : 'terminada'}: ${r.persons} personas y ${r.fingerprints} huellas copiadas, ${r.skipped.length} omitidas, ${r.errors.length} errores`);
+    console.log(`[biometric] sincronización ${error ? `con error (${j.error})` : 'terminada'}: ${r.renumbered} números corregidos, ${r.persons} personas y ${r.fingerprints} huellas copiadas, ${r.skipped.length} omitidas, ${r.errors.length} errores`);
 }
 
 const note = (list, entry) => { if (list.length < MAX_NOTES) list.push(entry); };
@@ -270,11 +286,42 @@ async function runSync(j, terminals) {
         if (state.status === 'failed') throw new BiometricError('device_error', `No se pudo leer «${terminal.name}»: ${state.error}`);
     }
 
-    // 2. Copiar lo que falta, terminal por terminal.
-    const plan = await planFor(terminals);
+    const byCode = new Map(terminals.map((t) => [t.code, t]));
+
+    // 2. Corregir números según Jarvis, y releer lo que cambió.
+    let plan = await planFor(terminals);
+    if (plan.renumbers.length) {
+        j.phase = 'correcting';
+        j.progress = { done: 0, total: plan.renumbers.length };
+        for (const fix of plan.renumbers) {
+            const target = byCode.get(fix.terminal);
+            const where = { terminal: target.name, employeeNo: `${fix.from} → ${fix.to}`, name: fix.name };
+            j.current = `Pasando a ${fix.name} del nº ${fix.from} al nº ${fix.to} en «${target.name}»`;
+            try {
+                const outcome = await withTerminal(target.code, () => renumberPerson(target.device, fix));
+                j.results.renumbered++;
+                note(j.results.corrected, { ...where, message: `${outcome.moved} ${outcome.moved === 1 ? 'huella pasada' : 'huellas pasadas'} al nº ${fix.to}.` });
+                console.log(`[biometric] «${target.code}»: ${fix.name} pasó del nº ${fix.from} al nº ${fix.to} (${fix.reason})`);
+            } catch (error) {
+                note(j.results.errors, { ...where, message: error?.message ?? String(error) });
+            }
+            j.progress.done++;
+        }
+        j.current = 'Releyendo los terminales corregidos…';
+        const changed = [...new Set(plan.renumbers.map((r) => r.terminal))].map((code) => byCode.get(code));
+        for (const terminal of changed) {
+            const state = ensureInventory(terminal, { maxAgeMs: 0, force: true });
+            await state.promise;
+            if (state.status === 'failed') throw new BiometricError('device_error', `No se pudo releer «${terminal.name}»: ${state.error}`);
+        }
+        // Se copia según cómo quedaron de verdad: lo que no se pudo corregir queda
+        // apartado (sin copiar) para la próxima sincronización.
+        plan = await planFor(terminals, { corrections: false });
+    }
+
+    // 3. Copiar lo que falta, terminal por terminal.
     j.phase = 'copying';
     j.progress = { done: 0, total: plan.copies.reduce((sum, c) => sum + (c.createPerson ? 1 : 0) + c.fingerprints.length, 0) };
-    const byCode = new Map(terminals.map((t) => [t.code, t]));
     const stopped = new Set();   // terminales que dejaron de responder (o se llenaron)
 
     for (const copy of plan.copies) {
@@ -289,7 +336,7 @@ async function runSync(j, terminals) {
         j.progress.done += steps;
     }
 
-    // 3. Lo leído ya no vale: la próxima vista relee. La escucha relee los nombres.
+    // 4. Lo leído ya no vale: la próxima vista relee. La escucha relee los nombres.
     j.phase = 'finishing';
     j.current = 'Actualizando los datos de los terminales…';
     for (const terminal of terminals) inventories.delete(terminal.code);
@@ -298,6 +345,68 @@ async function runSync(j, terminals) {
         if (!terminal.id) continue;
         try { await checkTerminal(terminal.id); } catch { /* solo actualiza los números de la lista */ }
     }
+}
+
+// renumberPerson = «pasar a una persona del nº `from` al nº `to` en un terminal,
+// con sus huellas». El terminal no deja la misma huella en dos números, así que
+// hay que quitar el viejo antes de guardarlas en el nuevo. El orden cuida que no
+// se pierda nada:
+//   1. leer sus huellas (quedan en memoria);
+//   2. crear el nº nuevo si no está (si falla, no se tocó nada);
+//   3. quitar el nº viejo y comprobar que ya no está (si falla, se deshace el 2);
+//   4. guardar las huellas en el nuevo, en sus posiciones o en una libre. Una que
+//      el terminal ya tiene ahí (estado 5: la misma persona) se da por puesta.
+//      Si otra falla, se deshace todo: vuelve el nº viejo con sus huellas.
+async function renumberPerson(device, { from, to, name }) {
+    const templates = await readFingerprints(device, from);
+    const existed = Boolean(await findDeviceUser(device, to));
+    if (!existed) await createDeviceUser(device, { employeeNo: to, name });
+
+    const undoCreate = async () => {
+        if (!existed) await deleteDeviceUser(device, to).catch(() => {});
+    };
+    try {
+        await deleteDeviceUser(device, from);
+        if (await findDeviceUser(device, from)) throw new BiometricError('device_error', `El terminal no quitó el nº ${from}.`);
+    } catch (error) {
+        await undoCreate();
+        throw new BiometricError(error?.kind ?? 'device_error', `No se cambió el número: ${error?.message ?? error}`);
+    }
+
+    const used = new Set(await listFingerprints(device, to));
+    const placed = new Set();   // posiciones (del nº viejo) que ya están en el nuevo
+    try {
+        for (const template of templates) {
+            const slot = used.has(template.id) ? freeFingerSlot([...used]) : template.id;
+            if (slot === null) throw new BiometricError('device_error', `El nº ${to} ya tiene ocupadas sus 10 posiciones de huella.`);
+            try {
+                await saveFingerprint(device, { employeeNo: to, fingerPrintID: slot, fingerData: template.fingerData });
+                used.add(slot);
+            } catch (error) {
+                if (error?.saveStatus !== 5) throw error;   // ya la tiene (la misma persona): está bien
+            }
+            placed.add(template.id);
+        }
+    } catch (error) {
+        // Se deshace lo que falta: el nº viejo vuelve con las huellas que no
+        // llegaron al nuevo (las que llegaron quedan ahí: el terminal no deja
+        // la misma en dos números). Si no llegó ninguna, todo queda como estaba.
+        const pending = templates.filter((t) => !placed.has(t.id));
+        try {
+            if (placed.size === 0) await undoCreate();
+            await createDeviceUser(device, { employeeNo: from, name });
+            for (const template of pending) {
+                await saveFingerprint(device, { employeeNo: from, fingerPrintID: template.id, fingerData: template.fingerData }).catch(() => {});
+            }
+        } catch (undoError) {
+            throw new BiometricError('device_error', `No se pudieron pasar sus huellas (${error?.message ?? error}) y tampoco volver al nº ${from} (${undoError?.message ?? undoError}): revísalo en el terminal.`);
+        }
+        const state = placed.size === 0
+            ? `quedó como estaba, en el nº ${from}`
+            : `${placed.size} de ${templates.length} huellas quedaron en el nº ${to} y las demás en el nº ${from}`;
+        throw new BiometricError(error?.kind ?? 'device_error', `No se pudieron pasar todas sus huellas al nº ${to}: ${state}. ${error?.message ?? ''}`.trim());
+    }
+    return { moved: placed.size };
 }
 
 // copyItem = «agregar (o completar) a una persona en un terminal». Si se la creó

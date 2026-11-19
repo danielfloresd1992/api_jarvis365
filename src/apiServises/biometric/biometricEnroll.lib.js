@@ -37,7 +37,7 @@ const SAVE_STATUS = {
     2: 'El lector de huellas del terminal está desconectado.',
     3: 'La huella salió de mala calidad. Limpia el dedo y el lector y vuelve a intentarlo.',
     4: 'La memoria de huellas del terminal está llena.',
-    5: 'Esa huella ya está registrada en el terminal para otra persona.',
+    5: 'Esa huella ya está registrada en el terminal con otro número: otra persona, o esta misma cargada antes con otro número (eso lo corrige «Sincronizar datos» en Client365 → Gestión de terminal).',
     6: 'Esa posición de huella ya está ocupada.',
     7: 'La posición de huella no es válida.',
 };

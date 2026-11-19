@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    sameDeviceName, linkMismatch, buildSyncPlan, planSummary, copyOutcome,
+    sameDeviceName, linkMismatch, buildSyncPlan, planSummary, copyOutcome, planCorrections,
 } from '../src/apiServises/biometric/biometricSync.lib.js';
 import { kioskPayload } from '../src/apiServises/biometric/biometricStream.lib.js';
 
@@ -158,4 +158,63 @@ test('Escucha: si el número es de otra persona en este terminal, el kiosco no m
     assert.deepEqual(payload, { type: 'unlinked', reason: 'otra_persona', name: 'Nora Vega', employeeNo: '105', serialNo: 70001, at: '2026-11-18T08:00:00-04:00' });
     assert.equal(kioskPayload({ action: 'repeated', secondsAgo: 5 }, event, null, { mismatchName: 'Nora Vega' }).type, 'unlinked', 'tampoco como repetida');
     assert.equal(kioskPayload({ action: 'rejected' }, event, null, { mismatchName: 'Nora Vega' }).type, 'rejected');
+});
+
+
+
+// ── Correcciones: manda el número que la persona tiene en Jarvis (2026-11-19) ──
+
+const corrected = planCorrections({ terminals: [PRINCIPAL, OFICINA], links: LINKS });
+const fixOf = (from: string) => corrected.renumbers.find((r: any) => r.from === from);
+
+test('Corrección: si el número de Jarvis es otra persona en un lector, esa pasa a un número libre', () => {
+    assert.deepEqual(fixOf('105'), {
+        terminal: 'oficina-2', from: '105', to: '107', name: 'Nora Vega', fingerprints: [6],
+        reason: 'otra_persona', linkedName: 'Gina Soto Rivas', targetExists: false, menuAccess: false,
+    });
+    assert.equal(fixOf('106')?.to, '108', 'el siguiente libre: ni en los lectores ni en Jarvis');
+    assert.equal(fixOf('106')?.name, 'Hector Arias');
+});
+
+test('Corrección: la misma persona con otro número pasa a su número de Jarvis, con sus huellas', () => {
+    assert.deepEqual(fixOf('4'), {
+        terminal: 'oficina-2', from: '4', to: '25', name: 'Elias Mora', fingerprints: [6],
+        reason: 'mismo_jarvis', linkedName: 'Elías Mora', targetExists: false, menuAccess: false,
+    });
+    assert.deepEqual(corrected.duplicates, [], 'ya no queda duplicada');
+});
+
+test('Corrección: después se copia lo que antes chocaba, cada uno con su número', () => {
+    const copy = (to: string, no: string) => corrected.copies.find((c: any) => c.to === to && c.employeeNo === no);
+    assert.equal(copy('oficina-2', '105')?.name, 'Gina Soto', 'la de Jarvis se queda el 105 en los dos');
+    assert.equal(copy('oficina-2', '106')?.name, 'Hector Vera');
+    assert.equal(copy('principal', '107')?.name, 'Nora Vega', 'y la que se movió llega al otro lector con su número nuevo');
+    assert.equal(copy('principal', '108')?.name, 'Hector Arias');
+    assert.deepEqual(copy('oficina-2', '25')?.fingerprints, [{ id: 1, from: 'principal' }, { id: 5, from: 'principal' }]);
+    assert.deepEqual(copy('principal', '25')?.fingerprints, [{ id: 6, from: 'oficina-2' }]);
+    assert.deepEqual(corrected.conflicts.map((c: any) => c.employeeNo), ['24', '104'], 'sin nadie vinculado no se sabe quién se queda el número');
+});
+
+test('Corrección: si su número de Jarvis ya está en ese lector (vacío), se le suman las huellas', () => {
+    const conVacio = planCorrections({
+        terminals: [PRINCIPAL, { ...OFICINA, people: [...OFICINA.people, p('25', 'Elias Mora', [])] }],
+        links: LINKS,
+    });
+    const fix = conVacio.renumbers.find((r: any) => r.from === '4');
+    assert.equal(fix?.to, '25');
+    assert.equal(fix?.targetExists, true);
+});
+
+test('Corrección: sin vínculo, o con dos candidatos, no se toca a nadie', () => {
+    const sinVinculo = planCorrections({ terminals: [PRINCIPAL, OFICINA], links: [] });
+    assert.deepEqual(sinVinculo.renumbers, []);
+    assert.equal(sinVinculo.duplicates.length, 1, 'Elias sigue apartado hasta que se vincule');
+    const dosCandidatos = planCorrections({
+        terminals: [
+            { code: 'a', name: 'A', people: [p('7', 'Rosa Blanco', [1]), p('8', 'Rosa Blanco', [2])] },
+            { code: 'b', name: 'B', people: [p('9', 'Rosa Blanco', [3])] },
+        ],
+        links: [{ employeeNo: '7', user: user('Rosa', 'Blanco') }, { employeeNo: '8', user: user('Rosa', 'Blanco Díaz') }],
+    });
+    assert.deepEqual(dosCandidatos.renumbers, [], 'dos números de Jarvis posibles: no se adivina');
 });
