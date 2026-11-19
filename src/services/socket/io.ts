@@ -3,7 +3,7 @@ const app = express();
 import { Server as HttpServer } from 'http'
 
 import { Server, Socket } from "socket.io";
-import { JOIN_KIOSK_EVENT, kioskRoomOf, joinedTerminalOf } from '../../apiServises/biometric/biometricStream.lib.js';
+import { JOIN_KIOSK_EVENT, KIOSKS_EVENT, kioskRoomOf, joinedTerminalOf } from '../../apiServises/biometric/biometricStream.lib.js';
 
 
 
@@ -85,11 +85,31 @@ class SocketManager {
                 //
                 // Llega ({ terminal }, ack). Los kioscos de antes mandan solo
                 // (ack), o nada: entran a la sala del terminal principal.
+                //
+                // Cada vez que un kiosco entra o sale, la sala sabe cuántos
+                // hay (KIOSKS_EVENT): más de uno en el mismo terminal es casi
+                // siempre una tablet sin anclar, y cada huella la marcaría uno
+                // solo, quizás no el que tiene a la persona delante.
                 socket.on(JOIN_KIOSK_EVENT, (payload?: unknown, ack?: unknown) => {
                     const callback = typeof payload === 'function' ? payload : ack;
                     const terminal = joinedTerminalOf(typeof payload === 'function' ? null : payload);
-                    socket.join(kioskRoomOf(terminal));
-                    if (typeof callback === 'function') callback(this.kioskStatusProvider(terminal));
+                    const room = kioskRoomOf(terminal);
+                    const before = socket.data.kioskRoom as string | undefined;
+                    if (before && before !== room) {
+                        socket.leave(before);
+                        this.announceKiosks(before);
+                    }
+                    socket.join(room);
+                    socket.data.kioskRoom = room;
+                    if (typeof callback === 'function') {
+                        const status = this.kioskStatusProvider(terminal);
+                        callback({ ...(status && typeof status === 'object' ? status : {}), kiosks: this.kiosksIn(room) });
+                    }
+                    this.announceKiosks(room);
+                });
+
+                socket.on('disconnect', () => {
+                    if (socket.data.kioskRoom) this.announceKiosks(socket.data.kioskRoom);
                 });
 
 
@@ -150,6 +170,15 @@ class SocketManager {
         else {
             console.error('Socket.IO no está inicializado. No se pueden emitir eventos.');
         }
+    }
+
+    // Cuántos kioscos hay ahora en la sala de un terminal (en ESTE servidor).
+    kiosksIn(room: string): number {
+        return this.io?.sockets.adapter.rooms.get(room)?.size ?? 0;
+    }
+
+    announceKiosks(room: string): void {
+        this.io?.to(room).emit(KIOSKS_EVENT, { count: this.kiosksIn(room) });
     }
 
     setKioskStatusProvider(provider: (terminal: string) => unknown): void {

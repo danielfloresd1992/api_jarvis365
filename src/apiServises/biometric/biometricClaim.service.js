@@ -15,18 +15,22 @@ import { isFingerprintEventId, isKioskId } from './biometricStream.lib.js';
 
 // claimFingerprint = «¿este kiosco registra esta huella?». El primero que la pide
 // se la queda; el mismo kiosco puede volver a pedirla (si su marcaje falló).
-export async function claimFingerprint({ eventId, kioskId, known }) {
+// `anchored`: el kiosco está anclado a este terminal (lo eligió un administrador
+// en esa tablet). Al que pierde se le dice si ganó uno anclado: si él no lo
+// está, es la tablet que sobra y no tiene nada que avisar.
+export async function claimFingerprint({ eventId, kioskId, anchored = false, known }) {
     if (!isFingerprintEventId(eventId) || !isKioskId(kioskId)) throw new BiometricError('bad_request', 'Reclamo de huella inválido.');
     if (!known) throw new BiometricError('gone', 'Esa huella no la avisó este servidor, o ya pasó demasiado tiempo.');
 
     const terminal = eventId.split(':')[0];
     try {
-        await ClaimModel.create({ _id: eventId, kioskId, terminal });
+        await ClaimModel.create({ _id: eventId, kioskId, terminal, anchored: anchored === true });
         return { granted: true };
     } catch (error) {
         if (error?.code !== 11000) throw error;
         // Ya la reclamó alguien: el mismo kiosco puede seguir; otro, no.
         const existing = await ClaimModel.findById(eventId).lean();
-        return { granted: existing?.kioskId === kioskId };
+        if (existing?.kioskId === kioskId) return { granted: true };
+        return { granted: false, winnerAnchored: existing?.anchored === true };
     }
 }

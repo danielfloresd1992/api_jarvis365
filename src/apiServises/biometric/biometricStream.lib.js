@@ -34,6 +34,7 @@ export const KIOSK_ROOM = 'biometric:kiosk';
 export const JOIN_KIOSK_EVENT = 'join-biometric-kiosk';
 export const FINGERPRINT_EVENT = 'biometric:fingerprint';
 export const LISTENER_EVENT = 'biometric:listener';   // { state }: si la API está leyendo al terminal
+export const KIOSKS_EVENT = 'biometric:kiosks';       // { count }: cuántos kioscos hay en la sala de ese terminal
 
 // kioskRoomOf = «la sala de los kioscos de un terminal». El principal conserva la
 // sala de siempre, así los kioscos que no dicen su terminal reciben lo mismo que antes.

@@ -101,7 +101,7 @@ controller.captureFingerprint = onTerminal((req, terminal) => enrollFingerprint(
 // él. El primero se la queda; otro kiosco del mismo terminal recibe «no».
 controller.claimFingerprint = respond(async (req) => {
     const eventId = req.body?.eventId;
-    const result = await claimFingerprint({ eventId, kioskId: req.body?.kioskId, known: wasForwarded(eventId) });
+    const result = await claimFingerprint({ eventId, kioskId: req.body?.kioskId, anchored: req.body?.anchored === true, known: wasForwarded(eventId) });
     if (!result.granted) console.log(`[biometric] la huella ${eventId} ya la está marcando otro kiosco: este no la marca`);
     return result;
 });

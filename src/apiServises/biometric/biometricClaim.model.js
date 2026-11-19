@@ -22,6 +22,9 @@ const ClaimSchema = new Schema({
 
     terminal: { type: String, required: true },
 
+    // ¿El kiosco que se la quedó está anclado a este terminal? (ver biometricClaim.service.js)
+    anchored: { type: Boolean, default: false },
+
     createdAt: { type: Date, default: Date.now, expires: 2 * 24 * 60 * 60 },
 
 }, { versionKey: false });
