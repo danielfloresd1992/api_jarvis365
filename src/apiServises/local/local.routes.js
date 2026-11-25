@@ -4,6 +4,8 @@ import { uploadLocal } from '../../util/multer.js';
 import { controller } from './local.controller.js';
 import {  extendSession, validateSession, validateSessionAndUserSuper } from '../../middleware/validateSessionAndUser.js';
 import { validateObjectIdStrict } from '../../middleware/validateObjectId.js';
+import { asyncHandler } from '../../middleware/asyncHandler.js';
+import { floorPlanController } from './floorPlan.controller.js';
 import nameApi from '../../libs/name_api.js';
 
 
@@ -104,6 +106,14 @@ routerLocal.put(`${nameApi}/local/:id`, extendSession, validateSessionAndUserSup
 routerLocal.put(`${nameApi}/local/image/id=:id`, extendSession, validateSessionAndUserSuper, uploadLocal.single('image'), controller.updateImgImage);
 
 routerLocal.delete(`${nameApi}/local/:id`, extendSession, validateSessionAndUserSuper, controller.deleteLocal);
+
+
+// El croquis de mesas del local (floorPlan.*): lo dibuja Client365 y lo leerá
+// insights365. Leerlo, cualquiera con sesión; guardarlo, quien puede editar el
+// local (el mismo permiso que PUT /local/:id).
+routerLocal.get(`${nameApi}/local/id=:id/floor-plan`, extendSession, validateSession, validateObjectIdStrict, asyncHandler(floorPlanController.getFloorPlan));
+
+routerLocal.put(`${nameApi}/local/id=:id/floor-plan`, extendSession, validateSessionAndUserSuper, validateObjectIdStrict, asyncHandler(floorPlanController.putFloorPlan));
 
 
 
