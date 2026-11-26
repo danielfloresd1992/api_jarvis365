@@ -9,6 +9,12 @@ const Franchise = new Schema({
     },
     location: {
         type: String
+    },
+    // La foto de la franquicia: la URL que devuelve POST /multimedia, como el logo
+    // de un local. Se cambia con PUT /franchise/:id (ver franchise.lib.ts).
+    image: {
+        type: String,
+        default: null
     }
 });
 
