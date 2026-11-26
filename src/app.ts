@@ -130,6 +130,7 @@ import { routesFailed } from './apiServises/failed/failed.routes.js';
 import { routerDvrFailure } from './apiServises/dvrFailure/dvrFailure.routes.js';
 import { routesDishes } from './apiServises/dishes/dishes.router.js';
 import { authRouter } from './apiServises/auth/auth.routes.js';
+import { routerPasswordReset } from './apiServises/auth/passwordReset.routes.js';
 import { routerDocument } from './apiServises/documentsAndAnalytics/document.routes.js';
 import { routerChat } from './apiServises/chat/router.js';
 import { routerAiChat } from './apiServises/aiChat/aiChat.routes.js';
@@ -192,6 +193,7 @@ app
     .use(routesFailed)
     .use(routesDishes)
     .use(authRouter)
+    .use(routerPasswordReset)
     .use(routerDocument)
     .use(routerChat)
     .use(routerAiChat)

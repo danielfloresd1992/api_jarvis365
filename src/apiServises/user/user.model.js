@@ -78,6 +78,12 @@ const UserSchema = new Schema({
         type: Boolean,
         default: false
     },
+
+    // Cuándo se cambió la contraseña por última vez con el enlace del correo
+    // (apiServises/auth/passwordReset.routes.ts). Sin valor = nunca por esa vía.
+    passwordChangedAt: {
+        type: Date
+    },
     date: {
         type: Date,
         default: new Date(),

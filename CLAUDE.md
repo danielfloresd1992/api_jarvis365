@@ -111,6 +111,18 @@ El candado de solo lectura vive en `apiKeyGate.lib.ts`, es puro y está probado.
 
 **Hoy ninguna llave puede escribir**: el esquema de creación solo admite el permiso `read`, así que la puerta de escritura está cerrada por construcción.
 
+### Restablecer la contraseña por correo
+
+Tres rutas sin sesión en `apiServises/auth/passwordReset.routes.ts`: `POST /auth/password/forgot`, `/reset/check` y `/reset`. Las reglas puras (token, enlace, textos de los correos) están en `passwordReset.lib.ts`, con pruebas.
+
+- `forgot` contesta **siempre 202 con el mismo texto**, y busca y envía **después** de contestar, para que ni la respuesta ni su tiempo digan si la cuenta existe.
+- El token se guarda como SHA-256, dura 30 minutos y es de un solo uso. Se gasta con un `findOneAndUpdate` atómico, y pedir uno nuevo anula los anteriores.
+- El token va en el cuerpo, nunca en la URL, porque morgan escribe las URL en el log. En el enlace del correo va detrás de `#`.
+- La dirección del enlace **no sale de la petición**: el cuerpo nombra un portal de `RESET_APPS` y la dirección sale del entorno (`INSIGHTS_URL`). En producción no hay respaldo.
+- Al cambiar la contraseña se cierran todas las sesiones de la cuenta recorriendo el store y se avisa por correo.
+
+El correo sale por `services/mail/mail.service.js`, que usa nodemailer por SMTP con las variables `MAIL_*`. Igual que WhatsApp, **solo envía en producción** salvo que `MAIL_ENABLED` diga otra cosa. En desarrollo escribe el texto en la consola.
+
 ### Tiempo tardío y días operativos
 
 El **día operativo va de las 08:00 a las 07:00 del día siguiente**, en `America/Caracas`. Aparece en el rol del día, en el informe de novedades y en las caídas de DVR. Ojo, porque el resumen diario de documentos calcula "hoy" en UTC, que no es lo mismo cerca de medianoche.
