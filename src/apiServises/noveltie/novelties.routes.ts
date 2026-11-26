@@ -18,6 +18,7 @@ import { FileImgToadPos } from './fileNoveltie.model';
 import { io } from '../../services/socket/io';
 import SocketAdapter from '../../adapters/SocketAdapter';
 import getNextDay from '../../libs/getNextTime';
+import { parseWallQuery, wallFilter, toWallNovelty, WALL_FIELDS, WALL_MAX_TIME_MS } from './noveltyWall.lib.js';
 
 import * as url from 'url';
 const __dirname: string = url.fileURLToPath(new URL('.', import.meta.url));
@@ -164,6 +165,41 @@ routerNoveltie.get(`${nameApi}/novelty`, validateSession, controller.getNovelty)
 // contaría por otra vía. Quién validó viaja igual en la respuesta, porque una
 // novedad rechazada no debería sumar lo mismo que una aprobada.
 routerNoveltie.get(`${nameApi}/novelties/by-user`, extendSession, validateSession, controller.getNoveltiesByUser);
+
+
+// ══════════════════════════════════════════════════════════════════════
+// EL MURO DE ALERTAS DEL CLIENTE (insights365)
+// ══════════════════════════════════════════════════════════════════════
+// GET /novelties/wall?establishments=<id,id,…>&before=<id>&limit=30
+//
+// Las validadas y enviadas al grupo de esos establecimientos, de la más nueva a
+// la más vieja, recortadas a lo que ve el cliente. Las reglas y el porqué de
+// cada una, en noveltyWall.lib.ts.
+//
+// Responde { novelties, hasMore, next }: `next` es lo que se manda como
+// `before` para la página siguiente.
+routerNoveltie.get(`${nameApi}/novelties/wall`, extendSession, validateSession, asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const parsed = parseWallQuery(req.query as Record<string, unknown>);
+    if (!parsed.ok) {
+        res.status(400).json({ status: 400, error: 'Bad request', message: parsed.message });
+        return;
+    }
+    const { establishments, before, limit } = parsed.value;
+
+    // Se pide una de más para saber si hay otra página sin contar la colección
+    const docs = await NoveltieModel
+        .find(wallFilter({ establishments, before }))
+        .sort({ _id: -1 })
+        .limit(limit + 1)
+        .select(WALL_FIELDS)
+        .populate({ path: 'menuRef', select: 'es en category' })
+        .maxTimeMS(WALL_MAX_TIME_MS)
+        .lean();
+
+    const novelties = docs.slice(0, limit).map(toWallNovelty);
+    const hasMore = docs.length > limit;
+    res.json({ status: 200, novelties, hasMore, next: hasMore ? novelties[novelties.length - 1]._id : null });
+}));
 
 routerNoveltie.get(`${nameApi}/novelties/id=:id`, validateSession, controller.getNoveltiesById);
 
