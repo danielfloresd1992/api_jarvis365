@@ -1,7 +1,7 @@
 import RotationModel from './rotation.model.js';
 import LocalModel from '../local/local.model.js';
-import { rotationValidate, rotationQueryValidate, rotationTargetValidate, syncValidate, rotationRemoveValidate, dayToDate } from './rotation.schema.js';
-import { applyEdit, addTouchTo, removeTouchFrom, abandonedOf, operationalDaysOf, syncOutcome, applySync, PEOPLE } from './rotation.lib.js';
+import { rotationValidate, rotationQueryValidate, rotationTargetValidate, syncValidate, rotationRemoveValidate, rotationSummaryValidate, dayToDate } from './rotation.schema.js';
+import { applyEdit, addTouchTo, removeTouchFrom, abandonedOf, operationalDaysOf, syncOutcome, applySync, summaryOfRotations, PEOPLE } from './rotation.lib.js';
 import { emitRotation, emitRotationSync } from './rotation.socket.js';
 import { operationalDateOf } from '../dvrFailure/dvrFailure.lib.js';
 
@@ -103,6 +103,42 @@ controller.getRotations = async (req, res) => {
         .lean();
 
     return res.status(200).json({ establishment: local._id, name: local.name, status, from: from ?? null, to: from ? to : null, total: documents.length, documents });
+};
+
+
+// GET /rotation/summary?day=AAAA-MM-DD — lo de un día operativo de CADA local, ya contado (summaryOfRotations)
+// Para el tablero del lobby de Client365: una sola petición en vez de dos por local. Sin `day`, el día operativo de
+// ahora, y entonces cuentan también las abiertas (en vivo), de cualquier día, como en el visor de mesas; con un día
+// pasado, solo sus guardadas. Solo vienen los locales que tuvieron alguna rotación, ordenados por nombre.
+controller.getRotationSummary = async (req, res) => {
+
+    const { day } = await rotationSummaryValidate.validate(req.query, OPTIONS);
+
+    const today = operationalDateOf(new Date());
+    const operationalDate = day ? dayToDate(day) : today;
+    const isToday = operationalDate.getTime() === today.getTime();
+
+    const saved = { status: { $ne: 'open' }, operationalDate };
+    const filter = isToday ? { $or: [{ status: 'open' }, saved] } : saved;
+
+    // Solo lo que se cuenta: ni horas ni personas
+    const rotations = await RotationModel.find(filter)
+        .select('establishment status takeOut tableNumber touch._id firstAttentionDelay cleaningDelay process.preparationDelay')
+        .lean();
+
+    const rows = summaryOfRotations(rotations);
+    // El nombre del local y el de su franquicia (franchiseReference; `franchise` suelto es el campo viejo)
+    const locals = await LocalModel.find({ _id: { $in: rows.map(row => row.establishment) } }).select('_id name franchise franchiseReference.name_franchise').lean();
+    const byId = new Map(locals.map(local => [String(local._id), local]));
+
+    const establishments = rows
+        .map(row => {
+            const local = byId.get(row.establishment);
+            return { ...row, name: local?.name ?? '', franchise: local?.franchiseReference?.name_franchise || local?.franchise || '' };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+
+    return res.status(200).json({ day: operationalDate.toISOString().slice(0, 10), live: isToday, total: establishments.length, establishments });
 };
 
 

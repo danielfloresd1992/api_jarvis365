@@ -81,6 +81,56 @@ export const rotationEvent = (method, localName) => `${localName}-${method}`;
 
 
 
+// ── EL RESUMEN DEL DÍA DE CADA LOCAL (GET /rotation/summary) ──────────
+
+// emptySummary = «un local sin nada contado todavía»
+const emptySummary = (establishment) => ({
+    establishment,
+    live: 0, saved: 0, rotations: 0,
+    firsts: 0, others: 0,
+    delays: { attention: 0, cleaning: 0, preparation: 0, total: 0 },
+});
+
+// summaryOfRotations = «lo de un día de cada local, ya contado», con las reglas del visor de mesas y del informe:
+//   - en vivo = abierta (sigue en Mesas); guardada = cerrada. Las dos son rotaciones del día;
+//   - los pedidos para llevar (mesa '#110') no son una mesa: no cuentan en nada;
+//   - primer toque = rotación con algún toque de gerente; otros = los que vienen después del primero en la misma
+//     rotación (por eso «otros» se mide sobre los primeros y puede pasar del 100 %);
+//   - demoras = las REPORTADAS desde Mesas, las que tienen su novedad apuntada: primera atención y limpieza en la
+//     rotación, preparación en cada pedido. Son los tres grupos de demora del informe semanal.
+// Recibe rotaciones con establishment, status, takeOut/tableNumber, touch, firstAttentionDelay, cleaningDelay y
+// process[].preparationDelay. Devuelve una fila por local que tuvo alguna, sin nombre (lo pone el controlador).
+export function summaryOfRotations(rotations) {
+    const byLocal = new Map();
+    for (const rotation of rotations ?? []) {
+        if (rotation.takeOut || isTakeOutTable(rotation.tableNumber)) continue;
+        const key = String(rotation.establishment);
+        const row = byLocal.get(key) ?? emptySummary(key);
+
+        if (rotation.status === 'open') row.live += 1;
+        else row.saved += 1;
+        row.rotations += 1;
+
+        const touches = rotation.touch?.length ?? 0;
+        if (touches > 0) {
+            row.firsts += 1;
+            row.others += touches - 1;
+        }
+
+        if (rotation.firstAttentionDelay) row.delays.attention += 1;
+        if (rotation.cleaningDelay) row.delays.cleaning += 1;
+        for (const process of rotation.process ?? []) {
+            if (process?.preparationDelay) row.delays.preparation += 1;
+        }
+        row.delays.total = row.delays.attention + row.delays.cleaning + row.delays.preparation;
+
+        byLocal.set(key, row);
+    }
+    return [...byLocal.values()];
+}
+
+
+
 // ── MESAS EN VIVO: la rotación abierta que se sube mientras se trabaja ──
 
 // SYNC_ACTIONS = «lo que se avisa de una rotación de Mesas»: que se subió (creada, cambiada o cerrada) o que se quitó

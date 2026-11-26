@@ -728,3 +728,49 @@ test('applySync no apunta los días del equipo en la rotación: ya están en ope
     assert.equal(rotacion.get('day'), undefined);
     assert.equal(rotacion.get('today'), undefined);
 });
+
+
+
+// ══════════════════════════════════════════════════════════════════════
+// EL RESUMEN DEL DÍA DE CADA LOCAL (GET /rotation/summary, el tablero del lobby de Client365)
+// ══════════════════════════════════════════════════════════════════════
+
+const DORAL = '637a7ae31a8ed7ed7d7e71e0';
+const MIAMI = '637a7b961a8ed7ed7d7e71eb';
+const NOVEDAD = '507f1f77bcf86cd799439099';
+
+test('summaryOfRotations cuenta por local en vivo, guardadas, toques y demoras reportadas', async () => {
+    const { summaryOfRotations } = await import('../src/apiServises/rotation/rotation.lib.js');
+    const filas = summaryOfRotations([
+        //  Doral: una abierta con dos toques y demora de primera atención
+        { establishment: DORAL, status: 'open', tableNumber: '36', touch: [{}, {}], firstAttentionDelay: NOVEDAD, process: [] },
+        //  Doral: una guardada sin toques, con limpieza y dos pedidos con demora de preparación
+        { establishment: DORAL, status: 'closed', tableNumber: '22', touch: [], cleaningDelay: NOVEDAD, process: [{ preparationDelay: NOVEDAD }, { preparationDelay: null }, { preparationDelay: NOVEDAD }] },
+        //  Doral: un pedido para llevar no cuenta en nada, aunque traiga toques y demoras
+        { establishment: DORAL, status: 'closed', tableNumber: '#110', takeOut: true, touch: [{}], firstAttentionDelay: NOVEDAD },
+        { establishment: DORAL, status: 'open', tableNumber: '  #111' },
+        //  Miami: una guardada con un toque
+        { establishment: MIAMI, status: 'closed', tableNumber: '4', touch: [{}] },
+    ]);
+
+    const doral = filas.find(fila => fila.establishment === DORAL);
+    const miami = filas.find(fila => fila.establishment === MIAMI);
+    assert.equal(filas.length, 2);
+    assert.deepEqual(doral, { establishment: DORAL, live: 1, saved: 1, rotations: 2, firsts: 1, others: 1, delays: { attention: 1, cleaning: 1, preparation: 2, total: 4 } });
+    assert.deepEqual(miami, { establishment: MIAMI, live: 0, saved: 1, rotations: 1, firsts: 1, others: 0, delays: { attention: 0, cleaning: 0, preparation: 0, total: 0 } });
+});
+
+test('summaryOfRotations: sin rotaciones no hay filas, y un local solo con pedidos para llevar no aparece', async () => {
+    const { summaryOfRotations } = await import('../src/apiServises/rotation/rotation.lib.js');
+    assert.deepEqual(summaryOfRotations([]), []);
+    assert.deepEqual(summaryOfRotations(undefined), []);
+    assert.deepEqual(summaryOfRotations([{ establishment: DORAL, status: 'open', tableNumber: '#5' }]), []);
+});
+
+test('el resumen se pide sin día (el de ahora) o con un día que exista', async () => {
+    const { rotationSummaryValidate } = await import('../src/apiServises/rotation/rotation.schema.js');
+    assert.deepEqual(await rotationSummaryValidate.validate({}, OPC), {});
+    assert.equal((await rotationSummaryValidate.validate({ day: '2026-11-26' }, OPC)).day, '2026-11-26');
+    await assert.rejects(rotationSummaryValidate.validate({ day: '2026-02-30' }, OPC), /«day» debe ser un día AAAA-MM-DD que exista/);
+    await assert.rejects(rotationSummaryValidate.validate({ day: 'hoy' }, OPC), /«day»/);
+});

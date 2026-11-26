@@ -208,3 +208,16 @@ export const rotationQueryValidate = yup.object({
     const days = (dayToDate(query.to) - dayToDate(query.from)) / 86400000 + 1;
     return days >= 1 && days <= MAX_RANGE_DAYS;
 });
+
+
+
+// ── GET /rotation/summary: lo de un día de TODOS los locales ──────────
+//
+//     GET /rotation/summary                → el día operativo de ahora
+//     GET /rotation/summary?day=AAAA-MM-DD → otro día operativo
+//
+// Sin local: es el resumen de los locales que tuvieron rotaciones ese día.
+
+export const rotationSummaryValidate = yup.object({
+    day: yup.string().test('day', '«day» debe ser un día AAAA-MM-DD que exista', isRealDay),
+});

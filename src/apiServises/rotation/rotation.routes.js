@@ -20,6 +20,13 @@ const routerRotation = express.Router();
 //   GET  /rotation?establishment=<id>&status=open
 //        Las que siguen ABIERTAS en Mesas, de cualquier día (las fechas son opcionales).
 //
+//   GET  /rotation/summary?day=AAAA-MM-DD
+//        El día operativo de TODOS los locales, ya contado: una fila por local que tuvo rotaciones (con su nombre y el
+//        de su franquicia), con en vivo,
+//        guardadas, primeros y otros toques y las demoras reportadas (primera atención, limpieza, preparación).
+//        Sin `day`, el de ahora, con las abiertas incluidas. Lo usa el tablero del lobby de Client365.
+//        Responde { day, live, total, establishments }.
+//
 //   POST /rotation
 //        Guarda una rotación. El autor sale de la sesión. Repetir el mismo
 //        `clientId` en el mismo establecimiento responde 409: ya estaba guardada.
@@ -59,6 +66,8 @@ const routerRotation = express.Router();
 
 
 routerRotation.get(`${nameApi}/rotation`, extendSession, validateSession, asyncHandler(controller.getRotations));
+
+routerRotation.get(`${nameApi}/rotation/summary`, extendSession, validateSession, asyncHandler(controller.getRotationSummary));
 
 routerRotation.post(`${nameApi}/rotation`, extendSession, validateSession, asyncHandler(controller.setRotation));
 
