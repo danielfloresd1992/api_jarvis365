@@ -53,6 +53,37 @@ const Novelties = new Schema({
         type: String,
         require: true
     },
+    // note = «la nota para el cliente, aparte del texto». La escribe o corrige el coordinador en Client365
+    // (componente Noveltie). null = aún no se separó: la nota, si la hay, sigue dentro de `menu`, en la línea
+    // «Nota: …» que arma Jarvis-express365. Al guardar, Client365 manda las dos cosas a la vez: `note` y `menu`
+    // con la nota pegada al final («\nNota: …»), que es el texto que se envía al grupo de WhatsApp.
+    note: {
+        type: String,
+        default: null,
+        trim: true,
+        maxlength: 1000
+    },
+    // noteBy = «quién escribió la nota para el cliente y cuándo». Lo pone la API desde la sesión al cambiar `note`
+    // (updateNovelties), nunca el cuerpo de la petición; null si no hay nota o la novedad es anterior al campo.
+    noteBy: {
+        type: new Schema({
+            updatedAt: { type: Date },
+            user: {
+                nameUser: { type: String },
+                id: { type: Schema.Types.ObjectId, ref: 'user' } // 'user' en minúscula, como el modelo
+            }
+        }, { _id: false }),
+        default: null
+    },
+    // operatorNote = «la nota del operador»: lo que escribe en el campo «Nota» de los formularios de
+    // Jarvis-express365. Es interna: Client365 la enseña al coordinador y NO se pega al mensaje ni se envía al
+    // cliente. null en las novedades anteriores al campo, cuya nota sigue dentro de `menu` («Nota: …»).
+    operatorNote: {
+        type: String,
+        default: null,
+        trim: true,
+        maxlength: 1000
+    },
     orderTicketNumber: {
         type: Number,
         default: null

@@ -99,7 +99,7 @@ export default class ControllerNovelty {
             const until: string = req.params.until;
 
             const query = { date: { $gte: new Date(since).toISOString(), $lt: new Date(until).toISOString() } };
-            const result = await NoveltieModel.find(query).select('-fileNoveltie').populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id establishment');
+            const result = await NoveltieModel.find(query).select('-fileNoveltie').populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id noteBy.user.id establishment');
             res.zip(JSON.stringify(result), 'resultado');
         }
         catch (error) {
@@ -287,7 +287,7 @@ export default class ControllerNovelty {
 
             const searchPromise = await NoveltieModel
                 .find(query)
-                .populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id establishment')
+                .populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id noteBy.user.id establishment')
                 .sort({ $natural: -1 })
                 .select('-fileNoveltie -isValidate -menu -userPublic -description -local')
                 .skip(page * 10)
@@ -361,7 +361,7 @@ export default class ControllerNovelty {
     getNoveltieImgById = async (req: Request, res: any): Promise<void> => {
         try {
             const id = req.params.id;
-            const noveltie = await NoveltieModel.find({ _id: id }).populate('fileNoveltie sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id establishment')
+            const noveltie = await NoveltieModel.find({ _id: id }).populate('fileNoveltie sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id noteBy.user.id establishment')
             res.json(noveltie);
         }
         catch (err) {
@@ -503,6 +503,11 @@ export default class ControllerNovelty {
 
                 menu: novelties.body.menu,
 
+                // La nota del operador (campo «Nota» de Jarvis-express365): aparte del menu, no va al cliente
+                operatorNote: typeof novelties.body.operatorNote === 'string' && novelties.body.operatorNote.trim()
+                    ? novelties.body.operatorNote.trim()
+                    : null,
+
 
                 isValidate: {
                     validation: 'null',
@@ -640,6 +645,20 @@ export default class ControllerNovelty {
             if (!findNovelty) return res.status(404).json({ error: 'Document not found' });
 
 
+            // La nota del operador es suya y no se edita desde aquí. Quién escribió la nota para el cliente lo dice
+            // la sesión, nunca el cuerpo: se apunta solo cuando la nota cambia (vacía = sin autor).
+            delete body.operatorNote;
+            delete body.noteBy;
+            if (typeof body.note === 'string') {
+                const nuevaNota = body.note.trim();
+                if (nuevaNota !== (findNovelty.note ?? '').trim()) {
+                    body.noteBy = nuevaNota
+                        ? { updatedAt: Date.now(), user: { nameUser: req.session.name, id: new Types.ObjectId(req.session.userId) } }
+                        : null;
+                }
+            }
+
+
             if (body.validationResult) {
                 body.validationResult = {
                     ...body.validationResult,
@@ -686,7 +705,7 @@ export default class ControllerNovelty {
             }
 
 
-            const updateDocument = await NoveltieModel.findOneAndUpdate({ _id: id }, body, { new: true, runValidators: true }).populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id establishment');
+            const updateDocument = await NoveltieModel.findOneAndUpdate({ _id: id }, body, { new: true, runValidators: true }).populate('sharedByUser.user.id menuEditedBy.user.id validationResult.validatedByUser.user.id noteBy.user.id establishment');
 
 
             if (io) {
