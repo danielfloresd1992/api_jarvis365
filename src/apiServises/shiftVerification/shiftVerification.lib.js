@@ -399,8 +399,8 @@ export function delaysOf(entries, rotations, limits) {
 
 
 // PEOPLE = «lo que viaja poblado con una verificación»: el local, el operador, los dos verificadores, cada rotación
-// con lo que se mira de ella (sus horas, su mesa, sus toques, sus demoras reportadas) y quién la creó, y quién hizo
-// cada cosa del historial
+// con lo que se mira de ella (sus horas, su mesa, sus toques, sus demoras reportadas) y quién la creó, quién hizo
+// cada cosa del historial y quién escribió cada comentario (con su foto)
 export const PEOPLE = [
     { path: 'establishment', select: 'name' },
     { path: 'operator', select: 'name surName img' },
@@ -412,4 +412,25 @@ export const PEOPLE = [
         populate: { path: 'createdBy', select: 'name surName' },
     },
     { path: 'history.user', select: 'name surName' },
+    { path: 'comments.user', select: 'name surName img' },
 ];
+
+
+
+// ── LOS COMENTARIOS (pedido del usuario) ──────────────────────────────
+
+// commentProblem = «por qué no se puede dejar ese comentario», o null. Si apunta a una rotación, tiene que ser una de
+// la verificación. Se puede comentar con la verificación cerrada, y sin tenerla tomada: comentar no es verificar.
+export function commentProblem(verification, { rotation }) {
+    if (rotation && !findEntry(verification?.rotations ?? [], rotation)) return 'Esa rotación no está en esta verificación';
+    return null;
+}
+
+// commentOf = «un comentario de la verificación, por su _id», o null
+export const commentOf = (verification, commentId) => (verification?.comments ?? [])
+    .find(comment => String(comment._id) === String(commentId)) ?? null;
+
+// commentOwnerProblem = «por qué esa persona no puede editar ni borrar ese comentario», o null: solo su autor puede
+export const commentOwnerProblem = (comment, userId) => (String(comment?.user?._id ?? comment?.user) === String(userId)
+    ? null
+    : 'Solo quien escribió el comentario lo puede editar o borrar');

@@ -2,12 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
     summaryQueryValidate, openValidate, checkValidate, recoveredRotationValidate, recoveredTouchValidate, closeValidate,
+    commentValidate, commentEditValidate, commentIdValidate, COMMENT_MAX,
     PASSES, CHECK_STATUSES, ORIGINS, HISTORY_ACTIONS, DELAY_KINDS,
 } from '../src/apiServises/shiftVerification/shiftVerification.schema.js';
 import {
     secondsOfClock, operationalInstant, dayKeyOf, shiftOfRotation, isVerifiable, majorityCreator, syncEntries,
     operatorRotations, findEntry, passKey, finalCheck, checkOf, passProgress, passProblem, closeProblem, totalsOf,
     withSummary, summarizeDay, PEOPLE, historyEntry, DEFAULT_LIMIT, limitsOf, elapsedBetween, delaysOf,
+    commentProblem, commentOf, commentOwnerProblem,
 } from '../src/apiServises/shiftVerification/shiftVerification.lib.js';
 import ShiftVerificationModel from '../src/apiServises/shiftVerification/shiftVerification.model.js';
 
@@ -327,7 +329,8 @@ test('el modelo rechaza un turno que no existe y una marca sin lo que dice', () 
 });
 
 test('viaja poblado: el local, las tres personas, cada rotación con quién la creó y quién hizo cada cosa', () => {
-    assert.deepEqual(PEOPLE.map(item => item.path), ['establishment', 'operator', 'firstVerifier', 'secondVerifier', 'rotations.rotation', 'history.user']);
+    assert.deepEqual(PEOPLE.map(item => item.path), ['establishment', 'operator', 'firstVerifier', 'secondVerifier', 'rotations.rotation', 'history.user', 'comments.user']);
+    assert.match(PEOPLE[6].select, /img/);   // quien comenta, con su foto
     assert.match(PEOPLE[4].select, /hourOccupies/);
     assert.match(PEOPLE[4].select, /touch/);
     assert.match(PEOPLE[4].select, /firstAttentionDelay/);
@@ -425,4 +428,60 @@ test('una demora reportada entra aunque no pase del límite, y las de una mesa s
     const model = new ShiftVerificationModel({ establishment: LOCAL, operationalDate: new Date(), shift: 'day', delays: reportedOnly });
     assert.equal(model.validateSync(), undefined);
     assert.equal(model.delays.items[0].kind, 'cleaning');
+});
+
+
+
+// ── LOS COMENTARIOS DE CADA VERIFICACIÓN ──────────────────────────────
+
+test('un comentario: de la 1 o de la 2, con texto, y si apunta a algo, a una rotación', async () => {
+    const ok = await commentValidate.validate({ pass: 1, rotation: ROTACION, text: '  La mesa 14 sí estaba, se ve a las 19:22  ', user: LUIS }, OPC);
+    assert.deepEqual(ok, { pass: 1, rotation: ROTACION, text: 'La mesa 14 sí estaba, se ve a las 19:22' });   // quién, de la sesión
+    assert.equal((await commentValidate.validate({ pass: 2, text: 'Todo bien' }, OPC)).rotation, null);
+
+    await assert.rejects(commentValidate.validate({ pass: 3, text: 'x' }, OPC), /1 o 2/);
+    await assert.rejects(commentValidate.validate({ pass: 1, text: '   ' }, OPC), /Falta el comentario/);
+    await assert.rejects(commentValidate.validate({ pass: 1, rotation: 'mesa-14', text: 'x' }, OPC), /rotación debe ser un ObjectId/);
+    await assert.rejects(commentValidate.validate({ pass: 1, text: 'x'.repeat(COMMENT_MAX + 1) }, OPC), /1000 caracteres/);
+    assert.equal((await commentValidate.validate({ pass: 1, text: 'x'.repeat(COMMENT_MAX) }, OPC)).text.length, COMMENT_MAX);
+});
+
+test('editar un comentario solo cambia el texto; a qué apunta, no', async () => {
+    assert.deepEqual(await commentEditValidate.validate({ text: ' Corregido ', pass: 2, rotation: ROTACION }, OPC), { text: 'Corregido' });
+    await assert.rejects(commentEditValidate.validate({ text: '' }, OPC), /Falta el comentario/);
+    await assert.rejects(commentIdValidate.validate('uno'), /comentario debe ser un ObjectId/);
+});
+
+test('un comentario que apunta a una rotación: tiene que ser de la verificación', () => {
+    const verification = { rotations: [entry(ROTACION, { first: confirmed })] };
+    assert.equal(commentProblem(verification, { rotation: ROTACION }), null);
+    assert.equal(commentProblem(verification, { rotation: null }), null);
+    assert.match(commentProblem(verification, { rotation: '507f1f77bcf86cd799439099' }), /no está en esta verificación/);
+});
+
+test('editar o borrar un comentario: solo quien lo escribió', () => {
+    const COMENTARIO = '507f1f77bcf86cd799439061';
+    const verification = { comments: [{ _id: COMENTARIO, pass: 1, text: 'Hola', user: LUIS }] };
+    assert.equal(commentOf(verification, COMENTARIO)?.text, 'Hola');
+    assert.equal(commentOf(verification, '507f1f77bcf86cd799439062'), null);
+    assert.equal(commentOwnerProblem(commentOf(verification, COMENTARIO), LUIS), null);
+    assert.equal(commentOwnerProblem({ user: { _id: LUIS, name: 'Luis' } }, LUIS), null);   // poblado, también
+    assert.match(commentOwnerProblem(commentOf(verification, COMENTARIO), ANA), /Solo quien escribió/);
+});
+
+test('el modelo guarda los comentarios con su _id, su verificación y quién; sin texto o de una verificación 3, no', () => {
+    const model = new ShiftVerificationModel({
+        establishment: LOCAL, operationalDate: new Date(), shift: 'day',
+        comments: [{ pass: 1, rotation: ROTACION, text: 'La 14 sí estaba', user: LUIS }],
+    });
+    assert.equal(model.validateSync(), undefined);
+    assert.ok(model.comments[0]._id);
+    assert.equal(model.comments[0].editedAt, null);
+    assert.ok(model.comments[0].at instanceof Date);
+
+    const wrong = new ShiftVerificationModel({ establishment: LOCAL, operationalDate: new Date(), shift: 'day', comments: [{ pass: 3, user: LUIS }] });
+    const errors = wrong.validateSync()?.errors ?? {};
+    assert.ok(errors['comments.0.pass']);
+    assert.ok(errors['comments.0.text']);
+    assert.deepEqual(new ShiftVerificationModel({ establishment: LOCAL, operationalDate: new Date(), shift: 'day' }).comments.length, 0);
 });

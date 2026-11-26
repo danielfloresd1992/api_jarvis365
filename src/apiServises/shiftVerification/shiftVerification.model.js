@@ -1,6 +1,6 @@
 import { Schema, model } from 'mongoose';
 import { SHIFTS } from '../rotation/rotation.schema.js';
-import { CHECK_STATUSES, ORIGINS, HISTORY_ACTIONS, DELAY_KINDS } from './shiftVerification.schema.js';
+import { CHECK_STATUSES, ORIGINS, HISTORY_ACTIONS, DELAY_KINDS, PASSES, COMMENT_MAX } from './shiftVerification.schema.js';
 
 
 
@@ -103,6 +103,19 @@ const DelayItem = new Schema({
     reported: { type: Boolean, default: false },   // el operador envió la novedad de la demora
 }, { _id: false });
 
+// ── UN COMENTARIO DE UNA VERIFICACIÓN (pedido del usuario) ──
+// Lo que alguien tiene que decir de la verificación 1 o de la 2; si habla de una rotación, apunta a ella. Lleva su
+// _id: su autor lo puede editar o borrar. Quién lo escribe lo pone el servidor; el body no lo trae.
+const Comment = new Schema({
+    pass:     { type: Number, enum: PASSES, required: true },
+    rotation: { type: Schema.Types.ObjectId, ref: 'Rotation', default: null },   // null: de toda la verificación
+    text:     { type: String, required: true, maxlength: COMMENT_MAX },
+    user:     { type: Schema.Types.ObjectId, ref: 'user', required: true },
+    at:       { type: Date, default: Date.now },
+    editedAt: { type: Date, default: null },
+});
+
+
 const Delays = new Schema({
     limits: {
         attention: { type: String, default: null },   // 'HH:MM:SS'
@@ -141,6 +154,9 @@ const ShiftVerification = new Schema({
 
     // Quién hizo qué y cuándo, del más viejo al más nuevo
     history: { type: [HistoryEntry], default: [] },
+
+    // Los comentarios de las dos verificaciones, del más viejo al más nuevo
+    comments: { type: [Comment], default: [] },
 
 }, { timestamps: true });
 

@@ -127,3 +127,33 @@ export const recoveredTouchValidate = yup.object({
 export const closeValidate = yup.object({
     pass: pass(),
 });
+
+
+// ── LOS COMENTARIOS DE CADA VERIFICACIÓN (pedido del usuario) ──
+// Quien revisa una verificación deja lo que tenga que decir de ella; si habla de una rotación en concreto, apunta a
+// ella. Quién lo escribe sale de la sesión, nunca del body.
+
+// COMMENT_MAX = «lo más largo que puede ser un comentario», en caracteres
+export const COMMENT_MAX = 1000;
+
+// commentText = «el texto de un comentario»: sin espacios de sobra, no vacío y no más largo que COMMENT_MAX
+const commentText = () => yup.string().trim()
+    .required('Falta el comentario')
+    .max(COMMENT_MAX, `El comentario va en ${COMMENT_MAX} caracteres como mucho`);
+
+// POST /shift-verification/id=<_id>/comment: { pass, rotation?, text }. `rotation`, la rotación a la que apunta
+// (una de la verificación), o null si es de toda la verificación.
+export const commentValidate = yup.object({
+    pass: pass(),
+    rotation: objectId('La rotación debe ser un ObjectId válido').nullable().default(null),
+    text: commentText(),
+});
+
+// PUT /shift-verification/id=<_id>/comment=<_id>: { text }. Solo cambia el texto; a qué apunta, no.
+export const commentEditValidate = yup.object({
+    text: commentText(),
+});
+
+// commentIdValidate = «el _id de un comentario», el de la ruta
+export const commentIdValidate = objectId('El id del comentario debe ser un ObjectId válido')
+    .required('Falta el id del comentario');

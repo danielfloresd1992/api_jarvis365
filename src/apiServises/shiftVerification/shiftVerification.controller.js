@@ -11,11 +11,12 @@ import { emitSession, emitVerificationSync } from '../verificationSession/verifi
 import {
     summaryQueryValidate, openValidate, verificationIdValidate, rotationIdValidate,
     checkValidate, recoveredRotationValidate, recoveredTouchValidate, closeValidate,
+    commentValidate, commentEditValidate, commentIdValidate,
 } from './shiftVerification.schema.js';
 import {
     isVerifiable, majorityCreator, syncEntries, operatorRotations, findEntry, passKey, checkOf,
     passProblem, closeProblem, totalsOf, withSummary, summarizeDay, operationalInstant, dayKeyOf, PEOPLE,
-    historyEntry, limitsOf, delaysOf,
+    historyEntry, limitsOf, delaysOf, commentProblem, commentOf, commentOwnerProblem,
 } from './shiftVerification.lib.js';
 
 
@@ -69,9 +70,17 @@ const tableNote = (rotation) => (rotation ? `Mesa ${rotation.tableNumber}${rotat
 
 
 
+// SUMMARY_VERIFIERS = «quién cerró cada verificación», con su nombre y su foto: la lista de /verifications los enseña
+// bajo «Verificada» (pedido del usuario)
+const SUMMARY_VERIFIERS = [
+    { path: 'firstVerifier', select: 'name surName img' },
+    { path: 'secondVerifier', select: 'name surName img' },
+];
+
 // GET /shift-verification?day=AAAA-MM-DD[&establishment=<id>]
 // Cómo va la verificación de cada local ese día, turno por turno: cuántas rotaciones de mesa tiene cada turno y
-// cómo van sus dos verificaciones (null si nadie la abrió). Es lo que pinta la lista de /verifications.
+// cómo van sus dos verificaciones (null si nadie la abrió), con quién cerró cada una (`verifiedBy`: nombre,
+// apellido y foto). Es lo que pinta la lista de /verifications.
 controller.getSummary = async (req, res) => {
 
     const { day, establishment } = await summaryQueryValidate.validate(req.query, OPTIONS);
@@ -80,7 +89,7 @@ controller.getSummary = async (req, res) => {
 
     const [rotations, verifications] = await Promise.all([
         RotationModel.find({ ...byLocal, operationalDate, status: { $ne: 'open' } }).select('establishment shift hourOccupies date takeOut tableNumber').lean(),
-        ShiftVerificationModel.find({ ...byLocal, operationalDate }).select('-history -delays').lean(),
+        ShiftVerificationModel.find({ ...byLocal, operationalDate }).select('-history -delays -comments').populate(SUMMARY_VERIFIERS).lean(),
     ]);
 
     return res.status(200).json({ day, establishments: summarizeDay(rotations, verifications) });
@@ -331,6 +340,99 @@ controller.closeVerification = async (req, res) => {
     emitVerificationSync(verification._id, pass);
 
     return respond(res, 200, verification);
+};
+
+
+
+// ── LOS COMENTARIOS DE CADA VERIFICACIÓN (pedido del usuario) ─────────
+// Se escriben con $push / $set / $pull sobre `comments`, sin guardar el documento entero: un comentario no pisa una
+// marca que esté guardando a la vez quien verifica. Comentar no pide tener la verificación tomada (no es verificar)
+// y se puede con ella cerrada. Responden con la verificación entera, como las demás.
+
+// commentFilter = «el comentario de la ruta, si es de quien escribe»: el $elemMatch que deja usar comments.$
+const commentFilter = (verificationId, commentId, userId) => ({
+    _id: verificationId,
+    comments: { $elemMatch: { _id: commentId, user: userId } },
+});
+
+// loadComment = «la verificación y el comentario de la ruta», o responder lo que falte (404 / 403). null si ya respondió.
+const loadComment = async (req, res) => {
+    const commentId = await commentIdValidate.validate(req.params.commentId);
+    const verification = await loadVerification(req);
+    if (!verification) { notFound(res, 'No existe esa verificación'); return null; }
+    const comment = commentOf(verification, commentId);
+    if (!comment) { notFound(res, 'Ese comentario no existe (o ya se borró)'); return null; }
+    const problem = commentOwnerProblem(comment, req.session.userId);
+    if (problem) { res.status(403).json({ status: 403, error: 'Forbidden', message: problem }); return null; }
+    return { verification, commentId };
+};
+
+
+// POST /shift-verification/id=:id/comment — deja un comentario en la verificación 1 o en la 2
+// Body: { pass, rotation?, text }. Con `rotation`, apunta a esa rotación (tiene que ser de la verificación: si no,
+// 404). Responde 201 con la verificación entera.
+controller.addComment = async (req, res) => {
+
+    if (!req.session?.userId) return unauthorized(res, 'comentar');
+
+    const body = await commentValidate.validate(req.body, OPTIONS);
+    const verification = await loadVerification(req);
+    if (!verification) return notFound(res, 'No existe esa verificación');
+
+    const problem = commentProblem(verification, body);
+    if (problem) return notFound(res, problem);
+
+    const updated = await ShiftVerificationModel.findByIdAndUpdate(
+        verification._id,
+        { $push: { comments: { pass: body.pass, rotation: body.rotation, text: body.text, user: req.session.userId, at: new Date() } } },
+        { new: true },
+    );
+    emitVerificationSync(verification._id, body.pass);
+
+    return respond(res, 201, updated);
+};
+
+
+// PUT /shift-verification/id=:id/comment=:commentId — cambia el texto de un comentario
+// Body: { text }. Solo su autor (403 si no). Queda la hora del cambio (`editedAt`). Responde con la verificación entera.
+controller.editComment = async (req, res) => {
+
+    if (!req.session?.userId) return unauthorized(res, 'editar un comentario');
+
+    const { text } = await commentEditValidate.validate(req.body, OPTIONS);
+    const found = await loadComment(req, res);
+    if (!found) return undefined;
+
+    const updated = await ShiftVerificationModel.findOneAndUpdate(
+        commentFilter(found.verification._id, found.commentId, req.session.userId),
+        { $set: { 'comments.$.text': text, 'comments.$.editedAt': new Date() } },
+        { new: true },
+    );
+    if (!updated) return notFound(res, 'Ese comentario no existe (o ya se borró)');
+    emitVerificationSync(updated._id, null);
+
+    return respond(res, 200, updated);
+};
+
+
+// DELETE /shift-verification/id=:id/comment=:commentId — borra un comentario
+// Solo su autor (403 si no). Responde con la verificación entera.
+controller.deleteComment = async (req, res) => {
+
+    if (!req.session?.userId) return unauthorized(res, 'borrar un comentario');
+
+    const found = await loadComment(req, res);
+    if (!found) return undefined;
+
+    const updated = await ShiftVerificationModel.findOneAndUpdate(
+        { _id: found.verification._id },
+        { $pull: { comments: { _id: found.commentId, user: req.session.userId } } },
+        { new: true },
+    );
+    if (!updated) return notFound(res, 'No existe esa verificación');
+    emitVerificationSync(updated._id, null);
+
+    return respond(res, 200, updated);
 };
 
 

@@ -44,10 +44,17 @@ const routerShiftVerification = express.Router();
 //   PUT  /shift-verification/id=<_id>/close     body: { pass }
 //        Cierra esa verificación: tiene que estar todo marcado. Quien la cierra queda como su verificador.
 //
-// Todos menos el primer GET responden con la verificación entera, que lleva su historial (quién hizo qué) y, desde
-// el primer cierre, sus demoras. 409 cuando la verificación está cerrada, cuando se intenta la 2 con la 1 abierta,
-// o cuando se cierra con algo sin marcar. Para marcar, recuperar o cerrar hay que TENER la verificación
-// (POST /verification-session): si no, 423 con quién la tiene. Quien verifica sale de la sesión.
+//   POST   /shift-verification/id=<_id>/comment                   body: { pass, rotation?, text }
+//   PUT    /shift-verification/id=<_id>/comment=<_id>             body: { text }
+//   DELETE /shift-verification/id=<_id>/comment=<_id>
+//        Los comentarios de cada verificación: dejar uno en la 1 o en la 2 (con `rotation`, apunta a esa rotación),
+//        cambiar su texto o borrarlo. Editar y borrar, solo su autor (403). Comentar no pide tener la verificación
+//        tomada y se puede con ella cerrada.
+//
+// Todos menos el primer GET responden con la verificación entera, que lleva su historial (quién hizo qué), sus
+// comentarios y, desde el primer cierre, sus demoras. 409 cuando la verificación está cerrada, cuando se intenta la
+// 2 con la 1 abierta, o cuando se cierra con algo sin marcar. Para marcar, recuperar o cerrar hay que TENER la
+// verificación (POST /verification-session): si no, 423 con quién la tiene. Quien verifica sale de la sesión.
 
 
 
@@ -64,6 +71,12 @@ routerShiftVerification.post(`${nameApi}/shift-verification/id=:id/rotation`, ex
 routerShiftVerification.post(`${nameApi}/shift-verification/id=:id/rotation=:rotationId/touch`, extendSession, validateSession, asyncHandler(controller.recoverTouch));
 
 routerShiftVerification.put(`${nameApi}/shift-verification/id=:id/close`, extendSession, validateSession, asyncHandler(controller.closeVerification));
+
+routerShiftVerification.post(`${nameApi}/shift-verification/id=:id/comment`, extendSession, validateSession, asyncHandler(controller.addComment));
+
+routerShiftVerification.put(`${nameApi}/shift-verification/id=:id/comment=:commentId`, extendSession, validateSession, asyncHandler(controller.editComment));
+
+routerShiftVerification.delete(`${nameApi}/shift-verification/id=:id/comment=:commentId`, extendSession, validateSession, asyncHandler(controller.deleteComment));
 
 
 
