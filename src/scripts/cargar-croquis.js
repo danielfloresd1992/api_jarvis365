@@ -6,6 +6,10 @@ import LocalModel from '../apiServises/local/local.model.js';
 import FloorPlanModel, { FLOOR_PLAN_VERSION } from '../apiServises/local/floorPlan.model.js';
 import { floorPlanValidate } from '../apiServises/local/floorPlan.schema.js';
 import FRANCISCA_DORAL from './croquis/francisca-doral.js';
+import FRANCISCA_MIAMI from './croquis/francisca-miami.js';
+import FRANCISCA_MIAMI_LAKES from './croquis/francisca-miami-lakes.js';
+import FRANCISCA_DAVIE from './croquis/francisca-davie.js';
+import FRANCISCA_ORLANDO from './croquis/francisca-orlando.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // CARGAR LOS CROQUIS DE MESAS QUE SE PASARON A MANO
@@ -23,7 +27,7 @@ import FRANCISCA_DORAL from './croquis/francisca-doral.js';
 // exista, porque lo que se haya corregido en Client365 vale más que esta copia.
 
 // CROQUIS = «los croquis a cargar», cada uno con el _id de su local
-const CROQUIS = [FRANCISCA_DORAL];
+const CROQUIS = [FRANCISCA_DORAL, FRANCISCA_MIAMI, FRANCISCA_MIAMI_LAKES, FRANCISCA_DAVIE, FRANCISCA_ORLANDO];
 
 const FORCE = process.argv.includes('--forzar');
 
