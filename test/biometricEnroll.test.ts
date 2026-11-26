@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
     isNewEmployeeNo, nextEmployeeNo, deviceNameOf, suggestedDeviceName, userRecordBody, userSearchByNoBody,
     captureFingerprintXml, parseCapturedFingerprint, fingerprintSetUpBody, fingerprintSearchBody, fingerprintPage,
-    freeFingerSlot, fingerprintSaveResult, captureFailureMessage, MAX_DEVICE_NAME_LENGTH,
+    freeFingerSlot, fingerprintSaveResult, captureFailureMessage, fingerprintDeleteBody, MAX_DEVICE_NAME_LENGTH,
 } from '../src/apiServises/biometric/biometricEnroll.lib.js';
 
 // ══════════════════════════════════════════════════════════════════════
@@ -85,6 +85,10 @@ test('Huellas: lo que se manda para capturar, buscar y guardar', () => {
     assert.ok(capture.includes('<CaptureFingerPrintCond version="2.0" xmlns="http://www.isapi.org/ver20/XMLSchema">'));
     assert.ok(capture.includes('<fingerNo>3</fingerNo>'));
     assert.deepEqual(fingerprintSearchBody('s', '25'), { FingerPrintCond: { searchID: 's', employeeNo: '25', cardReaderNo: 1 } });
+    // El borrado de huellas que aceptó el terminal de Oficina 2 (probado con REA, 2026-11-19).
+    assert.deepEqual(fingerprintDeleteBody('105', [1, 6]), {
+        FingerPrintDelete: { mode: 'byEmployeeNo', EmployeeNoDetail: { employeeNo: '105', enableCardReader: [1], fingerPrintID: [1, 6] } },
+    });
     assert.deepEqual(fingerprintSetUpBody({ employeeNo: '106', fingerPrintID: 1, fingerData: 'QUJD' }), {
         FingerPrintCfg: { employeeNo: '106', enableCardReader: [1], fingerPrintID: 1, fingerType: 'normalFP', fingerData: 'QUJD' },
     });
@@ -114,6 +118,8 @@ test('Guardado: 1 es éxito; los demás códigos del terminal se explican', () =
     assert.match(duplicate.message, /ya está registrada en el terminal con otro número/);
     assert.match(duplicate.message, /esta misma cargada antes con otro número/, 'el caso de Daniel Flores en Oficina 2 (2026-11-19): era él mismo, con el nº 4');
     assert.match(fingerprintSaveResult({ FingerPrintStatus: { StatusList: [{ id: 1, cardReaderRecvStatus: 3 }] } }).message, /mala calidad/);
+    // Estado 0: así respondió Oficina 2 a una plantilla que no es una huella (REA, 2026-11-19).
+    assert.match(fingerprintSaveResult({ FingerPrintStatus: { StatusList: [{ id: 1, cardReaderRecvStatus: 0 }] } }).message, /no aceptó la huella/);
     assert.match(fingerprintSaveResult({ FingerPrintStatus: { StatusList: [{ id: 1, cardReaderRecvStatus: 9, errorMsg: 'x' }] } }).message, /código 9: x/);
     assert.equal(fingerprintSaveResult({}).ok, false, 'sin confirmación no se da por guardada');
 });

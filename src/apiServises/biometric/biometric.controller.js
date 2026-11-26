@@ -9,6 +9,9 @@ import { getListenerStatus, refreshListenerTerminals, wasForwarded } from './bio
 import { createKioskAccess, removeKioskAccess, startFingerprintLogin, challengeOutcome, cancelChallenge } from './biometricAccess.service.js';
 import { claimFingerprint } from './biometricClaim.service.js';
 import { getTerminalPeople, getSyncPlan, startSync, getSyncJob } from './biometricSync.service.js';
+import {
+    removePerson, getAddOptions, addPerson, getFingerprintSources, copyFingerprints, registerFingerprint,
+} from './biometricPeople.service.js';
 import { sessionAccess, loggedInUser } from './biometricAccess.lib.js';
 import { BiometricError, errorResponse, isIsoDate, businessDateOf } from './biometric.lib.js';
 
@@ -148,6 +151,41 @@ controller.getSyncPlan = respond((req) => getSyncPlan(codesOf(req.query?.codes),
 controller.startSync = respond((req) => startSync({ codes: codesOf(req.body?.codes), adminId: req.session?.userId ?? null }));
 
 controller.getSyncJob = respond(() => ({ job: getSyncJob() }));
+
+
+
+// ─── Quitar y agregar personas en un terminal (Client365) ───────────────
+// Reglas en biometricPeople.service.js. El terminal va en la ruta (:code).
+
+const employeeNoOf = (value) => (value == null ? '' : String(value).trim());
+
+controller.removePerson = respond((req) => removePerson({
+    code: req.params.code,
+    employeeNo: req.params.employeeNo,
+    expectedName: typeof req.body?.name === 'string' ? req.body.name : null,
+    adminId: req.session?.userId ?? null,
+}));
+
+controller.getAddOptions = respond((req) => getAddOptions(req.params.code));
+
+controller.addPerson = respond((req) => addPerson({
+    code: req.params.code,
+    userId: req.body?.userId,
+    employeeNo: employeeNoOf(req.body?.employeeNo),
+    name: req.body?.name,
+    adminId: req.session?.userId ?? null,
+}));
+
+controller.getFingerprintSources = respond((req) => getFingerprintSources({ code: req.params.code, employeeNo: req.params.employeeNo }));
+
+controller.copyFingerprints = respond((req) => copyFingerprints({
+    code: req.params.code,
+    employeeNo: req.params.employeeNo,
+    from: String(req.body?.from ?? '').trim().toLowerCase(),
+}));
+
+// Espera a que la persona ponga el dedo en el lector de ese terminal (hasta un minuto).
+controller.registerFingerprint = respond((req) => registerFingerprint({ code: req.params.code, employeeNo: req.params.employeeNo }));
 
 
 

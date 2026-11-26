@@ -7,7 +7,7 @@ import {
 } from './biometric.lib.js';
 import {
     userRecordBody, userSearchByNoBody, captureFingerprintXml, parseCapturedFingerprint, fingerprintSetUpBody,
-    fingerprintSearchBody, fingerprintPage, fingerprintSaveResult, captureFailureMessage, FINGER_SLOTS,
+    fingerprintSearchBody, fingerprintPage, fingerprintSaveResult, captureFailureMessage, fingerprintDeleteBody, FINGER_SLOTS,
 } from './biometricEnroll.lib.js';
 
 // ══════════════════════════════════════════════════════════════════════
@@ -297,10 +297,10 @@ export async function readFingerprints(device, employeeNo) {
     return [...found.entries()].sort(([a], [b]) => a - b).map(([id, fingerData]) => ({ id, fingerData }));
 }
 
-// deleteDeviceUser = «borrar a una persona del terminal», con sus huellas. Solo
-// la usa la sincronización para deshacer una persona que ELLA acaba de crear y
-// que no sirvió (sus huellas ya estaban en ese terminal con otra persona). Por
-// UserInfo/Delete; si este firmware no lo admite, por UserInfoDetail/Delete.
+// deleteDeviceUser = «borrar a una persona del terminal». Por UserInfo/Delete; si
+// el firmware no lo admite, por UserInfoDetail/Delete (en el DS-K1A8503MF V1.4.0
+// andan los dos: probado con REA). Para quitar a alguien que puede tener huellas
+// está removeDeviceUser, que las borra antes y comprueba.
 export async function deleteDeviceUser(device, employeeNo) {
     try {
         await isapi(device, 'PUT', '/ISAPI/AccessControl/UserInfo/Delete?format=json', { json: { UserInfoDelCond: { EmployeeNoList: [{ employeeNo }] } } });
@@ -317,6 +317,46 @@ export async function deleteDeviceUser(device, employeeNo) {
         if (status === 'failed') throw new BiometricError('device_error', `El terminal no pudo borrar al nº ${employeeNo}.`);
     }
     throw new BiometricError('device_error', `El terminal no confirmó que borró al nº ${employeeNo}.`);
+}
+
+// deleteFingerprints = «borrar estas huellas (posiciones `ids`) de una persona».
+// El borrado corre aparte en el equipo y su DeleteProcess dice «success» UNA vez:
+// si se vuelve a preguntar responde «failed» (probado con REA en el V1.4.0). Así
+// que no se le cree a ciegas: lo que vale es qué huellas quedan (listFingerprints).
+// Devuelve las posiciones de `ids` que siguen ahí.
+export async function deleteFingerprints(device, employeeNo, ids) {
+    if (!ids.length) return [];
+    await isapi(device, 'PUT', '/ISAPI/AccessControl/FingerPrint/Delete?format=json', { json: fingerprintDeleteBody(employeeNo, ids) });
+    let left = ids;
+    for (let attempt = 0; attempt < 20; attempt++) {
+        const json = parseJson(await isapi(device, 'GET', '/ISAPI/AccessControl/FingerPrint/DeleteProcess?format=json'), 'borrado de huellas');
+        if (json?.FingerPrintDeleteProcess?.status !== 'processing') {
+            const now = new Set(await listFingerprints(device, employeeNo));
+            left = ids.filter((id) => now.has(id));
+            if (left.length === 0) return [];
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    return left;
+}
+
+// removeDeviceUser = «quitar a una persona del terminal, con sus huellas», y
+// comprobarlo. Primero sus huellas: si quedaran sueltas en el equipo, después
+// rechazaría esa misma huella con otro número (estado 5). Si alguna no se borra,
+// la persona no se quita. Devuelve cuántas huellas tenía.
+export async function removeDeviceUser(device, employeeNo) {
+    const ids = await listFingerprints(device, employeeNo);
+    const left = await deleteFingerprints(device, employeeNo, ids);
+    if (left.length) {
+        throw new BiometricError('device_error', `El terminal no borró ${left.length === 1 ? 'su huella' : 'sus huellas'} en ${left.length === 1 ? 'la posición' : 'las posiciones'} ${left.join(', ')}: no se quitó el nº ${employeeNo}.`);
+    }
+    await deleteDeviceUser(device, employeeNo);
+    if (await findDeviceUser(device, employeeNo)) {
+        throw new BiometricError('device_error', ids.length
+            ? `Se borraron sus huellas, pero el terminal no quitó el nº ${employeeNo}.`
+            : `El terminal no quitó el nº ${employeeNo}.`);
+    }
+    return { fingerprints: ids.length };
 }
 
 // captureFingerprint = «encender el lector del terminal y esperar un dedo»: devuelve

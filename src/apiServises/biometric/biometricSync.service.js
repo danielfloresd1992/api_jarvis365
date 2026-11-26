@@ -3,6 +3,7 @@ import { oneAtATime } from '../../libs/oneAtATime.js';
 import { BiometricError } from './biometric.lib.js';
 import {
     listDeviceUsers, listFingerprints, readFingerprints, createDeviceUser, saveFingerprint, deleteDeviceUser, findDeviceUser,
+    removeDeviceUser,
 } from './biometric.service.js';
 import { activeTerminals, resolveTerminal, checkTerminal } from './biometricTerminal.service.js';
 import { forgetDeviceNames } from './biometricListener.js';
@@ -25,10 +26,11 @@ import { freeFingerSlot } from './biometricEnroll.lib.js';
 //
 // Las reglas (qué falta, qué no se puede copiar) están en biometricSync.lib.js.
 // Antes de copiar, corrige números según Jarvis (planCorrections): cambiarle el
-// número a alguien en un terminal es lo único que borra a una persona, y solo
-// después de tener sus huellas en el número nuevo (renumberPerson). Fuera de
-// eso solo agrega; la otra persona que puede borrar es una que esta copia acaba
-// de crear y no sirvió (ver copyItem).
+// número a alguien en un terminal es lo único de la sincronización que borra a
+// una persona, y solo después de tener sus huellas en memoria (renumberPerson).
+// Fuera de eso solo agrega; la otra persona que puede borrar es una que esta
+// copia acaba de crear y no sirvió (ver copyItem). Quitar y agregar a mano, desde
+// los datos de un terminal, está en biometricPeople.service.js.
 
 
 
@@ -47,7 +49,9 @@ const inventories = new Map();   // código → lo leído o lo que se está leye
 const deviceQueues = new Map();  // código → lo que se está haciendo con ese equipo
 let job = null;                  // la sincronización en curso, o la última
 
-const withTerminal = (code, work) => oneAtATime(deviceQueues, code, work);
+// withTerminal = «hacer esto con el equipo cuando nadie más lo esté usando».
+// También lo usan las altas y bajas a mano (biometricPeople.service.js).
+export const withTerminal = (code, work) => oneAtATime(deviceQueues, code, work);
 const brief = (terminal) => ({ code: terminal.code, name: terminal.name });
 
 
@@ -87,6 +91,20 @@ function ensureInventory(terminal, { maxAgeMs, force = false }) {
         (error) => Object.assign(state, { status: 'failed', error: error?.message ?? String(error) }),
     );
     return state;
+}
+
+// patchInventory = «lo leído de este terminal cambió por algo hecho a mano»: se
+// corrige esa persona sin releerlo entero (tarda medio minuto). `change` recibe
+// la persona como estaba (o undefined) y devuelve cómo quedó (o null si ya no
+// está). Si no hay nada leído, no hay nada que corregir: la próxima vista lee.
+export function patchInventory(code, employeeNo, change) {
+    const state = inventories.get(code);
+    if (state?.status !== 'ready') return;
+    const index = state.people.findIndex((p) => p.employeeNo === employeeNo);
+    const next = change(index >= 0 ? state.people[index] : undefined);
+    if (index >= 0 && next) state.people[index] = next;
+    else if (index >= 0) state.people.splice(index, 1);
+    else if (next) state.people.push(next);
 }
 
 const readingView = (terminal, state) => ({
@@ -353,7 +371,8 @@ async function runSync(j, terminals) {
 // se pierda nada:
 //   1. leer sus huellas (quedan en memoria);
 //   2. crear el nº nuevo si no está (si falla, no se tocó nada);
-//   3. quitar el nº viejo y comprobar que ya no está (si falla, se deshace el 2);
+//   3. quitar el nº viejo con sus huellas, comprobado (removeDeviceUser). Si
+//      falla, se deshace el 2 y vuelven al nº viejo las huellas que le falten;
 //   4. guardar las huellas en el nuevo, en sus posiciones o en una libre. Una que
 //      el terminal ya tiene ahí (estado 5: la misma persona) se da por puesta.
 //      Si otra falla, se deshace todo: vuelve el nº viejo con sus huellas.
@@ -366,11 +385,12 @@ async function renumberPerson(device, { from, to, name }) {
         if (!existed) await deleteDeviceUser(device, to).catch(() => {});
     };
     try {
-        await deleteDeviceUser(device, from);
-        if (await findDeviceUser(device, from)) throw new BiometricError('device_error', `El terminal no quitó el nº ${from}.`);
+        await removeDeviceUser(device, from);
     } catch (error) {
         await undoCreate();
-        throw new BiometricError(error?.kind ?? 'device_error', `No se cambió el número: ${error?.message ?? error}`);
+        const back = await putBack(device, { employeeNo: from, name, templates })
+            .then(() => '', (undoError) => ` Revisa el nº ${from} en el terminal: ${undoError?.message ?? undoError}`);
+        throw new BiometricError(error?.kind ?? 'device_error', `No se cambió el número: ${error?.message ?? error}${back}`);
     }
 
     const used = new Set(await listFingerprints(device, to));
@@ -394,10 +414,7 @@ async function renumberPerson(device, { from, to, name }) {
         const pending = templates.filter((t) => !placed.has(t.id));
         try {
             if (placed.size === 0) await undoCreate();
-            await createDeviceUser(device, { employeeNo: from, name });
-            for (const template of pending) {
-                await saveFingerprint(device, { employeeNo: from, fingerPrintID: template.id, fingerData: template.fingerData }).catch(() => {});
-            }
+            await putBack(device, { employeeNo: from, name, templates: pending });
         } catch (undoError) {
             throw new BiometricError('device_error', `No se pudieron pasar sus huellas (${error?.message ?? error}) y tampoco volver al nº ${from} (${undoError?.message ?? undoError}): revísalo en el terminal.`);
         }
@@ -407,6 +424,17 @@ async function renumberPerson(device, { from, to, name }) {
         throw new BiometricError(error?.kind ?? 'device_error', `No se pudieron pasar todas sus huellas al nº ${to}: ${state}. ${error?.message ?? ''}`.trim());
     }
     return { moved: placed.size };
+}
+
+// putBack = «que el nº `employeeNo` vuelva a estar, con estas huellas»: lo crea si
+// ya no está y le guarda las que le falten, en su posición. Para deshacer.
+async function putBack(device, { employeeNo, name, templates }) {
+    if (!(await findDeviceUser(device, employeeNo))) await createDeviceUser(device, { employeeNo, name });
+    const has = new Set(await listFingerprints(device, employeeNo));
+    for (const template of templates) {
+        if (has.has(template.id)) continue;
+        await saveFingerprint(device, { employeeNo, fingerPrintID: template.id, fingerData: template.fingerData }).catch(() => {});
+    }
 }
 
 // copyItem = «agregar (o completar) a una persona en un terminal». Si se la creó

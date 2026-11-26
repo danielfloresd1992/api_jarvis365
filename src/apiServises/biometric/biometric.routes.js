@@ -58,6 +58,12 @@ routerBiometric.put(`${nameApi}/biometric/terminals/:id`, extendSession, validat
 routerBiometric.delete(`${nameApi}/biometric/terminals/:id`, extendSession, validateAdminSessionOnly, asyncHandler(controller.deleteTerminal));    // quitar un terminal
 routerBiometric.post(`${nameApi}/biometric/terminals/:ref/check`, extendSession, validateAdminSessionOnly, asyncHandler(controller.checkTerminal)); // comprobar (por id, o el principal del .env por su código)
 routerBiometric.get(`${nameApi}/biometric/terminals/:code/people`, extendSession, validateAdminSessionOnly, asyncHandler(controller.getTerminalPeople)); // qué tiene: personas, huellas y vínculo con Jarvis (?refresh=1)
+routerBiometric.post(`${nameApi}/biometric/terminals/:code/people`, extendSession, validateAdminSessionOnly, asyncHandler(controller.addPerson));        // agregar a un usuario de Jarvis a ese terminal (body: { userId, employeeNo, name })
+routerBiometric.delete(`${nameApi}/biometric/terminals/:code/people/:employeeNo`, extendSession, validateAdminSessionOnly, asyncHandler(controller.removePerson)); // quitarlo de ese terminal, con sus huellas (body: { name } el que se vio)
+routerBiometric.get(`${nameApi}/biometric/terminals/:code/people/:employeeNo/sources`, extendSession, validateAdminSessionOnly, asyncHandler(controller.getFingerprintSources)); // de qué otros terminales se le pueden copiar huellas
+routerBiometric.post(`${nameApi}/biometric/terminals/:code/people/:employeeNo/copy`, extendSession, validateAdminSessionOnly, asyncHandler(controller.copyFingerprints));        // copiarle las huellas de otro terminal (body: { from })
+routerBiometric.post(`${nameApi}/biometric/terminals/:code/people/:employeeNo/fingerprints`, extendSession, validateAdminSessionOnly, asyncHandler(controller.registerFingerprint)); // registrarle una huella en el lector de ese terminal
+routerBiometric.get(`${nameApi}/biometric/terminals/:code/add-options`, extendSession, validateAdminSessionOnly, asyncHandler(controller.getAddOptions)); // a quién de Jarvis se puede agregar, y el próximo nº libre
 routerBiometric.put(`${nameApi}/biometric/time`, extendSession, validateKioskAdmin, asyncHandler(controller.syncTime));      // poner el terminal en hora (UTC-04:00)
 routerBiometric.get(`${nameApi}/biometric/users`, extendSession, validateKioskAdmin, asyncHandler(controller.getUsers));     // empleados registrados en el terminal
 

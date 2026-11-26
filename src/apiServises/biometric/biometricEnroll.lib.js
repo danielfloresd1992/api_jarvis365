@@ -18,6 +18,13 @@ import { xmlValue } from './biometric.lib.js';
 //     el mismo searchID, hasta responder "NoFP". Las creadas desde su menú están
 //     en la posición 6 (una en la 5): las nuevas ocupan la primera libre desde la
 //     1, para no pisar ninguna.
+//
+// Y con REA (2026-11-19, en «Oficina 2», con un nº de prueba creado y borrado):
+//   - UserInfo/Delete y UserInfoDetail/Delete (byEmployeeNo) quitan a la persona.
+//   - FingerPrint/Delete (byEmployeeNo, posiciones 1 a 10) borra huellas; su
+//     DeleteProcess dice «success» UNA vez y después «failed».
+//   - FingerPrint/SetUp valida la plantilla: una que no es una huella de este
+//     lector vuelve con el estado 0.
 
 
 
@@ -33,7 +40,7 @@ export const FINGER_SLOTS = 10;
 
 // Lo que el terminal contesta al guardar una huella (cardReaderRecvStatus).
 const SAVE_STATUS = {
-    0: 'El terminal no pudo comunicarse con su lector de huellas.',
+    0: 'El terminal no aceptó la huella: no es una huella válida para su lector, o no pudo comunicarse con él.',
     2: 'El lector de huellas del terminal está desconectado.',
     3: 'La huella salió de mala calidad. Limpia el dedo y el lector y vuelve a intentarlo.',
     4: 'La memoria de huellas del terminal está llena.',
@@ -128,6 +135,11 @@ export function captureFingerprintXml(fingerNo) {
 // fingerprintSetUpBody = «guardar una huella en una persona» (PUT /ISAPI/AccessControl/FingerPrint/SetUp)
 export function fingerprintSetUpBody({ employeeNo, fingerPrintID, fingerData }) {
     return { FingerPrintCfg: { employeeNo, enableCardReader: [1], fingerPrintID, fingerType: 'normalFP', fingerData } };
+}
+
+// fingerprintDeleteBody = «borrar estas huellas de una persona» (PUT /ISAPI/AccessControl/FingerPrint/Delete)
+export function fingerprintDeleteBody(employeeNo, fingerPrintIDs) {
+    return { FingerPrintDelete: { mode: 'byEmployeeNo', EmployeeNoDetail: { employeeNo, enableCardReader: [1], fingerPrintID: [...fingerPrintIDs] } } };
 }
 
 // fingerprintSearchBody = «la siguiente huella de una persona» (POST /ISAPI/AccessControl/FingerPrintUpload)

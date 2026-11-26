@@ -5,6 +5,7 @@ import { fullNameOf, isValidEmployeeNo, compactUser } from './biometricLink.lib.
 import { isNewEmployeeNo, deviceNameOf, freeFingerSlot } from './biometricEnroll.lib.js';
 import { findDeviceUser, createDeviceUser, listFingerprints, captureFingerprint, saveFingerprint } from './biometric.service.js';
 import { linkEmployee } from './biometricLink.service.js';
+import { linkMismatch } from './biometricSync.lib.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // ALTA EN EL TERMINAL — lo que toca la base y el terminal
@@ -44,7 +45,11 @@ export async function enrollEmployee({ device, userId, employeeNo, name, adminId
             throw new BiometricError('bad_request', `${fullNameOf(user)} ya tiene el nº ${ownNumber}: en todos los terminales lleva el mismo número.`);
         }
         const here = await findDeviceUser(device, ownNumber);
-        if (here) throw new BiometricError('conflict', `${fullNameOf(user)} ya está en este terminal como nº ${ownNumber}.`);
+        if (here) {
+            throw new BiometricError('conflict', linkMismatch(here.name, user)
+                ? `En este terminal el nº ${ownNumber} lo tiene ${here.name || 'otra persona'}: quítala primero (Client365 → Gestión de terminal → Datos) para agregar a ${fullNameOf(user)}.`
+                : `${fullNameOf(user)} ya está en este terminal como nº ${ownNumber}.`);
+        }
         await createDeviceUser(device, { employeeNo: ownNumber, name: deviceName });
         return { employeeNo: ownNumber, name: deviceName, user: compactUser(user), warning: null, addedToTerminal: true };
     }
