@@ -48,8 +48,9 @@
 export const WALL_LIMIT_DEFAULT = 30;
 export const WALL_LIMIT_MAX = 60;
 
-/** Cuántos establecimientos se pueden pedir de una vez. */
-export const WALL_ESTABLISHMENTS_MAX = 100;
+/** Cuántos establecimientos se pueden pedir de una vez: todos los locales (hoy 122) caben, que es lo que pide el
+ *  equipo de Jarvis365 en insights365; unos 25 caracteres por id, así que la dirección sigue por debajo de 6 KB. */
+export const WALL_ESTABLISHMENTS_MAX = 200;
 
 /** Lo más que puede tardar la consulta antes de cortarla. Un local sin alertas obliga a recorrer mucho. */
 export const WALL_MAX_TIME_MS = 15000;

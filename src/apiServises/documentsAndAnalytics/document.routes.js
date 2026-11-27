@@ -5,6 +5,8 @@ import DocumentDiaryModel from './document.model.js';
 import documentConfigModel from './document.config.model.js';
 import LocalModel from '../local/local.model.js';
 import nameApi from '../../libs/name_api.js';
+import { canSeeLocalId, canSeeLocalName, forbidden, loadAccess } from '../access/access.middleware.js';
+import { normalizeAccess } from '../access/access.lib.js';
 import { config } from 'dotenv';
 import { join } from 'path';
 import { io } from '../../services/socket/io.js';
@@ -281,7 +283,7 @@ routerDocument.get(`${nameApi}/document/resume/:id`, validateSession, async (req
 
 
 
-routerDocument.get(`${nameApi}/document/:id`, validateSession, async (req, res) => {
+routerDocument.get(`${nameApi}/document/:id`, validateSession, loadAccess, async (req, res) => {
     try {
         const { id } = req.params;
         if (!id) return res.status(400).json({ error: 400, error: 'Bad request', message: 'id params is undefined' });
@@ -291,6 +293,8 @@ routerDocument.get(`${nameApi}/document/:id`, validateSession, async (req, res) 
         console.log(req?.query?.populate)
         const result = await DocumentDiaryModel.findById(id).populate(req?.query?.populate);
         if (!result) return res.status(404).json({ error: 'Document not found', status: 404, message: 'it could have been eliminated or it does not exist' });
+        // Solo los informes de un local que puede ver quien llama (user.access)
+        if (!(await canSeeLocalId(req.access, result.establishmentId))) return forbidden(res);
 
         return res.status(200).json(result);
     }
@@ -303,7 +307,7 @@ routerDocument.get(`${nameApi}/document/:id`, validateSession, async (req, res) 
 
 
 
-routerDocument.get(`${nameApi}/document/isExists/data`, validateSession, async (req, res) => {
+routerDocument.get(`${nameApi}/document/isExists/data`, validateSession, loadAccess, async (req, res) => {
     try {
         const { franchiseName, establishmentName, shift, date, type } = req.query;
 
@@ -313,6 +317,9 @@ routerDocument.get(`${nameApi}/document/isExists/data`, validateSession, async (
 
         if (!franchiseName && !establishmentName) return res.status(400).json({ error: 400, error: 'Bad request', message: 'franchiseName or establishmentName, query is undefined' });
         if (!shift || !date) return res.status(400).json({ error: 400, error: 'Bad request', message: 'shift,  date query is undefined' });
+        // Solo los locales que puede ver quien llama (user.access). Por franquicia, solo quien ve todo
+        if (query.establishmentName && !(await canSeeLocalName(req.access, query.establishmentName))) return forbidden(res);
+        if (!query.establishmentName && normalizeAccess(req.access).mode !== 'all') return forbidden(res);
 
         const result = await DocumentDiaryModel.exists({ ...query, shift, date, type });
         return res.status(200).json({ result });

@@ -3,6 +3,7 @@ import controller from './rotation.controller.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { extendSession, validateSession } from '../../middleware/validateSessionAndUser.js';
 import nameApi from '../../libs/name_api.js';
+import { loadAccess } from '../access/access.middleware.js';
 const routerRotation = express.Router();
 
 
@@ -63,12 +64,14 @@ const routerRotation = express.Router();
 // Los de Mesas (PUT y DELETE /rotation/client=) avisan con 'rotation-sync:<_id del local>'.
 //
 // `validateSession` y no un guard de administrador: quien guarda y corrige es el operador.
+// Las lecturas (GET) pasan además por loadAccess: un usuario con acceso restringido (user.access) solo lee las
+// rotaciones de sus locales; pedir las de otro responde 403, y el resumen solo trae los suyos.
 
 
 
-routerRotation.get(`${nameApi}/rotation`, extendSession, validateSession, asyncHandler(controller.getRotations));
+routerRotation.get(`${nameApi}/rotation`, extendSession, validateSession, loadAccess, asyncHandler(controller.getRotations));
 
-routerRotation.get(`${nameApi}/rotation/summary`, extendSession, validateSession, asyncHandler(controller.getRotationSummary));
+routerRotation.get(`${nameApi}/rotation/summary`, extendSession, validateSession, loadAccess, asyncHandler(controller.getRotationSummary));
 
 routerRotation.post(`${nameApi}/rotation`, extendSession, validateSession, asyncHandler(controller.setRotation));
 

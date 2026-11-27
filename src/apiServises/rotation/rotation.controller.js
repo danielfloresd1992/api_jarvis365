@@ -4,6 +4,7 @@ import { rotationValidate, rotationQueryValidate, rotationTargetValidate, syncVa
 import { applyEdit, addTouchTo, removeTouchFrom, abandonedOf, operationalDaysOf, syncOutcome, applySync, summaryOfRotations, PEOPLE } from './rotation.lib.js';
 import { emitRotation, emitRotationSync } from './rotation.socket.js';
 import { operationalDateOf } from '../dvrFailure/dvrFailure.lib.js';
+import { allowedLocalIds, canSeeLocalId, forbidden } from '../access/access.middleware.js';
 
 
 
@@ -92,6 +93,8 @@ controller.getRotations = async (req, res) => {
     if (!local) {
         return res.status(404).json({ status: 404, error: 'Not found', message: name && !establishment ? `No existe un establecimiento llamado «${name}»` : 'No existe ese establecimiento' });
     }
+    // Solo los locales que puede ver quien llama (user.access)
+    if (!(await canSeeLocalId(req.access, local._id))) return forbidden(res);
 
     // filter = «qué rotaciones»: las del local, las abiertas o las que no lo están, y en los días pedidos si se pidieron
     const filter = { establishment: local._id, status: status === 'open' ? 'open' : { $ne: 'open' } };
@@ -127,7 +130,9 @@ controller.getRotationSummary = async (req, res) => {
         .select('establishment status takeOut tableNumber touch._id firstAttentionDelay cleaningDelay process.preparationDelay')
         .lean();
 
-    const rows = summaryOfRotations(rotations);
+    // Solo los locales que puede ver quien llama (user.access); null es «todos»
+    const allowed = await allowedLocalIds(req.access);
+    const rows = summaryOfRotations(rotations).filter(row => allowed === null || allowed.has(row.establishment));
     // El nombre del local y el de su franquicia (franchiseReference; `franchise` suelto es el campo viejo)
     const locals = await LocalModel.find({ _id: { $in: rows.map(row => row.establishment) } }).select('_id name franchise franchiseReference.name_franchise').lean();
     const byId = new Map(locals.map(local => [String(local._id), local]));

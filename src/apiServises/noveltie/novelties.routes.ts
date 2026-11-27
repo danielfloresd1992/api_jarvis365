@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction, Express, Router } from 'express';
+import { allowedLocalIds, loadAccess } from '../access/access.middleware.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { spawn } from 'child_process';
 import ControllerNovelty from './novelties.controller';
@@ -178,13 +179,20 @@ routerNoveltie.get(`${nameApi}/novelties/by-user`, extendSession, validateSessio
 //
 // Responde { novelties, hasMore, next }: `next` es lo que se manda como
 // `before` para la página siguiente.
-routerNoveltie.get(`${nameApi}/novelties/wall`, extendSession, validateSession, asyncHandler(async (req: Request, res: Response): Promise<void> => {
+routerNoveltie.get(`${nameApi}/novelties/wall`, extendSession, validateSession, loadAccess, asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const parsed = parseWallQuery(req.query as Record<string, unknown>);
     if (!parsed.ok) {
         res.status(400).json({ status: 400, error: 'Bad request', message: parsed.message });
         return;
     }
-    const { establishments, before, limit } = parsed.value;
+    const { before, limit } = parsed.value;
+    // Solo los locales que puede ver quien llama (user.access): los demás que pida se quitan sin avisar
+    const allowed = await allowedLocalIds((req as Request & { access?: unknown }).access);
+    const establishments = allowed === null ? parsed.value.establishments : parsed.value.establishments.filter(id => allowed.has(id));
+    if (establishments.length === 0) {
+        res.json({ status: 200, novelties: [], hasMore: false, next: null });
+        return;
+    }
 
     // Se pide una de más para saber si hay otra página sin contar la colección
     const docs = await NoveltieModel

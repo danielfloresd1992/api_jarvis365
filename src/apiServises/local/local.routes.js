@@ -7,6 +7,7 @@ import { validateObjectIdStrict } from '../../middleware/validateObjectId.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { floorPlanController } from './floorPlan.controller.js';
 import nameApi from '../../libs/name_api.js';
+import { loadAccess } from '../access/access.middleware.js';
 
 
 
@@ -83,7 +84,7 @@ routerLocal.get(`${nameApi}/establishment`,  extendSession, validateSession, asy
 
 routerLocal.get(`${nameApi}/local`,  extendSession, validateSession, controller.getAllLocal); // datos solos del local
 
-routerLocal.get(`${nameApi}/localLigth`,  extendSession, validateSession, controller.getAllLocalLigth);
+routerLocal.get(`${nameApi}/localLigth`,  extendSession, validateSession, loadAccess, controller.getAllLocalLigth);
 
 routerLocal.get(`${nameApi}/localforCort`, extendSession, validateSession, controller.getCortLocal);
 
@@ -111,10 +112,10 @@ routerLocal.delete(`${nameApi}/local/:id`, extendSession, validateSessionAndUser
 // El croquis de mesas del local (floorPlan.*): lo dibuja Client365 y lo leerá
 // insights365. Leerlo, cualquiera con sesión; guardarlo, quien puede editar el
 // local (el mismo permiso que PUT /local/:id).
-routerLocal.get(`${nameApi}/local/id=:id/floor-plan`, extendSession, validateSession, validateObjectIdStrict, asyncHandler(floorPlanController.getFloorPlan));
+routerLocal.get(`${nameApi}/local/id=:id/floor-plan`, extendSession, validateSession, loadAccess, validateObjectIdStrict, asyncHandler(floorPlanController.getFloorPlan));
 
 // Todos los croquis de una vez, para el visor de mesas del lobby de Client365 (elige entre todos los locales)
-routerLocal.get(`${nameApi}/local/floor-plans`, extendSession, validateSession, asyncHandler(floorPlanController.getFloorPlans));
+routerLocal.get(`${nameApi}/local/floor-plans`, extendSession, validateSession, loadAccess, asyncHandler(floorPlanController.getFloorPlans));
 
 routerLocal.put(`${nameApi}/local/id=:id/floor-plan`, extendSession, validateSessionAndUserSuper, validateObjectIdStrict, asyncHandler(floorPlanController.putFloorPlan));
 

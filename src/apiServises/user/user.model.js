@@ -212,6 +212,17 @@ const UserSchema = new Schema({
         linkedBy: { type: Schema.Types.ObjectId, ref: 'user' },
     },
 
+    // Qué locales ve en insights365 (reglas en apiServises/access/access.lib.js). 'all' ve todos —lo de todo el que
+    // no tiene nada asignado, también los de antes del campo—; 'only', los de sus franquicias enteras y sus locales
+    // sueltos. Solo lo cambian los administradores desde Client365 (rutas /access/…), nunca el PUT /user/:id.
+    access: {
+        mode: { type: String, enum: ['all', 'only'], default: 'all' },
+        franchises: { type: [{ type: Schema.Types.ObjectId, ref: 'Franchise' }], default: [] },
+        locals: { type: [{ type: Schema.Types.ObjectId, ref: 'Local' }], default: [] },
+        updatedBy: { type: Schema.Types.ObjectId, ref: 'user', default: null },
+        updatedAt: { type: Date, default: null },
+    },
+
     img: {
         type: String,
         unique: true,

@@ -8,6 +8,7 @@ import { userSchema, userSchemaMinime, userSchemaLegacy } from '../../libs/schem
 import SMU_MODEl from '../auth/auth.model.js';
 import nameApi from '../../libs/name_api.js';
 import validateSecurityPass from '../../libs/validation/passwordValidation.js';
+import { accessOfUser } from '../access/access.session.js';
 import { config } from 'dotenv';
 
 
@@ -62,10 +63,16 @@ authRouter.post(`${nameApi}/auth/preUpdate`, async (req, res, next) => {
 
 
 
-authRouter.get(`${nameApi}/auth/isAuth`, (req, res) => {
-    
-    if(req.session.dataUser) return res.status(200).json(req.session.dataUser);
-    else res.status(401).json({ error: 'Requered auth', status: 401, message: 'Your session has expired' });
+authRouter.get(`${nameApi}/auth/isAuth`, async (req, res) => {
+
+    if (!req.session.dataUser) return res.status(401).json({ error: 'Requered auth', status: 401, message: 'Your session has expired' });
+
+    // `access` se lee de la base en cada llamada, no de la foto que se guardó al entrar: lo que un administrador asigne
+    // en Client365 llega aquí sin volver a entrar. Si no se puede leer, la sesión sigue valiendo, con access null
+    let access = null;
+    try { access = await accessOfUser(req.session.userId ?? req.session.dataUser?._id); }
+    catch (error) { console.log('[access] no se pudo leer el acceso de la sesión', error); }
+    return res.status(200).json({ ...req.session.dataUser, access });
 });
 
 

@@ -144,6 +144,7 @@ import { routerNomina } from './apiServises/nomina/nomina.routes.js';
 import { routerExchangeRate } from './apiServises/exchangeRate/exchangeRate.routes.js';
 import { routerApiKey } from './apiServises/apiKey/apiKey.routes.js';
 import routerMultimedia from './apiServises/multimedia/routes.index.ts'
+import { routerAccess } from './apiServises/access/access.routes.js';
 import swaggerUi from 'swagger-ui-express';
 import swaggerSpec from './docs/swagger.js';
 
@@ -165,6 +166,7 @@ const apiRouter = express.Router();
 
 app
     .use(routerUser)
+    .use(routerAccess)
     .use(routerAttendanceUser)
     .use(routerBiometric)
     .use(routerNotification)

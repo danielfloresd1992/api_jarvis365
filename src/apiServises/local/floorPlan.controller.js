@@ -1,6 +1,7 @@
 import LocalModel from './local.model.js';
 import FloorPlanModel, { FLOOR_PLAN_VERSION } from './floorPlan.model.js';
 import { floorPlanValidate } from './floorPlan.schema.js';
+import { allowedLocalIds, canSeeLocalId, forbidden } from '../access/access.middleware.js';
 
 
 
@@ -26,6 +27,8 @@ export const floorPlanController = {};
 
 
 floorPlanController.getFloorPlan = async (req, res) => {
+    // Solo el croquis de un local que puede ver quien llama (user.access)
+    if (!(await canSeeLocalId(req.access, req.params.id))) return forbidden(res);
     const plan = await FloorPlanModel.findOne({ establishment: req.params.id }).lean();
     return res.status(200).json({ data: plan ?? null });
 };
@@ -35,7 +38,10 @@ floorPlanController.getFloorPlan = async (req, res) => {
 // Para el visor de mesas del lobby de Client365, que deja elegir entre todos los locales: una petición en vez de
 // una por cada uno de los ~120. Los locales sin croquis no salen; quien llama los cruza con su lista de locales.
 floorPlanController.getFloorPlans = async (req, res) => {
-    const plans = await FloorPlanModel.find({}).select('-__v -updatedBy').lean();
+    // Solo los de los locales que puede ver quien llama (user.access); null es «todos»
+    const allowed = await allowedLocalIds(req.access);
+    const filter = allowed === null ? {} : { establishment: { $in: [...allowed] } };
+    const plans = await FloorPlanModel.find(filter).select('-__v -updatedBy').lean();
     return res.status(200).json({ data: plans });
 };
 

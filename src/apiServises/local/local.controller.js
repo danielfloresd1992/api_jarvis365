@@ -11,6 +11,7 @@ import Franchise from '../franchise/franchiseImg.model.js';
 import colors from 'colors';
 import mongoose from 'mongoose';
 import convertBoolean from '../../script/convertBoolean.js';
+import { localFilterOf } from '../access/access.lib.js';
 import { notify, diffChanges, actorFromSession } from '../notification/notification.service.js';
 
 
@@ -52,6 +53,9 @@ controller.getAllLocalLigth = async (req, res) => {
         const populateQuery = req.query.populate;
         const query = {};
         if (!allParams) query.isActive = true;
+        // Solo los locales que puede ver quien llama (user.access, loadAccess en la ruta); sin filtro, todos
+        const access = localFilterOf(req.access);
+        if (access) Object.assign(query, access);
         const local = await Local.find(query).select('-managers -img -touchs').populate(populateQuery);
         return res.json(local);
     }
