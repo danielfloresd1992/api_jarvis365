@@ -220,4 +220,7 @@ export const rotationQueryValidate = yup.object({
 
 export const rotationSummaryValidate = yup.object({
     day: yup.string().test('day', '«day» debe ser un día AAAA-MM-DD que exista', isRealDay),
+    // scope = «qué rotaciones se cuentan»: 'day' (sin mandarlo), las del día: abiertas y guardadas; 'live', solo las
+    // ABIERTAS ahora mismo en Mesas (el tablero en vivo del lobby), y entonces `day` no cuenta
+    scope: yup.string().oneOf(['day', 'live'], 'El alcance solo puede ser «day» o «live»').default('day'),
 });

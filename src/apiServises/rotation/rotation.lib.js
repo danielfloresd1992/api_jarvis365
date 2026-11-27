@@ -83,13 +83,26 @@ export const rotationEvent = (method, localName) => `${localName}-${method}`;
 
 // ── EL RESUMEN DEL DÍA DE CADA LOCAL (GET /rotation/summary) ──────────
 
+// emptyCount = «rotaciones y toques sin nada contado»
+const emptyCount = () => ({ live: 0, saved: 0, rotations: 0, firsts: 0, others: 0 });
+
 // emptySummary = «un local sin nada contado todavía»
 const emptySummary = (establishment) => ({
     establishment,
-    live: 0, saved: 0, rotations: 0,
-    firsts: 0, others: 0,
+    ...emptyCount(),
     delays: { attention: 0, cleaning: 0, preparation: 0, total: 0 },
 });
+
+// countInto = «suma una rotación a un conteo»: en vivo o guardada, y sus toques (primer toque y los siguientes)
+function countInto(count, rotation, touches) {
+    if (rotation.status === 'open') count.live += 1;
+    else count.saved += 1;
+    count.rotations += 1;
+    if (touches > 0) {
+        count.firsts += 1;
+        count.others += touches - 1;
+    }
+}
 
 // summaryOfRotations = «lo de un día de cada local, ya contado», con las reglas del visor de mesas y del informe:
 //   - en vivo = abierta (sigue en Mesas); guardada = cerrada. Las dos son rotaciones del día;
@@ -107,15 +120,8 @@ export function summaryOfRotations(rotations) {
         const key = String(rotation.establishment);
         const row = byLocal.get(key) ?? emptySummary(key);
 
-        if (rotation.status === 'open') row.live += 1;
-        else row.saved += 1;
-        row.rotations += 1;
-
         const touches = rotation.touch?.length ?? 0;
-        if (touches > 0) {
-            row.firsts += 1;
-            row.others += touches - 1;
-        }
+        countInto(row, rotation, touches);
 
         if (rotation.firstAttentionDelay) row.delays.attention += 1;
         if (rotation.cleaningDelay) row.delays.cleaning += 1;

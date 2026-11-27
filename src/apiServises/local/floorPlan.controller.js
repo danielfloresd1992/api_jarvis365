@@ -9,6 +9,7 @@ import { floorPlanValidate } from './floorPlan.schema.js';
 // ══════════════════════════════════════════════════════════════════════
 //   GET /local/id=:id/floor-plan   el croquis, o `data: null` si el local no tiene
 //   PUT /local/id=:id/floor-plan   lo guarda entero (lo crea la primera vez)
+//   GET /local/floor-plans         todos los croquis de una vez (los locales que tienen)
 //
 // Que un local sin croquis conteste 200 con null, y no 404, es a propósito: así
 // un 404 solo puede ser «la ruta no existe», que es lo que contesta un servidor
@@ -27,6 +28,15 @@ export const floorPlanController = {};
 floorPlanController.getFloorPlan = async (req, res) => {
     const plan = await FloorPlanModel.findOne({ establishment: req.params.id }).lean();
     return res.status(200).json({ data: plan ?? null });
+};
+
+
+// GET /local/floor-plans   TODOS los croquis, uno por local que tiene: { data: [croquis…] }
+// Para el visor de mesas del lobby de Client365, que deja elegir entre todos los locales: una petición en vez de
+// una por cada uno de los ~120. Los locales sin croquis no salen; quien llama los cruza con su lista de locales.
+floorPlanController.getFloorPlans = async (req, res) => {
+    const plans = await FloorPlanModel.find({}).select('-__v -updatedBy').lean();
+    return res.status(200).json({ data: plans });
 };
 
 

@@ -112,14 +112,15 @@ controller.getRotations = async (req, res) => {
 // pasado, solo sus guardadas. Solo vienen los locales que tuvieron alguna rotación, ordenados por nombre.
 controller.getRotationSummary = async (req, res) => {
 
-    const { day } = await rotationSummaryValidate.validate(req.query, OPTIONS);
+    const { day, scope } = await rotationSummaryValidate.validate(req.query, OPTIONS);
 
     const today = operationalDateOf(new Date());
     const operationalDate = day ? dayToDate(day) : today;
     const isToday = operationalDate.getTime() === today.getTime();
 
     const saved = { status: { $ne: 'open' }, operationalDate };
-    const filter = isToday ? { $or: [{ status: 'open' }, saved] } : saved;
+    // Con scope=live solo cuentan las abiertas: lo que pasa ahora mismo, sin nada de lo ya guardado
+    const filter = scope === 'live' ? { status: 'open' } : isToday ? { $or: [{ status: 'open' }, saved] } : saved;
 
     // Solo lo que se cuenta: ni horas ni personas
     const rotations = await RotationModel.find(filter)
@@ -138,7 +139,7 @@ controller.getRotationSummary = async (req, res) => {
         })
         .sort((a, b) => a.name.localeCompare(b.name, 'es'));
 
-    return res.status(200).json({ day: operationalDate.toISOString().slice(0, 10), live: isToday, total: establishments.length, establishments });
+    return res.status(200).json({ day: operationalDate.toISOString().slice(0, 10), scope, live: scope === 'live' || isToday, total: establishments.length, establishments });
 };
 
 

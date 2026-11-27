@@ -113,6 +113,9 @@ routerLocal.delete(`${nameApi}/local/:id`, extendSession, validateSessionAndUser
 // local (el mismo permiso que PUT /local/:id).
 routerLocal.get(`${nameApi}/local/id=:id/floor-plan`, extendSession, validateSession, validateObjectIdStrict, asyncHandler(floorPlanController.getFloorPlan));
 
+// Todos los croquis de una vez, para el visor de mesas del lobby de Client365 (elige entre todos los locales)
+routerLocal.get(`${nameApi}/local/floor-plans`, extendSession, validateSession, asyncHandler(floorPlanController.getFloorPlans));
+
 routerLocal.put(`${nameApi}/local/id=:id/floor-plan`, extendSession, validateSessionAndUserSuper, validateObjectIdStrict, asyncHandler(floorPlanController.putFloorPlan));
 
 

@@ -756,8 +756,14 @@ test('summaryOfRotations cuenta por local en vivo, guardadas, toques y demoras r
     const doral = filas.find(fila => fila.establishment === DORAL);
     const miami = filas.find(fila => fila.establishment === MIAMI);
     assert.equal(filas.length, 2);
-    assert.deepEqual(doral, { establishment: DORAL, live: 1, saved: 1, rotations: 2, firsts: 1, others: 1, delays: { attention: 1, cleaning: 1, preparation: 2, total: 4 } });
-    assert.deepEqual(miami, { establishment: MIAMI, live: 0, saved: 1, rotations: 1, firsts: 1, others: 0, delays: { attention: 0, cleaning: 0, preparation: 0, total: 0 } });
+    assert.deepEqual(doral, {
+        establishment: DORAL, live: 1, saved: 1, rotations: 2, firsts: 1, others: 1,
+        delays: { attention: 1, cleaning: 1, preparation: 2, total: 4 },
+    });
+    assert.deepEqual(miami, {
+        establishment: MIAMI, live: 0, saved: 1, rotations: 1, firsts: 1, others: 0,
+        delays: { attention: 0, cleaning: 0, preparation: 0, total: 0 },
+    });
 });
 
 test('summaryOfRotations: sin rotaciones no hay filas, y un local solo con pedidos para llevar no aparece', async () => {
@@ -769,7 +775,9 @@ test('summaryOfRotations: sin rotaciones no hay filas, y un local solo con pedid
 
 test('el resumen se pide sin día (el de ahora) o con un día que exista', async () => {
     const { rotationSummaryValidate } = await import('../src/apiServises/rotation/rotation.schema.js');
-    assert.deepEqual(await rotationSummaryValidate.validate({}, OPC), {});
+    assert.deepEqual(await rotationSummaryValidate.validate({}, OPC), { scope: 'day' });
+    assert.equal((await rotationSummaryValidate.validate({ scope: 'live' }, OPC)).scope, 'live');
+    await assert.rejects(rotationSummaryValidate.validate({ scope: 'todo' }, OPC), /alcance/);
     assert.equal((await rotationSummaryValidate.validate({ day: '2026-11-26' }, OPC)).day, '2026-11-26');
     await assert.rejects(rotationSummaryValidate.validate({ day: '2026-02-30' }, OPC), /«day» debe ser un día AAAA-MM-DD que exista/);
     await assert.rejects(rotationSummaryValidate.validate({ day: 'hoy' }, OPC), /«day»/);

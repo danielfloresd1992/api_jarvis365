@@ -20,6 +20,7 @@ const routerRotation = express.Router();
 //   GET  /rotation?establishment=<id>&status=open
 //        Las que siguen ABIERTAS en Mesas, de cualquier día (las fechas son opcionales).
 //
+//   GET  /rotation/summary?scope=live   (solo las ABIERTAS ahora: el tablero en vivo del lobby de Client365)
 //   GET  /rotation/summary?day=AAAA-MM-DD
 //        El día operativo de TODOS los locales, ya contado: una fila por local que tuvo rotaciones (con su nombre y el
 //        de su franquicia), con en vivo,
