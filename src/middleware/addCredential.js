@@ -1,5 +1,4 @@
 import SMU_MODEl from '../apiServises/auth/auth.model.js';
-import { accessOfUser } from '../apiServises/access/access.session.js';
 
 export default async function addCredentials(req, res, next) {
     try {
@@ -18,13 +17,7 @@ export default async function addCredentials(req, res, next) {
 
 
         if (documentReport) req.session.dataUser.activity = documentReport;
-
-        // `access` = qué locales ve, con sus franquicias y locales ya relacionados (access.session.js). Si no se puede
-        // leer, se entra igual: la app lo vuelve a pedir con /auth/isAuth
-        let access = null;
-        try { access = await accessOfUser(user._id); }
-        catch (error) { console.log('[access] no se pudo leer el acceso al entrar', error); }
-        return res.status(200).json({ ...user, access });
+        return res.status(200).json(user);
     }
     catch(error){
         console.log(error);

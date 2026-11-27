@@ -258,7 +258,9 @@ routerUser.put(`${nameApi}/user/:id`, validateAdminUser, asyncHandler(async (req
 
     if (!ObjectId.isValid(id)) return res.status(400).json({ error: 'Bad request', status: 400, message: 'ID is not valid' });
 
-    const body = req.body;
+    // `access` (qué locales ve) llega en cada usuario desde que existe el campo, pero aquí no se cambia: solo por las
+    // rutas /access/…. Si un formulario lo manda de vuelta se ignora, en vez de que noUnknown rechace todo el guardado
+    const { access: _accessIgnorado, ...body } = req.body ?? {};
     const dataValidate = await userUpdateSchema.validate(body);
 
     // Persistir SOLO las claves que el cliente envió realmente.

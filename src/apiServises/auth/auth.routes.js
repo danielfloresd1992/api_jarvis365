@@ -67,12 +67,14 @@ authRouter.get(`${nameApi}/auth/isAuth`, async (req, res) => {
 
     if (!req.session.dataUser) return res.status(401).json({ error: 'Requered auth', status: 401, message: 'Your session has expired' });
 
-    // `access` se lee de la base en cada llamada, no de la foto que se guardó al entrar: lo que un administrador asigne
-    // en Client365 llega aquí sin volver a entrar. Si no se puede leer, la sesión sigue valiendo, con access null
+    // Responde lo mismo de siempre (la sesión guardada al entrar) y además `access`, leído de la base en cada llamada y
+    // no de esa foto: lo que un administrador asigne en Client365 llega aquí sin volver a entrar. Si no se puede leer,
+    // la sesión sigue valiendo, con access null
+    const dataUser = typeof req.session.dataUser.toJSON === 'function' ? req.session.dataUser.toJSON() : req.session.dataUser;
     let access = null;
-    try { access = await accessOfUser(req.session.userId ?? req.session.dataUser?._id); }
+    try { access = await accessOfUser(req.session.userId ?? dataUser?._id); }
     catch (error) { console.log('[access] no se pudo leer el acceso de la sesión', error); }
-    return res.status(200).json({ ...req.session.dataUser, access });
+    return res.status(200).json({ ...dataUser, access });
 });
 
 
@@ -110,6 +112,15 @@ authRouter.post(`${nameApi}/auth/login`, asyncHandler(async (req, res, next) => 
     const userResponse = {...searchedUserByEmail}._doc;
     delete userResponse.password;
     delete userResponse.user;
+
+    // Quien entra por /auth/login (insights365, Client365) recibe además `access`: qué locales ve, con sus franquicias
+    // y locales ya relacionados (access.session.js). Va aquí y no en addCredentials, que también usa /user/login
+    // (Jarvis-express365) y queda como estaba. Si no se puede leer, se entra igual con access null
+    try { userResponse.access = await accessOfUser(userResponse._id); }
+    catch (error) {
+        console.log('[access] no se pudo leer el acceso al entrar', error);
+        userResponse.access = null;
+    }
     req.credentialForUser = userResponse;
 
     next();
