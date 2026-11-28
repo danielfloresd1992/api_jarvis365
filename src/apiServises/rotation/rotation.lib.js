@@ -282,3 +282,38 @@ export function removeTouchFrom(rotation, touchId, userId) {
     rotation.touch.pull(touch._id);
     return touch;
 }
+
+
+
+// ── BORRAR UNA ROTACIÓN GUARDADA (DELETE /rotation/id=) ───────────────
+// Desde la pestaña «Registros» de Jarvis-express365. Solo la borra QUIEN LA GUARDÓ (pedido del usuario,
+// 2026-11-28: «solo con la cuenta de la misma persona que la creó»), y no si Client365 ya la verificó: lo
+// que dijo la verificación se perdería con ella. Una abierta es de Mesas, que tiene su propio DELETE.
+
+// REMOVED_METHOD = «el aviso en vivo de una rotación borrada»: '<nombre del local>-delete', con su _id
+export const REMOVED_METHOD = 'delete';
+
+// removalProblem = «por qué no se puede borrar esta rotación», o null si se puede
+// Recibe la rotación (createdBy poblado o no), el _id de quien la quiere borrar y la verificación de turno que
+// la tiene (ShiftVerification, en objeto plano), o null si no está en ninguna. Devuelve { status, message }:
+// 403 si no la guardó quien pide; 409 si sigue abierta en Mesas o si la verificación ya dijo algo de ella.
+export function removalProblem(rotation, userId, verification = null) {
+
+    const author = rotation.createdBy?._id ?? rotation.createdBy;
+    if (!author || !userId || String(author) !== String(userId)) {
+        return { status: 403, message: 'Solo quien guardó la rotación puede borrarla' };
+    }
+
+    if (rotation.status === 'open') {
+        return { status: 409, message: 'Esta rotación sigue en Mesas: se quita desde allí' };
+    }
+
+    // entry = «lo que la verificación anotó de esta rotación»: si la revisó (first / second), si la recuperó ella
+    // (origin 'verification') o si la verificación ya se cerró, borrarla dejaría la verificación coja
+    const entry = verification?.rotations?.find(item => String(item.rotation?._id ?? item.rotation) === String(rotation._id)) ?? null;
+    if (verification && (verification.firstClosedAt || (entry && (entry.first || entry.second || entry.origin === 'verification')))) {
+        return { status: 409, message: 'Esta rotación ya se verificó en Client365: no se puede borrar' };
+    }
+
+    return null;
+}

@@ -782,3 +782,48 @@ test('el resumen se pide sin día (el de ahora) o con un día que exista', async
     await assert.rejects(rotationSummaryValidate.validate({ day: '2026-02-30' }, OPC), /«day» debe ser un día AAAA-MM-DD que exista/);
     await assert.rejects(rotationSummaryValidate.validate({ day: 'hoy' }, OPC), /«day»/);
 });
+
+
+// ── BORRAR UNA ROTACIÓN GUARDADA: solo quien la guardó, y no si ya se verificó ──
+
+test('removalProblem: solo la borra quien la guardó, con createdBy poblado o no', async () => {
+    const { removalProblem, REMOVED_METHOD, rotationEvent: event } = await import('../src/apiServises/rotation/rotation.lib.js');
+    const AUTOR = '6650a1b2c3d4e5f6a7b8c9d0';
+    const OTRO = '6650a1b2c3d4e5f6a7b8c9d1';
+    const guardada = { _id: ID, status: 'closed', createdBy: AUTOR };
+
+    assert.equal(removalProblem(guardada, AUTOR), null);
+    assert.equal(removalProblem({ ...guardada, createdBy: { _id: AUTOR, name: 'Humberto' } }, AUTOR), null);
+    //  Las de antes de existir `status` cuentan como guardadas
+    assert.equal(removalProblem({ _id: ID, createdBy: AUTOR }, AUTOR), null);
+
+    assert.deepEqual(removalProblem(guardada, OTRO), { status: 403, message: 'Solo quien guardó la rotación puede borrarla' });
+    assert.equal(removalProblem({ ...guardada, createdBy: null }, AUTOR).status, 403);
+    assert.equal(removalProblem(guardada, undefined).status, 403);
+
+    //  El aviso en vivo es '<local>-delete', con el mismo armado que los demás
+    assert.equal(event(REMOVED_METHOD, 'Francisca Doral'), 'Francisca Doral-delete');
+});
+
+test('removalProblem: una abierta es de Mesas, y una que la verificación ya tocó no se borra', async () => {
+    const { removalProblem } = await import('../src/apiServises/rotation/rotation.lib.js');
+    const AUTOR = '6650a1b2c3d4e5f6a7b8c9d0';
+    const guardada = { _id: ID, status: 'closed', createdBy: AUTOR };
+    const entrada = { rotation: ID, origin: 'operator', first: null, second: null, touches: [] };
+    const otraRotacion = { ...entrada, rotation: '6650a1b2c3d4e5f6a7b8c9ff', first: { status: 'confirmed' } };
+
+    assert.equal(removalProblem({ ...guardada, status: 'open' }, AUTOR).status, 409);
+
+    //  En una verificación sin revisarla todavía: se puede (el controlador la saca también de ella)
+    assert.equal(removalProblem(guardada, AUTOR, { rotations: [entrada, otraRotacion], firstClosedAt: null }), null);
+    //  Revisada en la primera o en la segunda, recuperada por la verificación, o con la verificación ya cerrada: no
+    const verificada = /ya se verificó en Client365/;
+    assert.match(removalProblem(guardada, AUTOR, { rotations: [{ ...entrada, first: { status: 'confirmed' } }] }).message, verificada);
+    assert.match(removalProblem(guardada, AUTOR, { rotations: [{ ...entrada, second: { status: 'notFound' } }] }).message, verificada);
+    assert.match(removalProblem(guardada, AUTOR, { rotations: [{ ...entrada, origin: 'verification' }] }).message, verificada);
+    assert.equal(removalProblem(guardada, AUTOR, { rotations: [entrada], firstClosedAt: new Date() }).status, 409);
+    //  La entrada con la rotación poblada también se reconoce
+    assert.equal(removalProblem(guardada, AUTOR, { rotations: [{ ...entrada, rotation: { _id: ID }, first: { status: 'confirmed' } }] }).status, 409);
+    //  Quien no la guardó oye 403 antes que nada: no se le dice si está verificada
+    assert.equal(removalProblem(guardada, '6650a1b2c3d4e5f6a7b8c9d1', { rotations: [{ ...entrada, first: { status: 'confirmed' } }] }).status, 403);
+});

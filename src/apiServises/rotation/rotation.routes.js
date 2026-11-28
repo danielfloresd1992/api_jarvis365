@@ -59,8 +59,13 @@ const routerRotation = express.Router();
 //
 //   Las dos anotan en `changes` el toque añadido o quitado y responden con la rotación entera.
 //
+//   DELETE /rotation/id=<_id de la rotación>
+//          Borra una rotación guardada. Solo quien la guardó (403 si es otro), y no si Client365 ya la
+//          verificó o si sigue abierta en Mesas (409). Una que ya no existe responde 200 con removed: false.
+//
 // Los que escriben (POST, PUT, añadir y quitar toques) avisan en vivo por socket
-// a los que tienen abierto ese local: '<nombre del local>-post' o '-put' (rotation.socket.js).
+// a los que tienen abierto ese local: '<nombre del local>-post' o '-put' (rotation.socket.js); el
+// borrado, con '<nombre del local>-delete' y solo el _id.
 // Los de Mesas (PUT y DELETE /rotation/client=) avisan con 'rotation-sync:<_id del local>'.
 //
 // `validateSession` y no un guard de administrador: quien guarda y corrige es el operador.
@@ -84,6 +89,8 @@ routerRotation.delete(`${nameApi}/rotation/client=:clientId`, extendSession, val
 routerRotation.post(`${nameApi}/rotation/id=:id/touch`, extendSession, validateSession, asyncHandler(controller.addTouch));
 
 routerRotation.delete(`${nameApi}/rotation/touch/id=:id`, extendSession, validateSession, asyncHandler(controller.removeTouch));
+
+routerRotation.delete(`${nameApi}/rotation/id=:id`, extendSession, validateSession, asyncHandler(controller.removeRotation));
 
 
 

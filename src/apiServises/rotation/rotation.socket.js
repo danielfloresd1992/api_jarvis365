@@ -1,7 +1,7 @@
 import { io } from '../../services/socket/io.js';
 import RotationModel from './rotation.model.js';
 import LocalModel from '../local/local.model.js';
-import { PEOPLE, ROTATION_METHODS, rotationEvent, SYNC_ACTIONS, rotationSyncEvent } from './rotation.lib.js';
+import { PEOPLE, ROTATION_METHODS, REMOVED_METHOD, rotationEvent, SYNC_ACTIONS, rotationSyncEvent } from './rotation.lib.js';
 
 
 
@@ -45,6 +45,29 @@ export async function emitRotation(method, rotation) {
     }
     catch (error) {
         console.log(`[rotation] No se pudo avisar en vivo (${method}):`, error?.message ?? error);
+    }
+}
+
+
+// emitRotationRemoved = «avisar en vivo de que se borró una rotación guardada» (DELETE /rotation/id=)
+//
+//     '<nombre del local>-delete'   { _id, establishment, operationalDate }   Registros la quita de su lista
+//
+// Recibe la rotación recién borrada: ya no se puede volver a leer, así que el aviso lleva solo lo que la señala.
+// NUNCA lanza, como emitRotation: se llama sin esperarla, después de borrar.
+export async function emitRotationRemoved(rotation) {
+    try {
+        const local = await LocalModel.findById(rotation.establishment).select('name').lean();
+        if (!local?.name) return;
+
+        io.emit(rotationEvent(REMOVED_METHOD, local.name), {
+            _id: rotation._id,
+            establishment: rotation.establishment,
+            operationalDate: rotation.operationalDate,
+        });
+    }
+    catch (error) {
+        console.log('[rotation] No se pudo avisar en vivo de la rotación borrada:', error?.message ?? error);
     }
 }
 

@@ -1,8 +1,9 @@
 import RotationModel from './rotation.model.js';
 import LocalModel from '../local/local.model.js';
 import { rotationValidate, rotationQueryValidate, rotationTargetValidate, syncValidate, rotationRemoveValidate, rotationSummaryValidate, dayToDate } from './rotation.schema.js';
-import { applyEdit, addTouchTo, removeTouchFrom, abandonedOf, operationalDaysOf, syncOutcome, applySync, summaryOfRotations, PEOPLE } from './rotation.lib.js';
-import { emitRotation, emitRotationSync } from './rotation.socket.js';
+import { applyEdit, addTouchTo, removeTouchFrom, abandonedOf, operationalDaysOf, syncOutcome, applySync, summaryOfRotations, removalProblem, PEOPLE } from './rotation.lib.js';
+import { emitRotation, emitRotationSync, emitRotationRemoved } from './rotation.socket.js';
+import ShiftVerificationModel from '../shiftVerification/shiftVerification.model.js';
 import { operationalDateOf } from '../dvrFailure/dvrFailure.lib.js';
 import { allowedLocalIds, canSeeLocalId, forbidden } from '../access/access.middleware.js';
 
@@ -325,6 +326,38 @@ controller.removeTouch = async (req, res) => {
 
     await rotation.populate(PEOPLE);
     return res.status(200).json(rotation);
+};
+
+
+
+// DELETE /rotation/id=:id — borra una rotación guardada (la pestaña «Registros» de Jarvis-express365)
+// Solo quien la guardó, y no si Client365 ya la verificó: lo decide removalProblem (rotation.lib.js), que responde
+// 403 o 409 con el porqué. Una que ya no existe responde 200 con removed: false: un reintento de un borrado que ya
+// se hizo. Si estaba en una verificación sin revisar, sale también de ella, para no dejarla apuntando a nada.
+// Avisa en vivo a Registros ('<local>-delete'), que la quita de su lista.
+controller.removeRotation = async (req, res) => {
+
+    if (!req.session?.userId) {
+        return res.status(401).json({ status: 401, error: 'Unauthorized', message: 'Para borrar una rotación hay que iniciar sesión' });
+    }
+
+    const id = await rotationTargetValidate.validate(req.params.id);
+
+    const rotation = await RotationModel.findById(id).select('establishment operationalDate status createdBy');
+    if (!rotation) return res.status(200).json({ removed: false, _id: id });
+
+    const verification = await ShiftVerificationModel.findOne({ 'rotations.rotation': rotation._id }).select('rotations firstClosedAt').lean();
+
+    const problem = removalProblem(rotation, req.session.userId, verification);
+    if (problem) {
+        return res.status(problem.status).json({ status: problem.status, error: problem.status === 403 ? 'Forbidden' : 'Conflict', message: problem.message });
+    }
+
+    await rotation.deleteOne();
+    if (verification) await ShiftVerificationModel.updateOne({ _id: verification._id }, { $pull: { rotations: { rotation: rotation._id } } });
+    emitRotationRemoved(rotation);
+
+    return res.status(200).json({ removed: true, _id: rotation._id });
 };
 
 
