@@ -10,6 +10,7 @@ import FRANCISCA_MIAMI from './croquis/francisca-miami.js';
 import FRANCISCA_MIAMI_LAKES from './croquis/francisca-miami-lakes.js';
 import FRANCISCA_DAVIE from './croquis/francisca-davie.js';
 import FRANCISCA_ORLANDO from './croquis/francisca-orlando.js';
+import REPORTES_GRILL_MIAMI from './croquis/reportes-grill-miami.js';
 
 // ══════════════════════════════════════════════════════════════════════
 // CARGAR LOS CROQUIS DE MESAS QUE SE PASARON A MANO
@@ -18,6 +19,10 @@ import FRANCISCA_ORLANDO from './croquis/francisca-orlando.js';
 //
 //     node dist/scripts/cargar-croquis.js            solo a los locales que no tienen croquis
 //     node dist/scripts/cargar-croquis.js --forzar   también pisa el que ya tengan
+//     node dist/scripts/cargar-croquis.js "Reportes Grill Miami"   solo ese (o esos) local(es), por su nombre
+//
+// Un croquis con `establishment: null` se busca por el nombre del local, que es
+// único (Local.name): para los locales cuyo _id no está a mano.
 //
 // En desarrollo: `npx tsx src/scripts/cargar-croquis.js`. Usa la misma base que
 // la API (config/index: la local en desarrollo, MONGO_URI en producción).
@@ -27,9 +32,11 @@ import FRANCISCA_ORLANDO from './croquis/francisca-orlando.js';
 // exista, porque lo que se haya corregido en Client365 vale más que esta copia.
 
 // CROQUIS = «los croquis a cargar», cada uno con el _id de su local
-const CROQUIS = [FRANCISCA_DORAL, FRANCISCA_MIAMI, FRANCISCA_MIAMI_LAKES, FRANCISCA_DAVIE, FRANCISCA_ORLANDO];
+const CROQUIS = [FRANCISCA_DORAL, FRANCISCA_MIAMI, FRANCISCA_MIAMI_LAKES, FRANCISCA_DAVIE, FRANCISCA_ORLANDO, REPORTES_GRILL_MIAMI];
 
 const FORCE = process.argv.includes('--forzar');
+// ONLY = «los nombres de local pedidos»: sin ninguno, todos
+const ONLY = process.argv.slice(2).filter(arg => !arg.startsWith('--'));
 
 
 async function main() {
@@ -38,14 +45,22 @@ async function main() {
     console.log(colors.cyan(`Conectando a ${uri.replace(/\/\/[^@/]*@/, '//***@')}`));
     await mongoose.connect(uri);
 
-    for (const { establishment, name, ...body } of CROQUIS) {
+    const pending = ONLY.length ? CROQUIS.filter(croquis => ONLY.includes(croquis.name)) : CROQUIS;
+    const unknown = ONLY.filter(name => !CROQUIS.some(croquis => croquis.name === name));
+    if (unknown.length) console.log(colors.red(`✗ sin croquis a mano para: ${unknown.join(', ')}`));
+
+    for (const { establishment: id, name, ...body } of pending) {
         const plan = await floorPlanValidate.validate(body, { abortEarly: false, stripUnknown: true });
 
-        const local = await LocalModel.findById(establishment).select('name').lean();
+        // Por su _id o, si el croquis no lo trae, por su nombre (único)
+        const local = id
+            ? await LocalModel.findById(id).select('name').lean()
+            : await LocalModel.findOne({ name }).select('name').lean();
         if (!local) {
-            console.log(colors.red(`✗ ${name}: no existe el local ${establishment} en esta base`));
+            console.log(colors.red(`✗ ${name}: no existe el local ${id ?? `«${name}»`} en esta base`));
             continue;
         }
+        const establishment = local._id;
 
         const existing = await FloorPlanModel.exists({ establishment });
         if (existing && !FORCE) {
