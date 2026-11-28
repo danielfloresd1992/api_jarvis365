@@ -293,8 +293,12 @@ routerDocument.get(`${nameApi}/document/:id`, validateSession, loadAccess, async
         console.log(req?.query?.populate)
         const result = await DocumentDiaryModel.findById(id).populate(req?.query?.populate);
         if (!result) return res.status(404).json({ error: 'Document not found', status: 404, message: 'it could have been eliminated or it does not exist' });
-        // Solo los informes de un local que puede ver quien llama (user.access)
-        if (!(await canSeeLocalId(req.access, result.establishmentId))) return forbidden(res);
+        // Solo los informes de un local que puede ver quien llama (user.access). Un informe viejo puede no tener
+        // establishmentId: entonces vale el nombre del local
+        const visible = result.establishmentId
+            ? await canSeeLocalId(req.access, result.establishmentId)
+            : await canSeeLocalName(req.access, result.establishmentName);
+        if (!visible) return forbidden(res);
 
         return res.status(200).json(result);
     }

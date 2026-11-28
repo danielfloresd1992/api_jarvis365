@@ -18,7 +18,11 @@ const routerAccess = express.Router();
 //          franquicias y sus locales sueltos ('only'). Ya poblados con lo que usa insights365 (franquicia,
 //          config_report, timeServices, platos). Responde { access, establishments }.
 //
-//   GET    /access/local/id=:id                    quién tiene acceso a este local (por el local o por su franquicia)
+//   GET    /insights/documents?establishment=<id>&from=AAAA-MM-DD&to=AAAA-MM-DD
+//          Los informes por turno de ese local en esos días (hasta 93), sin páginas: la lista de «Reportes por turno»
+//          de insights365. Cada uno se abre con GET /document/:id?populate=pages. 403 si no es de quien llama.
+//
+//   GET    /access/local/id=:id                   quién tiene acceso a este local (por el local o por su franquicia)
 //   POST   /access/local/id=:id                    { userId }: darle este local a un usuario
 //   DELETE /access/local/id=:id/user=:userId       quitárselo
 //   GET    /access/franchise/id=:id                quién ve toda esta franquicia
@@ -34,6 +38,7 @@ const routerAccess = express.Router();
 
 
 routerAccess.get(`${nameApi}/insights/establishments`, extendSession, validateSession, loadAccess, asyncHandler(accessController.getInsightsEstablishments));
+routerAccess.get(`${nameApi}/insights/documents`, extendSession, validateSession, loadAccess, asyncHandler(accessController.getInsightsDocuments));
 
 routerAccess.get(`${nameApi}/access/local/id=:id`, extendSession, validateAdminUser, validateObjectIdStrict, asyncHandler(accessController.getLocalAccess));
 routerAccess.post(`${nameApi}/access/local/id=:id`, extendSession, validateAdminUser, validateObjectIdStrict, asyncHandler(accessController.grantLocal));

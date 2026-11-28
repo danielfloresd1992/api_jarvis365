@@ -3,7 +3,9 @@ import { Types } from 'mongoose';
 import UserModel from '../user/user.model.js';
 import LocalModel from '../local/local.model.js';
 import FranchiseModel from '../franchise/franchise.model.js';
+import DocumentModel from '../documentsAndAnalytics/document.model.js';
 import { grantOf, insightsScope, localFilterOf, normalizeAccess, withItem, withoutItem } from './access.lib.js';
+import { canSeeLocalId, forbidden } from './access.middleware.js';
 
 
 
@@ -34,9 +36,7 @@ const person = (user, grant) => ({ _id: user._id, name: user.name, surName: user
 // (admin o super) y nada si no. Ya poblados con lo que usa insights365.
 // Responde { access: { mode, franchises, locals }, scope: 'assigned'|'staff'|'none', establishments }.
 accessController.getInsightsEstablishments = async (req, res) => {
-    const userId = req.session?.userId;
-    const user = userId ? await UserModel.findById(userId).select('admin super').lean() : null;
-    const scope = insightsScope(req.access, userId ? (user ?? {}) : null);
+    const scope = await insightsScopeOf(req);
     if (scope === 'none') return res.status(200).json({ access: req.access, scope, establishments: [] });
 
     const filter = localFilterOf(req.access) ?? {};
@@ -45,6 +45,64 @@ accessController.getInsightsEstablishments = async (req, res) => {
         .populate(INSIGHTS_POPULATE.join(' '))
         .lean();
     return res.status(200).json({ access: req.access, scope, establishments });
+};
+
+// insightsScopeOf = «qué le enseña insights365 a quien llama» (insightsScope con su admin/super leídos de la base)
+async function insightsScopeOf(req) {
+    const userId = req.session?.userId;
+    const user = userId ? await UserModel.findById(userId).select('admin super').lean() : null;
+    return insightsScope(req.access, userId ? (user ?? {}) : null);
+}
+
+// DAY = «una fecha como la guardan los informes»: AAAA-MM-DD, en texto
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+// DOCUMENTS_MAX_DAYS = «cuántos días se pueden pedir de una vez» (tres meses y algo)
+const DOCUMENTS_MAX_DAYS = 93;
+
+const documentsQueryValidate = yup.object({
+    establishment: yup.string().required('Falta el local («establishment»)').test('objectId', 'El local debe ser un ObjectId válido', value => Types.ObjectId.isValid(value)),
+    from: yup.string().required('Falta «from» (AAAA-MM-DD)').matches(DAY, '«from» va como AAAA-MM-DD'),
+    to: yup.string().required('Falta «to» (AAAA-MM-DD)').matches(DAY, '«to» va como AAAA-MM-DD'),
+});
+
+const daysBetween = (from, to) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);
+
+// GET /insights/documents?establishment=<id>&from=AAAA-MM-DD&to=AAAA-MM-DD — los informes por turno de un local en esos
+// días, SIN sus páginas, para la lista de «Reportes por turno» de insights365 (cada uno se abre luego con
+// GET /document/:id?populate=pages). Solo los de un local que puede ver quien llama, con la regla de insights365.
+// Un informe viejo puede no tener establishmentId: se busca también por el nombre del local.
+// Responde { establishment: { _id, name }, from, to, documents: [{ _id, date, shift, pages, createdAt }] }, del más nuevo
+// al más viejo; si un turno tiene dos informes salen los dos (el más nuevo primero).
+accessController.getInsightsDocuments = async (req, res) => {
+    const { establishment, from, to } = await documentsQueryValidate.validate(req.query, OPTIONS);
+    const span = daysBetween(from, to);
+    if (span < 0) return res.status(400).json({ status: 400, error: 'Bad request', message: '«from» no puede ser después de «to»' });
+    if (span > DOCUMENTS_MAX_DAYS) return res.status(400).json({ status: 400, error: 'Bad request', message: `Como mucho ${DOCUMENTS_MAX_DAYS} días por consulta` });
+
+    const scope = await insightsScopeOf(req);
+    if (scope === 'none' || !(await canSeeLocalId(req.access, establishment))) return forbidden(res);
+
+    const local = await LocalModel.findById(establishment).select('_id name').lean();
+    if (!local) return res.status(404).json({ status: 404, error: 'Not found', message: 'No existe ese establecimiento' });
+
+    const documents = await DocumentModel.find({
+        type: 'complete-shift',
+        date: { $gte: from, $lte: to },
+        $or: [{ establishmentId: local._id }, { establishmentName: local.name }],
+    }).select('_id date shift pages').sort({ date: -1, _id: -1 }).lean();
+
+    return res.status(200).json({
+        establishment: { _id: local._id, name: local.name },
+        from,
+        to,
+        documents: documents.map(document => ({
+            _id: document._id,
+            date: document.date,
+            shift: document.shift,
+            pages: Array.isArray(document.pages) ? document.pages.length : 0,
+            createdAt: document._id.getTimestamp(),
+        })),
+    });
 };
 
 
