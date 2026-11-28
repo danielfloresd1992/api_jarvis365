@@ -47,6 +47,16 @@
 //      Lo personal no se emite a todos para esconderlo en el cliente. Eso no lo
 //      hace privado: solo lo hace invisible.
 //
+//      Y si la estrategia lo pide (`push: '<app>'`), además por WEB PUSH a los
+//      navegadores de los destinatarios en esa app (apiServises/push): es lo
+//      único que llega con la app cerrada.
+//
+//   LAS DOS BANDEJAS (`channel`)
+//      'staff'     la campana del equipo, la de siempre
+//      'insights'  la campana de insights365: las alertas de demoras e
+//                  incidencias de los locales de cada cliente
+//      Cada app pide la suya (?channel=insights); nunca se mezclan.
+//
 //   5. SE LEE                                           → routes/
 //      El cliente pide su bandeja y el servidor filtra por lo que le toca, con
 //      el MISMO criterio con el que emitió. Lo leído se guarda en otra
@@ -73,8 +83,8 @@
 // Si la familia visual es nueva, hay que darla de alta también en el enum de
 // notification.model.js y en el registro de vistas del cliente.
 
-export { notify, diffChanges, actorFromSession, adminUserIds, NOTIFICATION_EVENT } from './notification.service.js';
-export { userRoom, ADMIN_ROOM, audienceQuery } from './notification.audience.js';
+export { notify, diffChanges, actorFromSession, adminUserIds, NOTIFICATION_EVENT, INSIGHTS_EVENT } from './notification.service.js';
+export { userRoom, ADMIN_ROOM, audienceQuery, channelOf } from './notification.audience.js';
 export { registerStrategy, resolveStrategy } from './strategies/index.js';
 export { routerNotification } from './notification.routes.js';
 export { default as NotificationModel } from './notification.model.js';

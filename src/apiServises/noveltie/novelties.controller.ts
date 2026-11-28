@@ -11,6 +11,7 @@ import { commentYupSchema } from './novelty.squema.js';
 import MenuModel from '../menu/menu.model.js';
 import UserModel from '../user/user.model.js';
 import { buildBonusSeal } from '../bonus/bonusSeal.lib.js';
+import { notifyInsightsAlert } from './insightsAlert.lib.js';
 import FileNoveltieModel from './fileNoveltie.model.js';
 import { join } from 'path';
 import fs, { readFileSync } from 'fs';
@@ -714,6 +715,10 @@ export default class ControllerNovelty {
                     { doc: updateDocument, user: { idUser: req.session.userId, nameUser: `${req.session.name}` } }
                 );
             }
+
+            // Si con este cambio una alerta de demora o de incidencia quedó validada y enviada al grupo, se avisa a
+            // los clientes que ven su local en insights365 (campana y Web Push). No se espera: nunca tumba la respuesta
+            void notifyInsightsAlert(findNovelty, updateDocument);
 
             // Si con este update la novedad quedó VALIDADA + ENVIADA AL GRUPO
             // (el mismo criterio que usa el corte de silencio) y antes no lo

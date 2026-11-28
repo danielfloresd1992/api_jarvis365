@@ -3,6 +3,7 @@ import UserModel from '../user/user.model.js';
 import { resolveStrategy } from './strategies/index.js';
 import { io } from '../../services/socket/io.js';
 import { userRoom, ADMIN_ROOM } from './notification.audience.js';
+import { sendPushToUsers } from '../push/push.service.js';
 
 // Las salas se re-exportan porque otros módulos las importan desde acá desde
 // antes de que existiera notification.audience.js.
@@ -20,6 +21,10 @@ export { userRoom, ADMIN_ROOM };
 // en las estrategias. Acá solo está la mecánica.
 
 export const NOTIFICATION_EVENT = 'notification:new';
+
+// INSIGHTS_EVENT = «el evento de socket de la campana de insights365». Distinto del de la campana del equipo a
+// propósito: un administrador con las dos apps abiertas no debe ver alertas de clientes en la del equipo.
+export const INSIGHTS_EVENT = 'insights:notification';
 
 
 
@@ -73,6 +78,8 @@ export async function notify({ type, actor, target, resource, changes = [], extr
             // La familia sale de la estrategia, no del nombre del tipo: es ella
             // quien sabe a qué se parece lo que está describiendo.
             family: strategy.family || 'general',
+            // Y la bandeja también: la campana del equipo o la de insights365
+            channel: strategy.channel || 'staff',
             scope,
             recipients,
             actor: {
@@ -114,6 +121,9 @@ export async function notify({ type, actor, target, resource, changes = [], extr
         });
 
         emitNotification(doc);
+        // Con la app cerrada solo llega por Web Push: si la estrategia lo pide (push: 'insights365'), a los
+        // navegadores de los destinatarios en esa app. No se espera: el aviso ya está guardado y emitido
+        if (strategy.push && scope === 'personal') void pushNotification(doc, strategy.push);
         return doc;
     }
     catch (error) {
@@ -167,6 +177,12 @@ async function resolveActor(actor) {
 function emitNotification(doc) {
     const payload = doc?.toObject ? doc.toObject() : doc;
 
+    // Las de insights365 van por su propio evento, solo a la sala de cada destinatario
+    if (payload.channel === 'insights') {
+        (payload.recipients || []).forEach(userId => io.emitToRoom(userRoom(userId), INSIGHTS_EVENT, payload));
+        return;
+    }
+
     if (payload.scope === 'global') {
         io.emit(NOTIFICATION_EVENT, payload);
         return;
@@ -180,6 +196,36 @@ function emitNotification(doc) {
     (payload.recipients || []).forEach(userId => {
         io.emitToRoom(userRoom(userId), NOTIFICATION_EVENT, payload);
     });
+}
+
+
+/**
+ * Manda la notificación por Web Push a los navegadores de sus destinatarios en
+ * esa app, cada uno en su idioma. Lo que lleva el aviso del sistema: título y
+ * texto ya renderizados, `tag` (un aviso nuevo de la misma alerta reemplaza al
+ * anterior en vez de apilarse), a dónde lleva al pulsarlo y el id de la
+ * notificación (para marcarla leída desde la app). `meta` va entero: la app
+ * pinta con él su bandeja sin volver a pedirlo.
+ */
+async function pushNotification(doc, app) {
+    try {
+        const payload = doc?.toObject ? doc.toObject() : doc;
+        await sendPushToUsers((payload.recipients || []).map(String), app, (subscription) => {
+            const text = payload.i18n?.[subscription.lang === 'en' ? 'en' : 'es'] || payload.i18n?.es || {};
+            return {
+                id: String(payload._id),
+                title: text.title || '',
+                body: text.body || '',
+                tag: `${payload.type}:${payload.resource?.id ?? payload._id}`,
+                url: payload.resource?.path || '/',
+                createdAt: payload.createdAt,
+                meta: payload.meta ?? null,
+            };
+        });
+    }
+    catch (error) {
+        console.log('[notification] no se pudo mandar el push:', error?.message || error);
+    }
 }
 
 

@@ -145,6 +145,7 @@ import { routerExchangeRate } from './apiServises/exchangeRate/exchangeRate.rout
 import { routerApiKey } from './apiServises/apiKey/apiKey.routes.js';
 import routerMultimedia from './apiServises/multimedia/routes.index.ts'
 import { routerAccess } from './apiServises/access/access.routes.js';
+import { routerPush } from './apiServises/push/push.routes.js';
 import swaggerUi from 'swagger-ui-express';
 import swaggerSpec from './docs/swagger.js';
 
@@ -170,6 +171,7 @@ app
     .use(routerAttendanceUser)
     .use(routerBiometric)
     .use(routerNotification)
+    .use(routerPush)
     .use(routerMultimedia)
     .use(routerPublisher)
     .use(routerFranchise)

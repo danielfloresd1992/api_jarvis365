@@ -58,8 +58,20 @@ const NotificationSchema = new mongoose.Schema({
     //   system   → anuncios de la plataforma
     family: {
         type: String,
-        enum: ['schedule', 'resource', 'system', 'attendance', 'comment', 'menu', 'bonus', 'general'],
+        enum: ['schedule', 'resource', 'system', 'attendance', 'comment', 'menu', 'bonus', 'alert', 'general'],
         default: 'general',
+        index: true,
+    },
+
+    // Para qué app es la notificación:
+    //   staff     la campana del equipo (Jarvis-express365 y compañía): todo lo de siempre
+    //   insights  la campana de insights365, la de los clientes: las alertas de sus locales (alert.strategies.js)
+    // Son bandejas separadas a propósito: un aviso del equipo (un horario, un bono) no puede llegarle a un cliente, y
+    // las alertas de los clientes no deben llenar la campana del equipo. Lo que no tiene el campo cuenta como 'staff'.
+    channel: {
+        type: String,
+        enum: ['staff', 'insights'],
+        default: 'staff',
         index: true,
     },
 

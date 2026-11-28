@@ -27,6 +27,7 @@
 // UNA FAMILIA POR ARCHIVO, para poder responder de un vistazo "¿qué avisos
 // existen sobre el horario?" abriendo un solo archivo.
 
+import './alert.strategies.js';        // alertas de demoras e incidencias para los clientes (insights365)
 import './attendance.strategies.js';   // marcaje: entrada y salida del propio empleado
 import './comment.strategies.js';      // notas escritas sobre el día de otra persona
 import './menu.strategies.js';         // alertas y su bonificación (dos familias)

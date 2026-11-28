@@ -26,18 +26,35 @@ export const userRoom = (userId) => `user:${String(userId)}`;
 /** Sala de administradores, para el alcance 'admin'. */
 export const ADMIN_ROOM = 'admins';
 
+/** Las bandejas: 'staff' (la campana del equipo) e 'insights' (la de los clientes en insights365). */
+export const CHANNELS = ['staff', 'insights'];
+
+/** El canal pedido, siempre uno válido: lo que no es 'insights' es la campana del equipo. */
+export const channelOf = (value) => (value === 'insights' ? 'insights' : 'staff');
+
 /**
- * Qué notificaciones le corresponden a un usuario.
+ * Qué notificaciones le corresponden a un usuario, en la bandeja de ese canal.
+ *
+ * Canal 'staff' (la campana del equipo, el de siempre):
  *   · todas las globales
  *   · las personales donde figura como destinatario
  *   · las de administradores, solo si lo es
+ *   y nunca las del canal 'insights'.
+ *
+ * Canal 'insights' (la campana de insights365): solo las personales donde
+ * figura como destinatario. Ahí no hay globales: cada alerta se reparte a
+ * quien ve su local (strategies/alert.strategies.js).
  *
  * El filtro se arma en el SERVIDOR, no en el cliente: una notificación personal
  * que viaja al front equivocado ya está filtrada, aunque no se pinte.
  */
-export const audienceQuery = (session) => {
+export const audienceQuery = (session, channel = 'staff') => {
+    if (channelOf(channel) === 'insights') {
+        return { channel: 'insights', scope: 'personal', recipients: session?.userId ?? null };
+    }
     const or = [{ scope: 'global' }];
     if (session?.userId) or.push({ scope: 'personal', recipients: session.userId });
     if (session?.admin === true) or.push({ scope: 'admin' });
-    return { $or: or };
+    // $ne también deja pasar las que no tienen el campo (todas las de antes)
+    return { channel: { $ne: 'insights' }, $or: or };
 };

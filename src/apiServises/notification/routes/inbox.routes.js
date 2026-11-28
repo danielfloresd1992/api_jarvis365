@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 
 import NotificationModel from '../notification.model.js';
 import NotificationReadModel from '../notificationRead.model.js';
-import { audienceQuery } from '../notification.audience.js';
+import { audienceQuery, channelOf } from '../notification.audience.js';
 import { validateSession } from '../../../middleware/validateSessionAndUser.js';
 
 // ══════════════════════════════════════════════════════════════════════
@@ -13,6 +13,9 @@ import { validateSession } from '../../../middleware/validateSessionAndUser.js';
 // eso pasa en el resto del sistema, a través de notify().
 //
 // Qué le toca a cada quien lo decide audienceQuery, en notification.audience.js.
+//
+// Todas aceptan ?channel=insights (la campana de insights365); sin él, la del
+// equipo, como siempre.
 
 export const routerInbox = express.Router();
 const routerNotification = routerInbox;
@@ -29,7 +32,7 @@ routerNotification.get(`${nameApi}/notifications`, validateSession, async (req, 
         const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
         const userId = req.session.userId;
 
-        const query = audienceQuery(req.session);
+        const query = audienceQuery(req.session, req.query.channel);
 
         const [items, total] = await Promise.all([
             NotificationModel.find(query)
@@ -72,7 +75,26 @@ routerNotification.get(`${nameApi}/notifications`, validateSession, async (req, 
 routerNotification.get(`${nameApi}/notifications/unread-count`, validateSession, async (req, res) => {
     try {
         const userId = req.session.userId;
-        const query = audienceQuery(req.session);
+        const query = audienceQuery(req.session, req.query.channel);
+
+        // En la de insights365 se cuentan de verdad las no leídas de ESA bandeja: restar todas las lecturas del
+        // usuario (como en la del equipo) mezclaría las de las dos
+        if (channelOf(req.query.channel) === 'insights') {
+            const [row] = await NotificationModel.aggregate([
+                { $match: { ...query, recipients: new ObjectId(String(userId)) } },
+                {
+                    $lookup: {
+                        from: NotificationReadModel.collection.name,
+                        let: { id: '$_id' },
+                        pipeline: [{ $match: { $expr: { $and: [{ $eq: ['$notification', '$$id'] }, { $eq: ['$user', new ObjectId(String(userId))] }] } } }],
+                        as: 'read',
+                    },
+                },
+                { $match: { read: { $size: 0 } } },
+                { $count: 'unread' },
+            ]);
+            return res.status(200).json({ status: 200, unread: row?.unread ?? 0 });
+        }
 
         const [total, leidas] = await Promise.all([
             NotificationModel.countDocuments(query),
@@ -126,7 +148,7 @@ routerNotification.post(`${nameApi}/notifications/read-all`, validateSession, as
     try {
         const userId = req.session.userId;
 
-        const pendientes = await NotificationModel.find(audienceQuery(req.session))
+        const pendientes = await NotificationModel.find(audienceQuery(req.session, req.query.channel ?? req.body?.channel))
             .select('_id')
             .lean();
 
